@@ -1,0 +1,30 @@
+[profile.default]
+src = "src"
+out = "out"
+libs = ["lib", "node_modules"]
+solc_version = "0.8.28"
+
+[profile.default.polkadot]
+resolc_compile = true
+solc_version = "0.8.28"
+
+# CI profile — verbose output, strict checks
+[profile.ci]
+src = "src"
+out = "out"
+libs = ["lib", "node_modules"]
+solc_version = "0.8.28"
+verbosity = 4
+
+[profile.ci.polkadot]
+resolc_compile = true
+solc_version = "0.8.28"
+
+# Local PolkaVM node endpoint
+[rpc_endpoints]
+local = "http://127.0.0.1:8545"
+polkadot_hub_testnet = "https://services.polkadothub-rpc.com/testnet"
+westend_hub = "https://westend-asset-hub-eth-rpc.polkadot.io"
+kusama_hub = "https://kusama-asset-hub-eth-rpc.polkadot.io"
+
+# See more config options https://github.com/nicholasgasior/foundry-polkadot/blob/main/crates/config/README.md#all-options

@@ -1,0 +1,53 @@
+{
+  "name": "pvm-core",
+  "version": "1.0.0",
+  "description": "Polkadot Virtual Machine Core Contracts — Foundry + Hardhat Polkadot",
+  "main": "index.js",
+  "scripts": {
+    "compile": "hardhat compile",
+    "compile:forge": "forge build",
+    "test": "hardhat test",
+    "test:forge": "forge test -vvv",
+    "test:forge:polkadot": "FOUNDRY_PROFILE=default forge test -vvv",
+    "node": "hardhat node",
+    "deploy": "hardhat ignition deploy ./ignition/modules/Counter.js",
+    "deploy:local": "hardhat ignition deploy ./ignition/modules/Counter.js --network localNode",
+    "deploy:testnet": "hardhat ignition deploy ./ignition/modules/Counter.js --network polkadotHubTestnet",
+    "deploy:westend": "hardhat ignition deploy ./ignition/modules/Counter.js --network westendHub",
+    "deploy:forge": "forge script script/Counter.s.sol:CounterScript --rpc-url local --broadcast",
+    "deploy:forge:testnet": "forge script script/Counter.s.sol:CounterScript --rpc-url polkadot_hub_testnet --broadcast",
+    "format": "forge fmt && prettier --write '**/*.js'",
+    "format:check": "forge fmt --check && prettier --check '**/*.js'",
+    "clean": "hardhat clean && forge clean"
+  },
+  "keywords": [
+    "hardhat",
+    "polkadot",
+    "smart-contracts",
+    "solidity",
+    "polkavm",
+    "foundry",
+    "pvm"
+  ],
+  "author": "Obidot",
+  "license": "MIT",
+  "devDependencies": {
+    "@nomicfoundation/hardhat-chai-matchers": "^2.0.7",
+    "@nomicfoundation/hardhat-ethers": "^3.0.8",
+    "@nomicfoundation/hardhat-foundry": "^1.2.1",
+    "@nomicfoundation/hardhat-ignition": "^0.15.11",
+    "@nomicfoundation/hardhat-network-helpers": "^1.1.0",
+    "@nomicfoundation/hardhat-toolbox": "^5.0.0",
+    "@parity/hardhat-polkadot": "^0.1.10",
+    "chai": "^4.3.4",
+    "dockerode": "^4.0.9",
+    "dotenv": "^17.2.3",
+    "ethers": "^6.15.0",
+    "hardhat": "^2.26.0",
+    "prettier": "^3.3.0",
+    "solc": "0.8.28"
+  },
+  "dependencies": {
+    "viem": "^2.23.6"
+  }
+}
