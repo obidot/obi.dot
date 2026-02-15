@@ -1,0 +1,6 @@
+[workspace]
+resolver = "2"
+members = ["pallets/pallet-revive-uapi"]
+
+[dependencies]
+pallet-revive-uapi = { version = "0.12.1", features = ["pto"] }

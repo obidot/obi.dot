@@ -1,3 +1,9 @@
 [submodule "pvm-core/lib/forge-std"]
 	path = pvm-core/lib/forge-std
 	url = https://github.com/foundry-rs/forge-std
+[submodule "pvm/lib/forge-std"]
+	path = pvm/lib/forge-std
+	url = https://github.com/foundry-rs/forge-std
+[submodule "pvm/lib/hyperbridge-sdk"]
+	path = pvm/lib/hyperbridge-sdk
+	url = https://github.com/polytope-labs/hyperbridge-sdk
