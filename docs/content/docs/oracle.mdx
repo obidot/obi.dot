@@ -1,0 +1,269 @@
+---
+title: Oracle Integration
+description: Oracle integration reference — Pyth Network price feeds via the Chainlink-compatible AggregatorV3 interface, staleness checks, slippage validation math, and configuration.
+---
+
+The ObidotVault uses oracle price feeds to validate that every strategy intent's expected return (`minReturn`) is economically reasonable given current market prices. This prevents the AI strategist from deploying capital at unfavorable rates — whether due to a bug, stale data, or market manipulation.
+
+## Oracle Interface
+
+Obidot consumes price data through the **Chainlink-compatible `IAggregatorV3` interface**. On Polkadot Hub, this is implemented by Pyth Network's `PythAggregatorV3` adapter, which wraps Pyth price feeds in the familiar Chainlink interface.
+
+```solidity
+interface IAggregatorV3 {
+    function decimals() external view returns (uint8);
+    function description() external view returns (string memory);
+    function version() external view returns (uint256);
+
+    function getRoundData(uint80 _roundId)
+        external view
+        returns (
+            uint80 roundId,
+            int256 answer,
+            uint256 startedAt,
+            uint256 updatedAt,
+            uint80 answeredInRound
+        );
+
+    function latestRoundData()
+        external view
+        returns (
+            uint80 roundId,
+            int256 answer,
+            uint256 startedAt,
+            uint256 updatedAt,
+            uint80 answeredInRound
+        );
+}
+```
+
+The vault only calls two functions:
+- `latestRoundData()` — to fetch the current price and its timestamp
+- `decimals()` — to determine the price feed's decimal precision
+
+## Oracle State
+
+```solidity
+/// @notice The Pyth/Chainlink oracle used for price sanity checks.
+IAggregatorV3 public priceOracle;
+
+/// @dev Oracle staleness threshold: 1 hour.
+uint256 public constant ORACLE_STALENESS_THRESHOLD = 3600;
+```
+
+The oracle address is set at deployment via the constructor and can be updated by the admin:
+
+```solidity
+function setOracle(address newOracle) external onlyRole(DEFAULT_ADMIN_ROLE);
+```
+
+## Staleness Check
+
+Before using any price data, the vault validates that the oracle's last update is recent enough. Stale data could lead to strategy execution at outdated prices, causing unexpected losses.
+
+```solidity
+(, int256 answer, , uint256 updatedAt, ) = priceOracle.latestRoundData();
+
+if (answer <= 0 || block.timestamp - updatedAt > ORACLE_STALENESS_THRESHOLD) {
+    revert OracleDataInvalid(answer, updatedAt);
+}
+```
+
+The check enforces two conditions:
+
+| Check | Condition | Rationale |
+|-------|-----------|-----------|
+| **Positive price** | `answer > 0` | Zero or negative prices indicate oracle malfunction |
+| **Freshness** | `block.timestamp - updatedAt <= 3600` | Price data must be less than 1 hour old |
+
+If either condition fails, the transaction reverts with `OracleDataInvalid(answer, updatedAt)`, which includes the problematic price and timestamp for debugging.
+
+### Why 1 Hour?
+
+The staleness threshold of 3600 seconds (1 hour) balances two concerns:
+
+- **Too short** — Pyth heartbeat intervals vary by feed; an overly aggressive threshold would cause unnecessary reverts during periods of low volatility when prices haven't changed enough to trigger an update
+- **Too long** — An excessively lenient threshold would allow strategy execution with significantly outdated prices, increasing slippage risk
+
+The threshold is a compile-time constant and cannot be changed after deployment. If a different value is needed, the contract must be redeployed.
+
+## Slippage Validation
+
+The oracle slippage check is the core protection mechanism. It ensures that the strategist's declared `minReturn` is consistent with the current oracle price, accounting for the specified maximum slippage tolerance.
+
+### The Formula
+
+```
+oracleMinimum = amount × price × (BPS_DENOMINATOR - maxSlippageBps) / (BPS_DENOMINATOR × 10^oracleDecimals)
+```
+
+Where:
+- `amount` — The number of underlying tokens being deployed
+- `price` — The oracle's latest price answer (scaled by `oracleDecimals`)
+- `BPS_DENOMINATOR` — 10,000 (100% in basis points)
+- `maxSlippageBps` — The strategist's declared maximum slippage tolerance
+- `oracleDecimals` — The oracle feed's decimal precision (typically 8)
+
+### Implementation
+
+```solidity
+function _enforceOracleSlippage(StrategyIntent calldata intent) internal view {
+    (, int256 answer, , uint256 updatedAt, ) = priceOracle.latestRoundData();
+
+    // Validate oracle data freshness and positivity
+    if (answer <= 0 || block.timestamp - updatedAt > ORACLE_STALENESS_THRESHOLD) {
+        revert OracleDataInvalid(answer, updatedAt);
+    }
+
+    uint8 oracleDecimals = priceOracle.decimals();
+    uint256 price = uint256(answer);
+
+    // Calculate minimum acceptable return based on oracle price and slippage
+    uint256 oracleMinimum = intent.amount.mulDiv(
+        price * (BPS_DENOMINATOR - intent.maxSlippageBps),
+        BPS_DENOMINATOR * (10 ** oracleDecimals),
+        Math.Rounding.Ceil  // Round up to be conservative (higher minimum)
+    );
+
+    if (intent.minReturn < oracleMinimum) {
+        revert OracleSlippageCheckFailed(intent.minReturn, oracleMinimum);
+    }
+}
+```
+
+### Rounding
+
+The `oracleMinimum` is computed using `Math.Rounding.Ceil` (round up). This means the minimum acceptable return is rounded in favor of the vault — if the exact result is between two integers, the higher value is used. This is a conservative choice that protects depositors.
+
+### Worked Example
+
+Consider a strategy deploying 10,000 DOT with a 1% slippage tolerance, where the oracle reports DOT/USD at $7.50 (8 decimals):
+
+```
+amount          = 10,000 × 10^18  (10,000 tokens with 18 decimals)
+price           = 750,000,000     ($7.50 with 8 decimals)
+maxSlippageBps  = 100             (1%)
+oracleDecimals  = 8
+BPS_DENOMINATOR = 10,000
+
+oracleMinimum = 10,000e18 × 750,000,000 × (10,000 - 100) / (10,000 × 10^8)
+              = 10,000e18 × 750,000,000 × 9,900 / 1,000,000,000,000
+              = 10,000e18 × 7,425,000,000,000 / 1,000,000,000,000
+              = 10,000e18 × 7.425
+              = 74,250 × 10^18
+```
+
+The strategist's `minReturn` must be at least 74,250 tokens. If the strategist declares `minReturn = 74,000`, the transaction reverts with:
+
+```
+OracleSlippageCheckFailed(74000e18, 74250e18)
+```
+
+## Slippage Bounds
+
+The maximum slippage tolerance is capped at 50% (5,000 basis points):
+
+```solidity
+uint256 internal constant MAX_SLIPPAGE_BPS = 5_000;
+
+if (intent.maxSlippageBps > MAX_SLIPPAGE_BPS) {
+    revert SlippageTooHigh(intent.maxSlippageBps);
+}
+```
+
+This check happens in step 2 of the validation pipeline (basic validation), before the oracle is even consulted. It prevents the strategist from setting an unreasonably high slippage tolerance that would effectively bypass the oracle check.
+
+### Basis Points Reference
+
+| BPS | Percentage | Use Case |
+|-----|-----------|----------|
+| 10 | 0.1% | Stablecoin swaps, low-volatility pairs |
+| 50 | 0.5% | Standard DeFi operations |
+| 100 | 1.0% | Moderate volatility tolerance |
+| 500 | 5.0% | High-volatility tokens or thin liquidity |
+| 1000 | 10.0% | Aggressive strategies |
+| 5000 | 50.0% | Maximum allowed (absolute upper bound) |
+
+## Oracle Update
+
+The admin can update the oracle address if the Pyth feed address changes or a different price source is needed:
+
+```solidity
+function setOracle(address newOracle) external onlyRole(DEFAULT_ADMIN_ROLE) {
+    if (newOracle == address(0)) revert ZeroAddress();
+    priceOracle = IAggregatorV3(newOracle);
+    emit OracleUpdated(newOracle);
+}
+```
+
+### Safety Considerations
+
+When updating the oracle:
+
+1. **Verify the new feed** — Ensure the new oracle address returns valid, fresh data before switching. A misconfigured oracle will cause all strategy executions to revert.
+2. **Check decimals** — The slippage formula depends on `priceOracle.decimals()`. If the new feed uses a different decimal precision, the slippage calculations will produce different results.
+3. **Match the asset** — The oracle price feed must correspond to the vault's underlying asset. A DOT vault should use a DOT/USD feed, not an ETH/USD feed.
+4. **Staleness compatibility** — Ensure the new feed updates frequently enough to stay within the 1-hour staleness threshold.
+
+## Error Reference
+
+| Error | Condition |
+|-------|-----------|
+| `OracleDataInvalid(int256 answer, uint256 updatedAt)` | Price is zero/negative, or data is older than 1 hour |
+| `OracleSlippageCheckFailed(uint256 minReturn, uint256 oracleMinimum)` | `minReturn` is below the oracle-derived minimum |
+| `SlippageTooHigh(uint256 maxSlippageBps)` | `maxSlippageBps > 5000` |
+| `ZeroAddress()` | Attempting to set oracle to `address(0)` |
+
+## Events Reference
+
+| Event | Emitted When |
+|-------|-------------|
+| `OracleUpdated(address indexed newOracle)` | Admin changes the oracle address via `setOracle()` |
+
+## Pyth Network on Polkadot
+
+Pyth Network provides high-frequency, low-latency price feeds across multiple blockchains. On Polkadot Hub EVM, Pyth deploys `PythAggregatorV3` adapter contracts that wrap Pyth's pull-based oracle into the familiar Chainlink `AggregatorV3Interface`.
+
+### How Pyth Works
+
+1. **Price publishers** submit prices from off-chain data sources to the Pyth network
+2. **Price aggregation** combines multiple publisher prices into a single aggregate with a confidence interval
+3. **Cross-chain delivery** relays aggregated prices to target chains (including Polkadot Hub)
+4. **AggregatorV3 adapter** wraps the Pyth price into the Chainlink-compatible interface that Obidot consumes
+
+### Pull vs Push
+
+Pyth uses a **pull-based** model — prices are updated on-chain only when someone submits an update transaction with a valid Wormhole VAA (Verified Action Approval). This means:
+
+- Prices may not update automatically during periods of low activity
+- Relayers or users may need to submit price updates before interacting with protocols that depend on fresh data
+- The 1-hour staleness threshold accounts for this by allowing a reasonable window between updates
+
+### Finding Feed Addresses
+
+Pyth AggregatorV3 adapter addresses for Polkadot Hub can be found at:
+- [Pyth Price Feed IDs](https://pyth.network/developers/price-feed-ids)
+- [Pyth Contract Addresses](https://docs.pyth.network/price-feeds/contract-addresses)
+
+## Design Rationale
+
+### Why Not Use Pyth Directly?
+
+Obidot uses the Chainlink-compatible `IAggregatorV3` interface rather than calling Pyth's native `IPyth` interface for several reasons:
+
+1. **Abstraction** — The vault is oracle-agnostic. If Chainlink, Redstone, or another provider launches on Polkadot Hub, the admin can switch without contract changes
+2. **Simplicity** — `latestRoundData()` is a single call that returns everything needed. Pyth's native interface requires managing price feed IDs and handling confidence intervals
+3. **Compatibility** — Many DeFi protocols already integrate with the AggregatorV3 interface, making the codebase familiar to auditors and developers
+
+### Why Check Slippage On-Chain?
+
+The oracle slippage check could theoretically be done off-chain by the AI agent. However, on-chain enforcement provides stronger guarantees:
+
+1. **Trustless** — Even a compromised AI agent key cannot submit a strategy with an unreasonable `minReturn`
+2. **Verifiable** — Anyone can inspect the oracle check logic in the contract source
+3. **Consistent** — The check uses the same oracle state that's visible to all participants at the time of execution
+4. **Non-bypassable** — The check cannot be disabled or circumvented without admin intervention (updating the oracle or modifying policy parameters)
+
+### Conservative Rounding Choice
+
+Using `Math.Rounding.Ceil` for the `oracleMinimum` calculation means the vault always requires a slightly higher minimum return than the exact mathematical result. This protects depositors by erring on the side of caution — the strategist must declare a `minReturn` that meets or exceeds this conservative bound.

@@ -1,0 +1,432 @@
+---
+title: Deployment
+description: Complete deployment guide — environment setup, Foundry configuration, deployment scripts, environment variables, post-deployment verification, and initial policy configuration.
+---
+
+This guide walks through deploying the ObidotVault contract to the Polkadot Hub EVM using Foundry. Two deployment scripts are provided: a minimal `Deploy` script and an extended `DeployWithSetup` script that also configures initial policy parameters.
+
+## Prerequisites
+
+### Toolchain
+
+Install the Foundry nightly toolchain with Polkadot network support:
+
+```bash
+foundryup --nightly
+```
+
+The nightly toolchain is required for the Revive LLVM compiler (`resolc`) which compiles Solidity to PolkaVM bytecode.
+
+### Dependencies
+
+Clone the repository and install dependencies:
+
+```bash
+git clone https://github.com/obidot/obidot.git
+cd obidot/contracts
+forge install
+```
+
+The project uses three external dependencies managed via Foundry's `lib/` directory:
+
+| Dependency | Version | Remapping |
+|-----------|---------|-----------|
+| OpenZeppelin Contracts | v5.5.0 | `@openzeppelin/contracts/` → `lib/openzeppelin-contracts/contracts/` |
+| Pyth SDK Solidity | v2.2.0 | `@pythnetwork/pyth-sdk-solidity/` → `lib/pyth-sdk-solidity/` |
+| Forge Std | latest | `forge-std/` → `lib/forge-std/src/` |
+
+## Foundry Profiles
+
+The project defines three Foundry profiles for different use cases:
+
+### Default Profile
+
+Standard Solidity compilation for local testing:
+
+```bash
+forge build
+forge test
+```
+
+Configuration:
+- Solidity `0.8.28`
+- Optimizer enabled (200 runs)
+- Fuzz: 1,000 runs per test
+- Invariant: 256 runs, depth 64
+
+### CI Profile
+
+Extended test parameters for continuous integration:
+
+```bash
+FOUNDRY_PROFILE=ci forge test
+```
+
+Configuration:
+- Fuzz: 5,000 runs per test
+- Invariant: 512 runs, depth 128
+- Verbosity level 4
+
+### Polkadot Profile
+
+Revive LLVM compiler for PolkaVM deployment:
+
+```bash
+FOUNDRY_PROFILE=polkadot forge build
+```
+
+This profile enables `resolc_compile = true` under the `[profile.polkadot.polkadot]` section, which compiles the contracts using the Revive LLVM compiler targeting PolkaVM instead of the standard EVM. The output is suitable for deployment to Polkadot Hub.
+
+**Important:** The Polkadot profile is for building deployment artifacts only. Tests should be run with the default or CI profile.
+
+## Target Networks
+
+### Polkadot Hub Testnet (Paseo)
+
+| Parameter | Value |
+|-----------|-------|
+| Chain ID | `420420417` |
+| RPC URL | `https://services.polkadothub-rpc.com/testnet` |
+| XCM Precompile | `0x00000000000000000000000000000000000a0000` |
+
+### Other Configured RPCs
+
+The `foundry.toml` includes additional RPC endpoints:
+
+| Alias | URL |
+|-------|-----|
+| `local` | `http://127.0.0.1:8545` |
+| `polkadot_hub_testnet` | `https://services.polkadothub-rpc.com/testnet` |
+| `westend_hub` | `https://westend-asset-hub-eth-rpc.polkadot.io` |
+| `kusama_hub` | `https://kusama-asset-hub-eth-rpc.polkadot.io` |
+
+## Environment Variables
+
+### Required
+
+These must be set before running either deployment script:
+
+| Variable | Description | Example |
+|----------|-------------|---------|
+| `PRIVATE_KEY` | Deployer's private key (hex, without `0x` prefix) | `abcdef1234...` |
+| `UNDERLYING_ASSET` | Address of the ERC-20 token used as the vault's underlying asset | `0x1234...abcd` |
+| `PYTH_ORACLE` | Address of the Pyth AggregatorV3 price feed adapter | `0x5678...ef01` |
+| `ADMIN_ADDRESS` | Admin address that receives `DEFAULT_ADMIN_ROLE` and `KEEPER_ROLE` | `0x9abc...2345` |
+
+### Optional (with Defaults)
+
+These can be overridden via environment variables. If not set, sensible defaults are used:
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `DEPOSIT_CAP` | `1000000000000000000000000` (1M tokens, 18 decimals) | Maximum total deposits the vault accepts |
+| `MAX_DAILY_LOSS` | `50000000000000000000000` (50K tokens) | Daily loss threshold for circuit breaker |
+| `MAX_XCM_REF_TIME` | `1000000000000` (1T picoseconds = 1 second) | Maximum XCM execution time |
+| `MAX_XCM_PROOF_SIZE` | `1048576` (1 MB) | Maximum XCM proof-of-validity size |
+
+### DeployWithSetup Only
+
+| Variable | Description | Example |
+|----------|-------------|---------|
+| `STRATEGIST_ADDRESS` | AI agent address to receive `STRATEGIST_ROLE` | `0xdef0...6789` |
+
+## Deployment Scripts
+
+### `Deploy` — Minimal Deployment
+
+The `Deploy` script deploys the vault with environment-variable configuration and runs post-deployment verification checks.
+
+```bash
+# 1. Set environment variables
+export PRIVATE_KEY=<deployer-private-key>
+export UNDERLYING_ASSET=<erc20-address>
+export PYTH_ORACLE=<pyth-aggregator-v3-address>
+export ADMIN_ADDRESS=<admin-multisig-or-eoa>
+
+# 2. Optional overrides
+export DEPOSIT_CAP=1000000000000000000000000
+export MAX_DAILY_LOSS=50000000000000000000000
+export MAX_XCM_REF_TIME=1000000000000
+export MAX_XCM_PROOF_SIZE=1048576
+
+# 3. Deploy to Polkadot Hub Testnet
+forge script script/Deploy.s.sol:Deploy \
+  --rpc-url polkadot_hub_testnet \
+  --broadcast \
+  --verify \
+  -vvvv
+```
+
+#### What It Does
+
+1. Loads required and optional environment variables
+2. Logs all deployment parameters to the console
+3. Deploys the `ObidotVault` contract with the configured parameters
+4. Logs the deployed contract address, share token name/symbol, and domain separator
+5. Runs post-deployment verification (see below)
+
+#### Post-Deployment Verification
+
+The script automatically verifies the deployed contract state:
+
+| Check | Expected |
+|-------|----------|
+| `vault.asset()` | Matches `UNDERLYING_ASSET` |
+| `vault.priceOracle()` | Matches `PYTH_ORACLE` |
+| `vault.hasRole(DEFAULT_ADMIN_ROLE, admin)` | `true` |
+| `vault.hasRole(KEEPER_ROLE, admin)` | `true` |
+| `vault.depositCap()` | Matches configured cap |
+| `vault.maxDailyLoss()` | Matches configured threshold |
+| `vault.maxXcmRefTime()` | Matches configured limit |
+| `vault.maxXcmProofSize()` | Matches configured limit |
+| `vault.totalAssets()` | `0` |
+| `vault.totalSupply()` | `0` |
+| `vault.paused()` | `false` |
+| `vault.emergencyMode()` | `false` |
+
+If any check fails, the script reverts with a descriptive error message.
+
+### `DeployWithSetup` — Extended Deployment
+
+The `DeployWithSetup` script deploys the vault AND performs initial policy configuration in a single broadcast:
+
+```bash
+# 1. Set environment variables
+export PRIVATE_KEY=<deployer-private-key>
+export UNDERLYING_ASSET=<erc20-address>
+export PYTH_ORACLE=<pyth-aggregator-v3-address>
+export ADMIN_ADDRESS=<admin-address>
+export STRATEGIST_ADDRESS=<ai-agent-address>
+
+# 2. Deploy with setup
+forge script script/Deploy.s.sol:DeployWithSetup \
+  --rpc-url polkadot_hub_testnet \
+  --broadcast \
+  -vvvv
+```
+
+#### What It Does
+
+1. Deploys the `ObidotVault` contract (same as `Deploy`)
+2. Grants `STRATEGIST_ROLE` to the configured strategist address
+3. Whitelists five initial parachains:
+
+| Parachain | ID |
+|-----------|------|
+| Astar | `2006` |
+| Moonbeam | `2004` |
+| Acala | `2000` |
+| HydraDX | `2034` |
+| Bifrost | `2030` |
+
+#### Remaining Manual Steps
+
+After `DeployWithSetup` completes, you still need to:
+
+1. Call `setProtocolAllowed()` for each target DeFi protocol address
+2. Call `setProtocolExposureCap()` for each protocol
+3. Transfer `DEFAULT_ADMIN_ROLE` to a multisig if needed
+
+## Local Development
+
+### Running a Local Node
+
+For local testing and development:
+
+```bash
+# Start a local Anvil node
+anvil
+
+# Deploy to local node
+forge script script/Deploy.s.sol:Deploy \
+  --rpc-url local \
+  --broadcast \
+  -vvvv
+```
+
+### Running Tests
+
+```bash
+# Run all tests
+forge test
+
+# Run with verbose output
+forge test -vvvv
+
+# Run a specific test
+forge test --match-test test_deposit
+
+# Run fuzz tests only
+forge test --match-test testFuzz
+
+# Run invariant tests only
+forge test --match-test invariant
+
+# Run with CI-level fuzz depth
+FOUNDRY_PROFILE=ci forge test
+```
+
+### Gas Reports
+
+```bash
+forge test --gas-report
+```
+
+## Post-Deployment Configuration
+
+After deploying the vault, the admin needs to configure the policy engine. This can be done interactively with `cast` or programmatically.
+
+### Grant Strategist Role
+
+If using the minimal `Deploy` script, grant `STRATEGIST_ROLE` to the AI agent:
+
+```bash
+cast send $VAULT_ADDRESS \
+  "grantRole(bytes32,address)" \
+  $(cast keccak "STRATEGIST_ROLE") \
+  $STRATEGIST_ADDRESS \
+  --private-key $ADMIN_PRIVATE_KEY \
+  --rpc-url polkadot_hub_testnet
+```
+
+### Whitelist Parachains
+
+```bash
+# Whitelist Moonbeam (2004)
+cast send $VAULT_ADDRESS \
+  "setParachainAllowed(uint32,bool)" \
+  2004 true \
+  --private-key $ADMIN_PRIVATE_KEY \
+  --rpc-url polkadot_hub_testnet
+
+# Whitelist Acala (2000)
+cast send $VAULT_ADDRESS \
+  "setParachainAllowed(uint32,bool)" \
+  2000 true \
+  --private-key $ADMIN_PRIVATE_KEY \
+  --rpc-url polkadot_hub_testnet
+```
+
+### Whitelist Protocols
+
+```bash
+cast send $VAULT_ADDRESS \
+  "setProtocolAllowed(address,bool)" \
+  $PROTOCOL_ADDRESS true \
+  --private-key $ADMIN_PRIVATE_KEY \
+  --rpc-url polkadot_hub_testnet
+```
+
+### Set Exposure Caps
+
+```bash
+# Cap deployment to a protocol at 100,000 tokens (18 decimals)
+cast send $VAULT_ADDRESS \
+  "setProtocolExposureCap(address,uint256)" \
+  $PROTOCOL_ADDRESS 100000000000000000000000 \
+  --private-key $ADMIN_PRIVATE_KEY \
+  --rpc-url polkadot_hub_testnet
+```
+
+### Verify Configuration
+
+Query the vault state to verify configuration:
+
+```bash
+# Check deposit cap
+cast call $VAULT_ADDRESS "depositCap()" --rpc-url polkadot_hub_testnet
+
+# Check if a parachain is whitelisted
+cast call $VAULT_ADDRESS "allowedParachains(uint32)" 2004 --rpc-url polkadot_hub_testnet
+
+# Check if a protocol is whitelisted
+cast call $VAULT_ADDRESS "allowedTargets(address)" $PROTOCOL_ADDRESS --rpc-url polkadot_hub_testnet
+
+# Check protocol exposure cap
+cast call $VAULT_ADDRESS "maxProtocolExposure(address)" $PROTOCOL_ADDRESS --rpc-url polkadot_hub_testnet
+
+# Check daily loss status
+cast call $VAULT_ADDRESS "dailyLossStatus()" --rpc-url polkadot_hub_testnet
+
+# Check roles
+cast call $VAULT_ADDRESS "hasRole(bytes32,address)" $(cast keccak "STRATEGIST_ROLE") $STRATEGIST_ADDRESS --rpc-url polkadot_hub_testnet
+```
+
+## Production Deployment Checklist
+
+Before going to production, verify the following:
+
+### Pre-Deployment
+
+- [ ] All 91+ tests pass (`forge test`)
+- [ ] Invariant tests pass with CI-level depth (`FOUNDRY_PROFILE=ci forge test`)
+- [ ] PolkaVM build compiles cleanly (`FOUNDRY_PROFILE=polkadot forge build`)
+- [ ] Underlying asset contract is verified and audited
+- [ ] Pyth oracle feed address is correct for the underlying asset
+- [ ] Admin address is a multisig (not an EOA)
+- [ ] Deposit cap is set to an appropriate value for launch
+- [ ] Daily loss threshold is conservative for initial deployment
+- [ ] XCM weight limits are appropriate for the target chains
+
+### Post-Deployment
+
+- [ ] Post-deployment verification checks all pass
+- [ ] `STRATEGIST_ROLE` granted to the AI agent address
+- [ ] Target parachains whitelisted via `setParachainAllowed()`
+- [ ] Target protocols whitelisted via `setProtocolAllowed()`
+- [ ] Exposure caps set for each whitelisted protocol
+- [ ] Monitoring and alerting configured for key events:
+  - `StrategyExecuted`
+  - `StrategyOutcomeReported`
+  - `EmergencyModeToggled`
+  - `ParachainWhitelistUpdated`
+  - `ProtocolWhitelistUpdated`
+- [ ] Keeper infrastructure running and reporting outcomes
+- [ ] AI strategist connected and signing intents
+- [ ] `DEFAULT_ADMIN_ROLE` transferred to multisig if deployer was an EOA
+
+### Security
+
+- [ ] Deployer private key securely stored and rotated if used temporarily
+- [ ] Admin multisig threshold appropriate (e.g., 3-of-5)
+- [ ] Strategist private key stored in HSM or secure enclave
+- [ ] No sensitive environment variables committed to version control
+- [ ] Contract source code verified on block explorer
+
+## Upgradeability
+
+The ObidotVault is **not upgradeable**. It does not use a proxy pattern. If a new version is needed:
+
+1. Deploy a new vault contract
+2. Admin pauses the old vault
+3. Depositors withdraw from the old vault
+4. Depositors deposit into the new vault
+5. Admin configures the new vault's policy engine
+6. Transfer strategist and keeper roles to the new vault
+
+This design choice prioritizes simplicity and auditability over upgradeability. The policy engine's configurability (whitelists, caps, oracle address, weight limits) provides sufficient operational flexibility without requiring contract upgrades.
+
+## Troubleshooting
+
+### Common Issues
+
+**`MissingEnvVar` error:**
+Ensure all required environment variables are set. The script will revert if `PRIVATE_KEY`, `UNDERLYING_ASSET`, `PYTH_ORACLE`, or `ADMIN_ADDRESS` is missing.
+
+**`ZeroAddress` error during deployment:**
+The oracle address and admin address must be non-zero. Double-check the addresses in your environment variables.
+
+**`InvalidCap` error during deployment:**
+The deposit cap must be non-zero. Ensure `DEPOSIT_CAP` is set to a positive value.
+
+**Build fails with Polkadot profile:**
+Ensure you're using the nightly Foundry toolchain (`foundryup --nightly`). The Revive LLVM compiler is only available in nightly builds.
+
+**Tests fail after modifying contracts:**
+Run `forge clean && forge build` to clear the cache, then `forge test` again. Some changes require a clean build.
+
+**`vm.prank` consumed by view call in tests:**
+This is a known Foundry gotcha. `vm.prank` is consumed by the next external call, including view calls like `vault.STRATEGIST_ROLE()`. Cache role hashes in variables before using `vm.prank`.
+
+**Oracle staleness errors in tests:**
+After using `vm.warp` to advance time, refresh the mock oracle's timestamp. The vault rejects oracle data older than 1 hour.

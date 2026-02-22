@@ -1,0 +1,474 @@
+---
+title: XCM Cross-Chain
+description: XCM cross-chain dispatch reference — IXcm precompile interface, weight estimation, safety margins, MultiLocation encoding library, and configuration.
+---
+
+Obidot uses Polkadot's native **Cross-Consensus Messaging (XCM)** to dispatch capital deployment instructions from the Polkadot Hub EVM to destination parachains. Rather than relying on third-party bridges, the vault calls the XCM precompile directly — a native system contract that provides access to the Polkadot relay chain's messaging infrastructure.
+
+## XCM Precompile
+
+The XCM precompile is a system contract deployed at a fixed address on the Polkadot Hub EVM. It provides two core functions: sending XCM messages and estimating their execution weight.
+
+### Address
+
+```solidity
+IXcm public constant XCM_PRECOMPILE =
+    IXcm(0x00000000000000000000000000000000000a0000);
+```
+
+The address must use lowercase hex. This is a system precompile — it exists at this address on every Polkadot Hub EVM instance and does not need to be deployed.
+
+### Interface
+
+```solidity
+interface IXcm {
+    /// @notice Dispatch an XCM message to a remote consensus system.
+    /// @param dest    SCALE-encoded VersionedLocation of the destination.
+    /// @param message SCALE-encoded VersionedXcm containing the instructions.
+    function send(bytes calldata dest, bytes calldata message) external;
+
+    /// @notice Estimate the execution weight of an XCM message.
+    /// @param message SCALE-encoded VersionedXcm to estimate.
+    /// @return refTime   Estimated execution time in picoseconds.
+    /// @return proofSize Estimated proof-of-validity size in bytes.
+    function weighMessage(
+        bytes calldata message
+    ) external view returns (uint64 refTime, uint64 proofSize);
+}
+```
+
+### Errors
+
+The precompile defines four error conditions:
+
+| Error | Condition |
+|-------|-----------|
+| `InvalidDestination()` | The destination location bytes cannot be decoded |
+| `InvalidMessage()` | The XCM message payload cannot be decoded |
+| `Overweight()` | The XCM message exceeds the weight limit |
+| `SendFailure()` | The XCM transport layer failed to route the message |
+
+### Events
+
+```solidity
+event XcmSent(address indexed sender, bytes dest, bytes message);
+```
+
+Emitted after a successful XCM dispatch. The `sender` is the EVM address that invoked `send` (in Obidot's case, the vault contract address).
+
+## Polkadot Weight Model
+
+Polkadot uses a **two-dimensional weight model** to meter execution resources:
+
+| Dimension | Unit | Description |
+|-----------|------|-------------|
+| `refTime` | Picoseconds | Execution time consumed on the reference hardware |
+| `proofSize` | Bytes | Proof-of-Validity (PoV) data consumed |
+
+Both dimensions must be within limits for a message to be accepted. A message that exceeds either limit is considered "overweight" and will be rejected.
+
+### Why Two Dimensions?
+
+Traditional blockchains use a single gas metric that conflates computation and storage access. Polkadot separates these because:
+
+- **Computation** (refTime) scales with CPU speed and can be parallelized
+- **Storage proofs** (proofSize) scale with state trie depth and are constrained by block size limits
+
+An XCM message that reads many storage items might have high proofSize but low refTime. Conversely, a computationally intensive message might have high refTime but low proofSize. The two-dimensional model prevents either from being a bottleneck.
+
+## Weight Estimation & Safety Margin
+
+Before dispatching any XCM message, the vault estimates its weight and verifies it falls within configured limits. A **10% safety margin** is applied to account for estimation inaccuracies.
+
+### Implementation
+
+```solidity
+function _enforceXcmWeight(bytes calldata xcmCall) internal view {
+    (uint64 refTime, uint64 proofSize) = XCM_PRECOMPILE.weighMessage(xcmCall);
+
+    // Apply safety margin: estimated × 110 / 100
+    uint64 adjustedRefTime = (refTime * XCM_WEIGHT_SAFETY_MARGIN) /
+        WEIGHT_MARGIN_DENOMINATOR;
+    uint64 adjustedProofSize = (proofSize * XCM_WEIGHT_SAFETY_MARGIN) /
+        WEIGHT_MARGIN_DENOMINATOR;
+
+    if (adjustedRefTime > maxXcmRefTime || adjustedProofSize > maxXcmProofSize) {
+        revert XcmOverweight(
+            adjustedRefTime, adjustedProofSize, maxXcmRefTime, maxXcmProofSize
+        );
+    }
+}
+```
+
+### Constants
+
+```solidity
+/// Safety margin multiplier (110 = 10% buffer)
+uint64 public constant XCM_WEIGHT_SAFETY_MARGIN = 110;
+
+/// Denominator for weight safety margin calculation
+uint64 internal constant WEIGHT_MARGIN_DENOMINATOR = 100;
+```
+
+### How the Safety Margin Works
+
+The estimated weight from `weighMessage()` is a best-effort prediction. Actual execution weight on the destination chain may vary due to:
+
+- State changes between estimation and execution
+- Runtime upgrades on the destination parachain
+- Different storage layouts affecting proof sizes
+- Benchmarking differences between chains
+
+The 10% buffer ensures that messages estimated near the limit still have headroom:
+
+```
+Estimated refTime:   900,000,000,000 ps
+Adjusted refTime:    990,000,000,000 ps  (900B × 1.1)
+Max refTime:       1,000,000,000,000 ps
+→ Passes (990B < 1T)
+
+Without margin:
+Estimated refTime:   950,000,000,000 ps
+Adjusted refTime:  1,045,000,000,000 ps  (950B × 1.1)
+Max refTime:       1,000,000,000,000 ps
+→ Reverts with XcmOverweight
+```
+
+## Weight Limits Configuration
+
+The admin configures maximum weight limits for XCM messages:
+
+```solidity
+/// Maximum allowed XCM refTime
+uint64 public maxXcmRefTime;
+
+/// Maximum allowed XCM proofSize
+uint64 public maxXcmProofSize;
+```
+
+### Setting Limits
+
+```solidity
+function setXcmWeightLimits(uint64 _maxRefTime, uint64 _maxProofSize)
+    external onlyRole(DEFAULT_ADMIN_ROLE);
+```
+
+- Only callable by the admin
+- Emits `XcmWeightLimitsUpdated(_maxRefTime, _maxProofSize)`
+
+### Default Values
+
+The deployment scripts use these defaults:
+
+| Parameter | Default Value | Human-Readable |
+|-----------|--------------|----------------|
+| `maxXcmRefTime` | `1,000,000,000,000` | 1 trillion picoseconds (1 second) |
+| `maxXcmProofSize` | `1,048,576` | 1 MB |
+
+These are conservative limits suitable for most XCM operations. Complex multi-hop messages or messages that interact with many storage items may need higher limits.
+
+### Choosing Weight Limits
+
+When configuring weight limits, consider:
+
+1. **Destination chain block limits** — The message weight must fit within the destination chain's per-block weight allocation for XCM execution
+2. **Relay chain limits** — The relay chain imposes its own limits on XCM message weight during routing
+3. **Fee implications** — Higher weight means higher execution fees on the destination chain
+4. **Safety margin overhead** — The 10% buffer is applied on top of the estimated weight, so set limits that accommodate this
+
+## XCM Dispatch Flow
+
+During `executeStrategy()`, after all validations pass, the vault dispatches the XCM message:
+
+### Step 1: Encode Destination
+
+The vault encodes the target parachain as a SCALE-encoded `VersionedLocation` using the MultiLocation library:
+
+```solidity
+bytes memory dest = MultiLocation.siblingParachain(
+    MultiLocation.VERSION_V4,
+    intent.targetParachain
+);
+```
+
+This produces a V4 location pointing to the specified sibling parachain from the Hub's perspective (parents: 1, interior: X1(Parachain(id))).
+
+### Step 2: Approve Asset Transfer
+
+The vault approves the XCM precompile to spend the underlying asset:
+
+```solidity
+IERC20(asset()).forceApprove(address(XCM_PRECOMPILE), intent.amount);
+```
+
+`forceApprove` is used instead of `approve` to handle tokens that require approval to be set to zero before changing (USDT pattern).
+
+### Step 3: Send XCM
+
+```solidity
+XCM_PRECOMPILE.send(dest, intent.xcmCall);
+```
+
+The `xcmCall` field of the `StrategyIntent` contains the complete SCALE-encoded `VersionedXcm` payload with all the instructions to execute on the destination chain. This payload is constructed off-chain by the AI strategist and included in the signed intent.
+
+## MultiLocation Library
+
+The `MultiLocation` library (`src/libraries/MultiLocation.sol`) provides pure Solidity functions for constructing SCALE-encoded XCM location payloads. These are used to encode the destination parameter for XCM dispatch.
+
+### Encoding Format
+
+XCM locations follow the Polkadot SCALE codec specification:
+
+| Type | Encoding |
+|------|----------|
+| Enum variant | Single byte prefix |
+| `u8` | 1 byte |
+| `u32` | 4 bytes little-endian |
+| `Compact<u32>` | Variable-length (1/2/4 bytes, two LSBs encode mode) |
+| `Compact<u128>` | Variable-length (1/2/4/8/16 bytes) |
+| `Option<T>` | `0x00` = None, `0x01 ++ encoded(T)` = Some |
+| `Vec<u8>` | Compact-length prefix ++ raw bytes |
+
+### Versioned Locations
+
+The library supports XCM V3 and V4 versioned locations:
+
+```solidity
+uint8 internal constant VERSION_V3 = 0x03;
+uint8 internal constant VERSION_V4 = 0x04;
+```
+
+The version byte is prepended to every encoded location. Obidot uses V4 by default for XCM dispatch.
+
+### Junction Types
+
+Junctions identify specific entities within the Polkadot consensus hierarchy:
+
+| Variant | Index | Description |
+|---------|-------|-------------|
+| `Parachain` | `0x00` | Identifies a parachain by its `u32` ID |
+| `AccountId32` | `0x01` | A 32-byte account (Substrate-style) |
+| `AccountKey20` | `0x03` | A 20-byte account (Ethereum-style) |
+| `PalletInstance` | `0x04` | A pallet within a chain |
+| `GeneralIndex` | `0x05` | A generic numeric index (e.g., asset ID) |
+
+### Builder Functions
+
+The library provides high-level builder functions for common location patterns:
+
+#### `relayChain`
+
+Encodes the relay chain location (parents: 1, interior: Here).
+
+```solidity
+function relayChain(uint8 version) internal pure returns (bytes memory);
+```
+
+```
+V4 output: 0x04 01 00
+           │    │  └─ Junctions::Here
+           │    └──── parents: 1
+           └───────── V4 version prefix
+```
+
+#### `siblingParachain`
+
+Encodes a sibling parachain location (parents: 1, interior: X1(Parachain(id))).
+
+```solidity
+function siblingParachain(uint8 version, uint32 parachainId)
+    internal pure returns (bytes memory);
+```
+
+This is the primary function used by `executeStrategy()` to encode the XCM destination.
+
+#### `siblingParachainAccountId32`
+
+Encodes an account on a sibling parachain using a 32-byte Substrate account ID.
+
+```solidity
+function siblingParachainAccountId32(
+    uint8 version,
+    uint32 parachainId,
+    bytes32 accountId
+) internal pure returns (bytes memory);
+```
+
+Location: parents: 1, interior: X2(Parachain(id), AccountId32 \{ network: None, id \}).
+
+#### `siblingParachainAccountKey20`
+
+Encodes an account on a sibling parachain using a 20-byte Ethereum-style address.
+
+```solidity
+function siblingParachainAccountKey20(
+    uint8 version,
+    uint32 parachainId,
+    address account
+) internal pure returns (bytes memory);
+```
+
+Location: parents: 1, interior: X2(Parachain(id), AccountKey20 \{ network: None, key \}).
+
+#### `siblingParachainPalletAsset`
+
+Encodes a specific asset on a sibling parachain identified by pallet instance and general index.
+
+```solidity
+function siblingParachainPalletAsset(
+    uint8 version,
+    uint32 parachainId,
+    uint8 palletIndex,
+    uint128 assetIndex
+) internal pure returns (bytes memory);
+```
+
+Location: parents: 1, interior: X3(Parachain(id), PalletInstance(pallet), GeneralIndex(asset)).
+
+#### `localHere`
+
+Encodes the local chain (parents: 0, interior: Here).
+
+```solidity
+function localHere(uint8 version) internal pure returns (bytes memory);
+```
+
+#### `childParachain`
+
+Encodes a child parachain from the relay chain's perspective (parents: 0, interior: X1(Parachain(id))).
+
+```solidity
+function childParachain(uint8 version, uint32 parachainId)
+    internal pure returns (bytes memory);
+```
+
+### Compact Encoding
+
+SCALE compact encoding uses the two least-significant bits to indicate the encoding mode:
+
+| Mode | Bits | Range | Byte Length |
+|------|------|-------|-------------|
+| Single-byte | `00` | 0 – 63 | 1 |
+| Two-byte | `01` | 64 – 16,383 | 2 |
+| Four-byte | `10` | 16,384 – 1,073,741,823 | 4 |
+| Big-integer | `11` | > 1,073,741,823 | Variable |
+
+The library implements compact encoding for both `u32` and `u128` types:
+
+```solidity
+function _encodeCompactU32(uint32 value) internal pure returns (bytes memory);
+function _encodeCompactU128(uint128 value) internal pure returns (bytes memory);
+```
+
+### Decoder
+
+The library also provides a decoder for extracting parachain IDs from encoded locations:
+
+```solidity
+function extractParachainId(bytes memory data) internal pure returns (uint32);
+```
+
+This can be used for validation — ensuring that an XCM destination payload actually targets the expected parachain.
+
+### Error Handling
+
+```solidity
+/// Thrown when a parachain ID exceeds the valid range for compact encoding.
+error InvalidParachainId(uint32 id);
+
+/// Thrown when an unsupported XCM version is specified.
+error UnsupportedVersion(uint8 version);
+```
+
+Library functions are `internal pure`, which means they cannot be caught with `try/catch` in the calling contract. In testing, a wrapper contract is used to make these calls external for proper revert testing.
+
+## XCM Message Payload
+
+The `xcmCall` field in the `StrategyIntent` struct contains the complete SCALE-encoded `VersionedXcm` payload. This is constructed off-chain by the AI strategist and must contain the appropriate XCM instructions for the intended operation.
+
+### Common XCM Instructions
+
+Typical strategy payloads might include combinations of:
+
+| Instruction | Purpose |
+|-------------|---------|
+| `WithdrawAsset` | Withdraw assets from the holding register on the destination |
+| `BuyExecution` | Pay for execution weight on the destination chain |
+| `DepositAsset` | Deposit assets into a specific account on the destination |
+| `TransferAsset` | Transfer assets to a beneficiary |
+| `Transact` | Execute an arbitrary call on the destination chain |
+| `ReserveAssetDeposited` | Notify destination of reserve-backed assets |
+| `DepositReserveAsset` | Deposit assets and notify the reserve chain |
+
+### Payload Construction
+
+The AI strategist constructs XCM payloads based on the target protocol's requirements. For example, deploying capital to a lending protocol on Moonbeam might require:
+
+1. `WithdrawAsset` — Take tokens from the Hub's sovereign account on Moonbeam
+2. `BuyExecution` — Pay for execution using a portion of the withdrawn assets
+3. `Transact` — Call the lending protocol's `deposit` function via EVM
+4. `DepositAsset` — Return any remaining assets to the vault's account
+
+The exact instructions depend on the destination chain's runtime, the target protocol's interface, and whether reserve-based or teleport-based transfers are used.
+
+### Validation
+
+The vault does **not** decode or validate the XCM payload's semantic content. It only:
+
+1. Passes the payload to `weighMessage()` for weight estimation
+2. Passes the payload to `send()` for dispatch
+
+The policy engine validates the intent's metadata (target parachain, target protocol, amount, slippage) rather than the raw XCM bytes. This separation allows the AI strategist flexibility in constructing XCM payloads while the vault enforces economic and security constraints.
+
+## Error Reference
+
+| Error | Condition |
+|-------|-----------|
+| `XcmOverweight(uint64 refTime, uint64 proofSize, uint64 maxRef, uint64 maxProof)` | Adjusted weight exceeds configured limits |
+| `InvalidDestination()` | XCM precompile cannot decode the destination (precompile error) |
+| `InvalidMessage()` | XCM precompile cannot decode the message (precompile error) |
+| `Overweight()` | XCM precompile rejects overweight message (precompile error) |
+| `SendFailure()` | XCM transport layer failed (precompile error) |
+| `InvalidParachainId(uint32 id)` | MultiLocation library: parachain ID out of range |
+| `UnsupportedVersion(uint8 version)` | MultiLocation library: version not V3 or V4 |
+
+## Events Reference
+
+| Event | Emitted When |
+|-------|-------------|
+| `XcmWeightLimitsUpdated(uint64 maxRefTime, uint64 maxProofSize)` | Admin updates weight limits via `setXcmWeightLimits()` |
+| `XcmSent(address indexed sender, bytes dest, bytes message)` | XCM precompile successfully dispatches a message |
+
+## Design Rationale
+
+### Why Native XCM Instead of Bridges?
+
+Obidot uses Polkadot's native XCM transport rather than third-party bridges because:
+
+1. **Native security** — XCM inherits Polkadot's shared security model. Messages are validated by the relay chain's validators, not by a separate bridge validator set
+2. **No wrapper tokens** — Assets move through reserve-based transfers or teleports without creating wrapped representations
+3. **Lower latency** — XCM messages between parachains settle in seconds, not minutes or hours
+4. **No bridge risk** — No dependency on bridge contracts that can be exploited (a common DeFi attack vector)
+5. **Protocol-level support** — XCM is maintained by the Polkadot core team and is a first-class feature of the ecosystem
+
+### Why Pre-Flight Weight Estimation?
+
+Estimating weight before sending prevents wasted gas on messages that would be rejected by the destination chain. Without pre-flight checks, a message could pass all vault validations but fail at the XCM transport layer, consuming gas without deploying capital.
+
+### Why a 10% Safety Margin?
+
+Weight estimation is inherently imprecise because:
+
+- The destination chain's state may change between estimation and execution
+- Runtime upgrades can alter weight costs
+- Benchmarking weights are statistical estimates, not exact measurements
+
+A 10% buffer provides reasonable headroom without being so conservative that it blocks legitimate messages. The margin is a compile-time constant (`XCM_WEIGHT_SAFETY_MARGIN = 110`) and cannot be changed after deployment.
+
+### Why Separate Destination Encoding from Message Payload?
+
+The `executeStrategy()` function encodes the destination from the intent's `targetParachain` field using the MultiLocation library, but accepts the XCM message payload (`xcmCall`) as-is from the strategist. This design:
+
+1. **Validates the destination** — The vault constructs the destination itself from the policy-validated `targetParachain`, ensuring the XCM message is actually sent to the whitelisted chain
+2. **Allows flexible payloads** — The strategist can construct arbitrary XCM instruction sequences appropriate for the target protocol
+3. **Separates concerns** — Location encoding is a mechanical transformation; message construction requires protocol-specific knowledge that belongs in the AI agent

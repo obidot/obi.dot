@@ -1,0 +1,171 @@
+---
+title: Architecture
+description: High-level architecture of the Obidot autonomous cross-chain finance layer, including system components, data flow, and actor roles.
+---
+
+## System Overview
+
+Obidot is designed as a modular system where each component has a clearly defined responsibility. The core smart contract — `ObidotVault` — acts as the coordination point between depositors, an AI strategist, keepers, and the Polkadot XCM transport layer.
+
+```
+Depositors ──► ObidotVault (ERC-4626) ──► XCM Precompile ──► Parachain DeFi
+                  │                              ▲
+                  ├── Policy Engine               │
+                  ├── Oracle Slippage Guard        │
+                  ├── EIP-712 Signature Verify     │
+                  └── Remote Asset Accounting      │
+                                                   │
+AI Strategist ─── signs StrategyIntent ────────────┘
+                                                   │
+Keeper ─────── reports outcome (P&L) ──────────────┘
+```
+
+## Actor Model
+
+The system defines three privileged roles using OpenZeppelin's `AccessControl`, plus unprivileged depositors and relayers.
+
+### Depositors
+
+Standard ERC-4626 users who deposit the underlying asset and receive vault shares in return. They interact exclusively through `deposit()`, `mint()`, `withdraw()`, and `redeem()`. Depositors have no special on-chain role — anyone with the underlying token can participate.
+
+### Admin (`DEFAULT_ADMIN_ROLE`)
+
+The governance layer. The admin configures all policy engine parameters and has emergency controls:
+
+- Whitelist/delist parachains and protocols
+- Set per-protocol exposure caps
+- Configure daily loss thresholds
+- Update the oracle address
+- Adjust XCM weight limits
+- Pause/unpause the vault
+- Enable emergency withdrawal mode
+- Manually adjust remote asset accounting
+
+In production, this role should be held by a multisig or governance contract.
+
+### AI Strategist (`STRATEGIST_ROLE`)
+
+The autonomous agent that decides where to deploy capital. The strategist never calls the vault directly — instead, it signs an EIP-712 `StrategyIntent` struct off-chain. This signed intent is then submitted to the vault by a relayer.
+
+The strategist's power is bounded by:
+- Parachain whitelist (can only target approved chains)
+- Protocol whitelist (can only target approved protocols)
+- Exposure caps (cannot over-allocate to a single protocol)
+- Oracle slippage bounds (expected return must be reasonable)
+- Daily loss circuit breaker (vault auto-pauses on excessive losses)
+
+### Keeper (`KEEPER_ROLE`)
+
+An off-chain service that monitors cross-chain strategy outcomes and reports results back to the vault via `reportStrategyOutcome()`. The keeper provides:
+
+- Whether the remote execution succeeded or failed
+- The amount of assets returned
+- The vault calculates P&L and updates accounting accordingly
+
+If accumulated daily losses exceed the configured threshold, the circuit breaker triggers automatically.
+
+### Relayer (Unprivileged)
+
+Anyone can call `executeStrategy()` with a valid signed intent. This permissionless relaying model means the strategist doesn't need ETH/DOT for gas — any relayer can submit the transaction. The EIP-712 signature ensures only authorized strategists can originate valid intents.
+
+## Contract Inheritance
+
+`ObidotVault` inherits from four OpenZeppelin v5 base contracts:
+
+| Base Contract | Purpose |
+|--------------|---------|
+| `ERC4626` | Standard yield-bearing vault interface (which itself inherits `ERC20`) |
+| `AccessControl` | Role-based access control for admin, strategist, and keeper |
+| `Pausable` | Emergency pause mechanism for deposits and strategy execution |
+| `ReentrancyGuard` | Protection against reentrancy on all entry/exit points |
+
+## Data Flow
+
+### Deposit Flow
+
+1. User calls `deposit(assets, receiver)` or `mint(shares, receiver)`
+2. Vault checks: not paused, deposit cap not exceeded
+3. Assets transferred from user to vault (increases idle balance)
+4. Shares minted to receiver using ERC-4626 conversion math
+
+### Strategy Execution Flow
+
+1. AI strategist constructs a `StrategyIntent` with target parachain, protocol, amount, and XCM payload
+2. Strategist signs the intent using EIP-712 typed data
+3. Relayer submits `executeStrategy(intent, signature)` to the vault
+4. Vault runs the full validation pipeline:
+   - Deadline check
+   - Basic validation (non-zero amount, asset match, slippage bounds)
+   - EIP-712 signature recovery and `STRATEGIST_ROLE` verification
+   - Nonce check and increment (replay protection)
+   - Policy engine enforcement (whitelists, caps, circuit breaker)
+   - Oracle slippage validation (Pyth price feed)
+   - XCM weight estimation (pre-flight check with 10% safety margin)
+5. Vault updates accounting: `totalRemoteAssets += amount`, `protocolExposure += amount`
+6. Vault approves the XCM precompile and dispatches the cross-chain message
+
+### Outcome Reporting Flow
+
+1. Keeper observes the cross-chain result (success/failure, returned amount)
+2. Keeper calls `reportStrategyOutcome(strategyId, success, returnedAmount)`
+3. Vault calculates P&L: `pnl = returnedAmount - deployedAmount`
+4. Remote asset accounting updated: `totalRemoteAssets -= deployedAmount`
+5. Protocol exposure decremented
+6. If loss detected: accumulated into daily loss tracker
+7. If daily losses exceed threshold: vault auto-pauses + emergency mode enabled
+
+### Withdrawal Flow
+
+1. User calls `withdraw(assets, receiver, owner)` or `redeem(shares, receiver, owner)`
+2. If paused and not in emergency mode: reverts
+3. If emergency mode: `totalAssets()` returns only idle balance (ignores remote assets)
+4. Shares burned, assets transferred to receiver
+
+## Accounting Model
+
+The vault tracks two categories of assets:
+
+| Category | Description |
+|----------|-------------|
+| **Idle Assets** | Underlying tokens held directly in the vault contract (`IERC20(asset()).balanceOf(address(this))`) |
+| **Remote Assets** | Value deployed to parachains, tracked via `totalRemoteAssets` state variable |
+
+```
+totalAssets() = idle + totalRemoteAssets     (normal mode)
+totalAssets() = idle                         (emergency mode)
+```
+
+This dual-balance model means share prices reflect both local and remote capital. When the vault enters emergency mode, remote assets are excluded so depositors can withdraw their proportional share of whatever is locally available.
+
+## Security Layers
+
+Obidot employs defense-in-depth with multiple independent security mechanisms:
+
+1. **EIP-712 Signatures** — Strategy intents are cryptographically signed with domain separation, preventing cross-contract and cross-chain replay
+2. **Sequential Nonces** — Per-strategist nonce tracking prevents intent replay within the same contract
+3. **Policy Engine** — On-chain whitelists and caps bound the strategist's operational scope
+4. **Oracle Validation** — Real-time price checks ensure expected returns are economically reasonable
+5. **XCM Weight Limits** — Pre-flight weight estimation prevents dispatching overweight messages
+6. **Circuit Breaker** — Automatic pause when daily losses exceed the configured threshold
+7. **Reentrancy Guard** — All external entry points are protected against reentrancy attacks
+8. **Inflation Attack Mitigation** — Virtual share offset of `10^3` prevents share price manipulation at low liquidity
+
+## File Organization
+
+```
+contracts/
+├── src/
+│   ├── ObidotVault.sol          # Core vault contract
+│   ├── Gateway.sol              # Gateway contract
+│   ├── interfaces/
+│   │   ├── IAggregatorV3.sol    # Chainlink-compatible oracle interface
+│   │   ├── IGateway.sol         # Gateway interface
+│   │   └── IXcm.sol             # XCM precompile interface
+│   └── libraries/
+│       └── MultiLocation.sol    # SCALE-encoding for XCM locations
+├── script/
+│   └── Deploy.s.sol             # Deployment scripts
+├── test/
+│   └── ObidotVault.t.sol        # Full test suite (91+ tests)
+└── foundry.toml                 # Foundry configuration
+```

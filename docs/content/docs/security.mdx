@@ -1,0 +1,433 @@
+---
+title: Security Model
+description: Comprehensive security model reference — defense-in-depth layers, EIP-712 replay protection, reentrancy guards, signature malleability prevention, inflation attack mitigation, circuit breakers, and threat analysis.
+---
+
+Obidot employs a **defense-in-depth** security architecture where multiple independent mechanisms protect depositor funds. No single layer is solely responsible for security — if one mechanism fails or is bypassed, the remaining layers continue to enforce constraints.
+
+## Security Layers Overview
+
+| Layer | Mechanism | Protects Against |
+|-------|-----------|-----------------|
+| 1 | EIP-712 Signatures | Unauthorized strategy execution |
+| 2 | Sequential Nonces | Intent replay attacks |
+| 3 | Policy Engine | Unbounded capital deployment |
+| 4 | Oracle Validation | Economically irrational strategies |
+| 5 | XCM Weight Limits | Overweight cross-chain messages |
+| 6 | Circuit Breaker | Cascading losses |
+| 7 | Reentrancy Guard | Reentrancy attacks on entry/exit points |
+| 8 | Inflation Attack Mitigation | Share price manipulation at low liquidity |
+| 9 | Access Control | Unauthorized admin/keeper actions |
+| 10 | Pausability | Emergency halting of all operations |
+
+## EIP-712 Signature Verification
+
+Every strategy execution requires a valid [EIP-712](https://eips.ethereum.org/EIPS/eip-712) typed data signature from an address holding `STRATEGIST_ROLE`. This is the primary authentication mechanism for the AI agent.
+
+### Domain Separation
+
+The `DOMAIN_SEPARATOR` is computed at deploy time and stored immutably:
+
+```solidity
+DOMAIN_SEPARATOR = keccak256(
+    abi.encode(
+        keccak256("EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)"),
+        keccak256("ObidotVault"),
+        keccak256("1"),
+        block.chainid,
+        address(this)
+    )
+);
+```
+
+This binds every signature to a specific:
+- **Contract name** — prevents cross-protocol replay
+- **Version** — prevents replay across contract upgrades
+- **Chain ID** — prevents cross-chain replay
+- **Contract address** — prevents replay across multiple vault deployments
+
+An intent signed for one vault instance cannot be replayed against a different vault, even on the same chain.
+
+### Signature Recovery
+
+The vault uses raw `ecrecover` (precompile at address `0x01`) rather than OpenZeppelin's ECDSA library for signature recovery:
+
+```solidity
+function _recover(bytes32 digest, bytes calldata signature)
+    internal pure returns (address)
+{
+    if (signature.length != 65) return address(0);
+
+    bytes32 r;
+    bytes32 s;
+    uint8 v;
+
+    assembly {
+        r := calldataload(signature.offset)
+        s := calldataload(add(signature.offset, 0x20))
+        v := byte(0, calldataload(add(signature.offset, 0x40)))
+    }
+
+    // EIP-2: restrict s to lower half order
+    if (uint256(s) > 0x7FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF5D576E7357A4501DDFE92F46681B20A0) {
+        return address(0);
+    }
+
+    if (v != 27 && v != 28) return address(0);
+
+    return ecrecover(digest, v, r, s);
+}
+```
+
+### Signature Length Check
+
+The signature must be exactly 65 bytes (32 bytes `r` + 32 bytes `s` + 1 byte `v`). Any other length returns `address(0)`, which then triggers the `InvalidSignature` error in the calling function.
+
+### EIP-2 s-Value Malleability Protection
+
+ECDSA signatures have an inherent malleability property: for any valid signature `(r, s, v)`, the signature `(r, n - s, v ^ 1)` is also valid for the same message (where `n` is the secp256k1 curve order). This means an attacker could take a valid signature and create a different-but-valid signature without knowing the private key.
+
+Obidot prevents this by enforcing [EIP-2](https://eips.ethereum.org/EIPS/eip-2): the `s` value must be in the lower half of the curve order:
+
+```solidity
+if (uint256(s) > 0x7FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF5D576E7357A4501DDFE92F46681B20A0) {
+    return address(0);
+}
+```
+
+The constant `0x7FFF...20A0` is `(n - 1) / 2` where `n` is the secp256k1 curve order. Any `s` value above this threshold is rejected.
+
+### v-Value Validation
+
+Only `v = 27` and `v = 28` are accepted. Other values (e.g., 0/1 from some signing libraries) are rejected to prevent ambiguous recovery.
+
+## Replay Protection
+
+### Sequential Nonces
+
+Each strategist has an independent sequential nonce that increments after every successful strategy execution:
+
+```solidity
+mapping(address => uint256) public nonces;
+
+// During executeStrategy():
+uint256 expectedNonce = nonces[strategist];
+if (intent.nonce != expectedNonce) {
+    revert InvalidNonce(expectedNonce, intent.nonce);
+}
+unchecked {
+    nonces[strategist] = expectedNonce + 1;
+}
+```
+
+This provides two guarantees:
+
+1. **No replay** — A signed intent with nonce `N` can only be executed once. After execution, the strategist's nonce becomes `N+1`, and any attempt to resubmit the same intent reverts with `InvalidNonce`.
+
+2. **Ordered execution** — Intents must be executed in the order they were signed. If the strategist signs intents with nonces 0, 1, 2, they must be submitted in that order. Intent 2 cannot be executed before intent 1.
+
+### Deadline Enforcement
+
+Every intent includes a `deadline` field — a Unix timestamp after which the intent becomes invalid:
+
+```solidity
+if (block.timestamp > intent.deadline) {
+    revert DeadlineExpired(intent.deadline, block.timestamp);
+}
+```
+
+This provides time-bounded validity. Even if a signed intent is never submitted (leaving the nonce unconsumed), it becomes permanently unusable after its deadline passes.
+
+### Cross-Chain Replay Prevention
+
+The EIP-712 `DOMAIN_SEPARATOR` includes `block.chainid` and `address(this)`, preventing a signed intent from being replayed on:
+- A different blockchain (different chain ID)
+- A different vault instance (different contract address)
+- A fork of the same chain (different chain ID after fork)
+
+## Reentrancy Protection
+
+All user-facing entry and exit points are protected with OpenZeppelin's `ReentrancyGuard`:
+
+```solidity
+function deposit(uint256, address) public override whenNotPaused nonReentrant returns (uint256);
+function mint(uint256, address) public override whenNotPaused nonReentrant returns (uint256);
+function withdraw(uint256, address, address) public override nonReentrant returns (uint256);
+function redeem(uint256, address, address) public override nonReentrant returns (uint256);
+function executeStrategy(StrategyIntent calldata, bytes calldata)
+    external whenNotPaused nonReentrant returns (uint256);
+function reportStrategyOutcome(uint256, bool, uint256)
+    external onlyRole(KEEPER_ROLE) nonReentrant;
+```
+
+The `nonReentrant` modifier uses a storage-based lock that prevents any of these functions from being called while another is already executing. This protects against:
+
+- **Deposit-during-withdraw attacks** — An ERC-20 token with callback hooks (e.g., ERC-777) could trigger a deposit during a withdrawal
+- **Strategy-during-strategy attacks** — A malicious XCM precompile implementation could attempt to call `executeStrategy` recursively
+- **Cross-function reentrancy** — Any combination of entry/exit/strategy functions calling each other
+
+## Inflation Attack Mitigation
+
+ERC-4626 vaults are vulnerable to a well-known inflation attack where:
+
+1. An attacker deposits a small amount (e.g., 1 wei) to receive 1 share
+2. The attacker donates a large amount of the underlying token directly to the vault
+3. The share price inflates dramatically
+4. A victim deposits tokens but receives 0 shares due to rounding
+5. The attacker redeems their 1 share for the victim's entire deposit
+
+Obidot mitigates this with a **virtual share offset** of `10^3`:
+
+```solidity
+function _decimalsOffset() internal pure override returns (uint8) {
+    return 3;
+}
+```
+
+This creates 1,000 virtual shares in all conversion calculations, meaning the attacker would need to donate 1,000x more tokens to achieve the same manipulation effect. The cost of the attack becomes prohibitively expensive.
+
+### Mathematical Impact
+
+With the offset, conversion functions effectively become:
+
+```
+convertToShares(assets) = assets × (totalSupply + 1000) / (totalAssets + 1)
+convertToAssets(shares) = shares × (totalAssets + 1) / (totalSupply + 1000)
+```
+
+For the attack to steal a victim's deposit of `D` tokens, the attacker must donate at least `1000 × D` tokens — making the attack unprofitable for any realistic deposit amount.
+
+## Access Control
+
+### Role Hierarchy
+
+The vault uses OpenZeppelin's `AccessControl` with three distinct roles:
+
+| Role | Granted At | Purpose |
+|------|-----------|---------|
+| `DEFAULT_ADMIN_ROLE` | Constructor | Full administrative control, can grant/revoke all roles |
+| `KEEPER_ROLE` | Constructor (to admin) | Can report strategy outcomes |
+| `STRATEGIST_ROLE` | Post-deployment (manual) | Can sign strategy intents |
+
+### Role Separation
+
+The three roles serve different actors with different trust assumptions:
+
+- **Admin** — Highest trust. Controls all policy parameters and emergency functions. Should be a multisig or governance contract in production.
+- **Strategist** — Bounded trust. Can deploy capital but only within policy engine constraints. Cannot modify policy parameters, pause the vault, or report outcomes.
+- **Keeper** — Moderate trust. Can affect accounting via outcome reporting but cannot deploy capital or modify policy. Reports are validated against existing strategy records.
+
+### Principle of Least Privilege
+
+Each role has the minimum permissions necessary for its function:
+
+- The strategist cannot whitelist new parachains or protocols
+- The keeper cannot execute strategies
+- Neither the strategist nor the keeper can pause the vault
+- Only the admin can modify any configuration parameter
+
+### Role Revocation
+
+The admin can revoke any role at any time using OpenZeppelin's `revokeRole()`. Revoking `STRATEGIST_ROLE` from an AI agent immediately prevents any new signed intents from being executed, even if the agent's private key is compromised.
+
+## Circuit Breaker
+
+The daily loss circuit breaker is an automatic safety mechanism that limits cumulative losses within a 24-hour window.
+
+### How It Works
+
+1. Every strategy outcome with negative P&L adds the loss amount to `dailyLossAccumulator`
+2. The accumulator resets to zero when 24 hours have elapsed since the last reset
+3. If the accumulator exceeds `maxDailyLoss`, the vault automatically:
+   - Pauses (blocking deposits and new strategies)
+   - Enables emergency mode (allowing withdrawals based on idle balance only)
+
+### What It Protects Against
+
+| Threat | Protection |
+|--------|-----------|
+| AI agent malfunction | Limits total damage from a buggy or misbehaving agent |
+| Oracle manipulation | Caps losses if oracle prices are temporarily manipulated |
+| Protocol exploits | Limits exposure if a target DeFi protocol is exploited |
+| Market crashes | Prevents continued deployment during adverse market conditions |
+
+### Recovery
+
+After the circuit breaker triggers, the admin must manually assess the situation and call `unpause()` to restore normal operations. This human-in-the-loop step ensures that automated recovery doesn't compound the problem.
+
+## Emergency Mode
+
+Emergency mode is the vault's last-resort protection mechanism for depositors. When enabled:
+
+1. The vault is paused (no new deposits, no strategy execution)
+2. `totalAssets()` only counts idle balance (ignores `totalRemoteAssets`)
+3. Withdrawals and redemptions remain available
+
+This means depositors can always exit with their proportional share of locally available assets, even if:
+- Remote assets are permanently stuck on a destination chain
+- The keeper infrastructure is down and cannot report outcomes
+- Cross-chain communication is disrupted
+
+### Trigger Conditions
+
+Emergency mode can be activated in two ways:
+
+| Trigger | Mechanism |
+|---------|-----------|
+| **Admin action** | `enableEmergencyMode()` called by `DEFAULT_ADMIN_ROLE` |
+| **Circuit breaker** | Automatic when `dailyLossAccumulator > maxDailyLoss` |
+
+### Deactivation
+
+Emergency mode is automatically deactivated when the admin calls `unpause()`. There is no way to disable emergency mode while the vault remains paused.
+
+## Oracle Security
+
+### Staleness Protection
+
+The vault rejects oracle data older than 1 hour (3,600 seconds):
+
+```solidity
+if (answer <= 0 || block.timestamp - updatedAt > ORACLE_STALENESS_THRESHOLD) {
+    revert OracleDataInvalid(answer, updatedAt);
+}
+```
+
+This prevents strategy execution with outdated prices that could result in unfavorable deployments.
+
+### Positive Price Validation
+
+Zero or negative prices are rejected immediately. A zero price would cause division-by-zero in slippage calculations, while a negative price indicates oracle malfunction.
+
+### Conservative Rounding
+
+The oracle slippage minimum (`oracleMinimum`) is computed with `Math.Rounding.Ceil`, meaning the vault rounds up the minimum acceptable return. This conservative approach favors depositors.
+
+## Threat Analysis
+
+### Compromised Strategist Key
+
+**Scenario:** An attacker gains access to the AI strategist's private key.
+
+**Mitigations:**
+- Policy engine constraints still apply — the attacker can only target whitelisted parachains and protocols
+- Exposure caps limit maximum deployment per protocol
+- Oracle slippage checks prevent deployment at unreasonable prices
+- Daily loss circuit breaker limits total damage within 24 hours
+- Admin can revoke `STRATEGIST_ROLE` immediately upon detection
+
+**Residual risk:** The attacker can deploy vault funds to whitelisted protocols within cap limits. The maximum damage is bounded by `maxDailyLoss` before the circuit breaker triggers.
+
+### Compromised Keeper Key
+
+**Scenario:** An attacker gains access to the keeper's private key.
+
+**Mitigations:**
+- Keeper can only report on strategies that are in `Sent` status
+- Each strategy can only be reported on once (status transitions from `Sent` to `Executed`/`Failed`)
+- False loss reports trigger the circuit breaker, which pauses the vault and alerts the admin
+- The keeper cannot deploy capital or modify policy parameters
+
+**Residual risk:** The attacker can file false outcome reports, potentially triggering the circuit breaker (which is actually a protective outcome) or preventing legitimate outcome reporting.
+
+### Oracle Manipulation
+
+**Scenario:** An attacker manipulates the Pyth oracle price feed.
+
+**Mitigations:**
+- Staleness check ensures the price is recent (< 1 hour)
+- Pyth uses multiple data publishers with aggregation, making manipulation expensive
+- The oracle only validates `minReturn` — it doesn't determine how much is actually deployed
+- Slippage cap of 50% limits the maximum "acceptable" deviation from oracle price
+
+**Residual risk:** If the oracle is successfully manipulated to report a significantly different price, the strategist could deploy capital at unfavorable rates up to the slippage tolerance.
+
+### Malicious Admin
+
+**Scenario:** The admin account is compromised or acts maliciously.
+
+**Mitigations:**
+- In production, the admin should be a multisig or governance contract requiring multiple signers
+- All admin actions emit events, creating a public audit trail
+- The admin cannot directly withdraw depositor funds (only depositors can withdraw via ERC-4626)
+- `adjustRemoteAssets()` only changes accounting, not actual token balances
+
+**Residual risk:** A malicious admin could whitelist dangerous protocols, set exposure caps to unlimited, disable the circuit breaker, or change the oracle to a manipulated feed. This is why the admin role should be held by a multisig with appropriate governance procedures.
+
+### Reentrancy via Malicious Token
+
+**Scenario:** The underlying ERC-20 token has callback hooks (e.g., ERC-777) that could trigger reentrancy.
+
+**Mitigations:**
+- `nonReentrant` modifier on all entry/exit points
+- `SafeERC20` library used for all token transfers
+- OpenZeppelin's ERC-4626 implementation follows the checks-effects-interactions pattern
+
+**Residual risk:** Minimal. The reentrancy guard prevents any cross-function reentrancy regardless of the token's callback behavior.
+
+### Front-Running Strategy Intents
+
+**Scenario:** A front-runner observes a pending `executeStrategy()` transaction and attempts to extract value.
+
+**Mitigations:**
+- The `minReturn` parameter sets a floor on acceptable returns
+- Oracle slippage validation prevents execution at manipulated prices
+- The intent's deadline limits the time window for front-running
+- Sequential nonces prevent intent reordering
+
+**Residual risk:** Front-runners could potentially sandwich the XCM dispatch on the destination chain, but this is outside the vault contract's control. The `minReturn` parameter provides a bound on the maximum MEV extractable.
+
+### Destination Chain Failure
+
+**Scenario:** A destination parachain halts, is deregistered, or the target protocol is exploited.
+
+**Mitigations:**
+- Per-protocol exposure caps limit maximum loss from any single protocol
+- Daily loss circuit breaker limits total losses across all protocols
+- Emergency mode allows depositors to withdraw idle assets even if remote assets are lost
+- `adjustRemoteAssets()` allows the admin to write off lost remote assets
+
+**Residual risk:** Remote assets deployed to a failed chain may be permanently lost. The vault's accounting can be corrected, but the assets themselves cannot be recovered without the destination chain coming back online.
+
+## Security Best Practices for Operators
+
+### Admin Role
+
+1. **Use a multisig** — Never use an EOA for the admin role in production. A 3-of-5 or similar multisig provides protection against single-point-of-failure key compromise.
+2. **Monitor events** — Set up alerting on all admin events (whitelist changes, cap updates, emergency mode toggles).
+3. **Review before unpausing** — After a circuit breaker trigger, thoroughly investigate the cause before calling `unpause()`.
+
+### Strategist Management
+
+1. **Key rotation** — Periodically rotate the strategist's private key by granting `STRATEGIST_ROLE` to a new address and revoking from the old one.
+2. **Secure key storage** — Store the AI agent's private key in a hardware security module (HSM) or secure enclave.
+3. **Monitor nonces** — Track the strategist's nonce progression. Gaps or unexpected jumps could indicate unauthorized activity.
+
+### Keeper Infrastructure
+
+1. **Redundancy** — Run multiple keeper instances to ensure outcome reporting doesn't halt.
+2. **Timeout monitoring** — Alert if strategies remain in `Sent` status beyond a reasonable timeout.
+3. **Cross-reference** — Verify keeper reports against independent chain data sources.
+
+### Policy Configuration
+
+1. **Start conservative** — Begin with tight exposure caps and a low daily loss threshold. Widen limits gradually as confidence builds.
+2. **Regular review** — Periodically audit the whitelist of parachains and protocols. Remove any that are no longer actively used or maintained.
+3. **Test oracle** — Before changing the oracle address, verify the new feed returns valid, fresh data with the expected decimal precision.
+
+## Test Coverage
+
+The vault's security properties are verified by a comprehensive test suite:
+
+| Category | Test Count | Description |
+|----------|-----------|-------------|
+| ERC-4626 Core | 10+ | Deposit, redeem, caps, paused state, remote accounting, emergency |
+| Fuzz Tests | 4 | Deposit/withdraw roundtrip, multi-user, deposit cap, share inflation |
+| Strategy Execution | 5+ | Success, permissionless relay, sequential, outcome reporting, circuit breaker |
+| Security Tests | 10+ | Expired deadline, nonce mismatch, replay, unauthorized strategist, invalid/malleable signature, asset mismatch, zero amount, slippage too high, insufficient balance, paused, access control |
+| Policy Engine | 6+ | Parachain/protocol not allowed, exposure cap, exposure reset, daily loss reset, whitelist toggle |
+| Oracle Tests | 6+ | Slippage pass/fail, stale data, negative/zero price, oracle update, fuzz boundary |
+| XCM Tests | 4+ | Weight within limits, overweight refTime/proofSize, weight limit update, fuzz safety margin |
+| Invariant Tests | 4 | No zombie shares, idle balance consistency, conversion rounding, deposits ≥ withdrawals |
+
+Total: **91+ unit/fuzz tests** and **4 invariant tests** (256 runs, 16,384 calls each).

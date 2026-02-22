@@ -1,0 +1,270 @@
+---
+title: Vault (ERC-4626)
+description: Deep dive into the ObidotVault ERC-4626 implementation — share mechanics, deposit caps, inflation attack mitigation, accounting model, and entry/exit guards.
+---
+
+The `ObidotVault` contract is a fully compliant [ERC-4626](https://eips.ethereum.org/EIPS/eip-4626) tokenized vault built on OpenZeppelin v5.5.0. It accepts an underlying ERC-20 asset, mints yield-bearing share tokens (`obVAULT`), and manages dual-balance accounting across local idle funds and remotely deployed capital.
+
+## Share Token
+
+When users deposit the underlying asset, they receive `obVAULT` share tokens representing their proportional claim on the vault's total assets.
+
+| Property | Value |
+|----------|-------|
+| Name | `Obidot Vault Share` |
+| Symbol | `obVAULT` |
+| Decimals | Same as underlying asset + 3 (offset) |
+| Standard | ERC-20 (inherited via ERC-4626) |
+
+## Inflation Attack Mitigation
+
+ERC-4626 vaults are susceptible to an inflation attack where an attacker can manipulate the share price by donating a large amount of the underlying asset when the vault has very few shares outstanding. Obidot mitigates this with a **virtual share offset**.
+
+```solidity
+function _decimalsOffset() internal pure override returns (uint8) {
+    return 3;
+}
+```
+
+This adds `10^3 = 1000` virtual shares to all conversion calculations, making the attack economically infeasible. The attacker would need to donate 1000x more tokens to achieve the same manipulation effect.
+
+### How It Works
+
+The OpenZeppelin v5 `ERC4626` base uses the offset in its conversion functions:
+
+```
+convertToShares(assets) = assets * (totalSupply + 10^offset) / (totalAssets + 1)
+convertToAssets(shares) = shares * (totalAssets + 1) / (totalSupply + 10^offset)
+```
+
+The `+1` on assets and `+10^offset` on shares create a virtual liquidity floor that prevents price manipulation at low supply levels.
+
+## Conservative Rounding
+
+The vault follows ERC-4626 best practices by rounding in favor of the vault (against the user) on all conversions:
+
+- **Deposits**: rounds *up* the number of assets required (user pays slightly more)
+- **Mints**: rounds *up* the number of assets required for a given share count
+- **Withdrawals**: rounds *down* the assets returned (user receives slightly less)
+- **Redemptions**: rounds *down* the assets returned for a given share count
+
+This is handled automatically by OpenZeppelin v5's default rounding behavior.
+
+## Total Assets Accounting
+
+The vault tracks two categories of assets:
+
+```solidity
+function totalAssets() public view override returns (uint256) {
+    if (emergencyMode) {
+        return IERC20(asset()).balanceOf(address(this));
+    }
+    return IERC20(asset()).balanceOf(address(this)) + totalRemoteAssets;
+}
+```
+
+| Category | Source | Description |
+|----------|--------|-------------|
+| **Idle Assets** | `IERC20(asset()).balanceOf(address(this))` | Tokens physically held in the vault contract |
+| **Remote Assets** | `totalRemoteAssets` state variable | Value deployed to parachains via XCM strategies |
+
+In **normal mode**, share prices reflect the full portfolio (idle + remote). In **emergency mode**, only idle assets are counted, enabling proportional withdrawals of whatever is locally available.
+
+### View Helpers
+
+```solidity
+/// Returns idle (local, undeployed) assets in the vault.
+function idleAssets() external view returns (uint256);
+```
+
+## Deposit Caps
+
+The vault enforces a global deposit cap to limit total exposure. The cap is checked via overridden `maxDeposit()` and `maxMint()` functions:
+
+```solidity
+function maxDeposit(address) public view override returns (uint256) {
+    if (paused()) return 0;
+    uint256 currentTotal = totalAssets();
+    if (currentTotal >= depositCap) return 0;
+    return depositCap - currentTotal;
+}
+
+function maxMint(address) public view override returns (uint256) {
+    if (paused()) return 0;
+    uint256 maxDep = maxDeposit(address(0));
+    if (maxDep == 0) return 0;
+    return convertToShares(maxDep);
+}
+```
+
+When the vault is paused, both functions return `0`, preventing any new deposits.
+
+### Configuring the Deposit Cap
+
+The admin can update the deposit cap at any time:
+
+```solidity
+function setDepositCap(uint256 newCap) external onlyRole(DEFAULT_ADMIN_ROLE);
+```
+
+The cap must be non-zero. Setting a lower cap does not force existing depositors to withdraw — it only prevents new deposits once `totalAssets() >= newCap`.
+
+## Entry and Exit Guards
+
+All user-facing entry and exit functions are protected with multiple guards:
+
+### Deposit & Mint
+
+```solidity
+function deposit(uint256 assets, address receiver)
+    public override whenNotPaused nonReentrant returns (uint256);
+
+function mint(uint256 shares, address receiver)
+    public override whenNotPaused nonReentrant returns (uint256);
+```
+
+Guards applied:
+- `whenNotPaused` — reverts if the vault is paused
+- `nonReentrant` — prevents reentrancy attacks
+
+### Withdraw & Redeem
+
+```solidity
+function withdraw(uint256 assets, address receiver, address owner)
+    public override nonReentrant returns (uint256);
+
+function redeem(uint256 shares, address receiver, address owner)
+    public override nonReentrant returns (uint256);
+```
+
+Guards applied:
+- `nonReentrant` — prevents reentrancy attacks
+- Custom pause check: `if (paused() && !emergencyMode) revert EnforcedPause()`
+
+Withdrawals and redemptions are only blocked when the vault is paused **and** emergency mode is not active. When emergency mode is enabled, users can still withdraw proportionally based on idle assets.
+
+### Max Withdraw & Max Redeem
+
+```solidity
+function maxWithdraw(address owner) public view override returns (uint256) {
+    if (paused() && !emergencyMode) return 0;
+    return super.maxWithdraw(owner);
+}
+
+function maxRedeem(address owner) public view override returns (uint256) {
+    if (paused() && !emergencyMode) return 0;
+    return super.maxRedeem(owner);
+}
+```
+
+These view functions correctly report `0` when the vault is paused (non-emergency), ensuring off-chain integrations can query available withdrawal limits.
+
+## Emergency Mode
+
+Emergency mode is a special vault state designed to protect depositors when something goes wrong with remote deployments. When enabled:
+
+1. The vault is paused (no new deposits or strategy executions)
+2. `totalAssets()` only counts idle balance (ignores `totalRemoteAssets`)
+3. Withdrawals and redemptions remain available
+
+This means each depositor can withdraw their proportional share of whatever assets are physically present in the vault contract, even if remote assets are stuck or lost.
+
+### Lifecycle
+
+```solidity
+// Admin enables emergency mode (also pauses the vault)
+function enableEmergencyMode() external onlyRole(DEFAULT_ADMIN_ROLE);
+
+// Admin unpauses (also disables emergency mode if active)
+function unpause() external onlyRole(DEFAULT_ADMIN_ROLE);
+```
+
+Emergency mode can also be triggered automatically by the **daily loss circuit breaker** — if accumulated losses from strategy outcomes exceed the configured `maxDailyLoss` threshold, the vault auto-pauses and enters emergency mode.
+
+### Manual Remote Asset Adjustment
+
+In exceptional circumstances, the admin can manually adjust the `totalRemoteAssets` value:
+
+```solidity
+function adjustRemoteAssets(uint256 newValue, string calldata reason)
+    external onlyRole(DEFAULT_ADMIN_ROLE);
+```
+
+This emits a `RemoteAssetsAdjusted` event with the old value, new value, and a human-readable reason string for audit purposes.
+
+## Pause & Unpause
+
+The admin can pause and unpause the vault independently of emergency mode:
+
+```solidity
+function pause() external onlyRole(DEFAULT_ADMIN_ROLE);
+function unpause() external onlyRole(DEFAULT_ADMIN_ROLE);
+```
+
+When paused:
+- Deposits and mints are blocked
+- Strategy execution is blocked
+- Withdrawals and redemptions are blocked **unless** emergency mode is active
+
+When unpausing, if emergency mode was active, it is automatically disabled.
+
+## Constructor
+
+The vault is deployed with the following parameters:
+
+```solidity
+constructor(
+    IERC20 _asset,        // Underlying ERC-20 token
+    address _oracle,      // Pyth AggregatorV3 oracle address
+    uint256 _depositCap,  // Initial deposit cap
+    uint256 _maxDailyLoss, // Daily loss circuit breaker threshold
+    uint64 _maxRefTime,   // Max XCM execution time (picoseconds)
+    uint64 _maxProofSize, // Max XCM proof size (bytes)
+    address _admin        // Admin address (receives DEFAULT_ADMIN_ROLE + KEEPER_ROLE)
+)
+```
+
+### Validations
+
+The constructor enforces:
+- `_oracle` must not be the zero address
+- `_admin` must not be the zero address
+- `_depositCap` must be non-zero
+
+### Initialization
+
+On deployment:
+- EIP-712 `DOMAIN_SEPARATOR` is computed and stored immutably
+- `DEFAULT_ADMIN_ROLE` is granted to `_admin`
+- `KEEPER_ROLE` is granted to `_admin`
+- `lastLossResetTimestamp` is set to `block.timestamp`
+
+## Role-Based Access Control
+
+The vault uses OpenZeppelin's `AccessControl` with three roles:
+
+| Role | Hash | Purpose |
+|------|------|---------|
+| `DEFAULT_ADMIN_ROLE` | `0x00` | Full admin: policy config, emergency controls, role management |
+| `STRATEGIST_ROLE` | `keccak256("STRATEGIST_ROLE")` | AI agent: can sign strategy intents |
+| `KEEPER_ROLE` | `keccak256("KEEPER_ROLE")` | Keeper: can report strategy outcomes |
+
+The admin role can grant and revoke all other roles. The `STRATEGIST_ROLE` is not granted at deployment — it must be explicitly assigned to the AI agent address.
+
+## ERC-165 Interface Support
+
+```solidity
+function supportsInterface(bytes4 interfaceId)
+    public view override(AccessControl) returns (bool);
+```
+
+The vault supports interface detection via ERC-165, resolving the diamond inheritance between `AccessControl` and `ERC4626`.
+
+## Key Invariants
+
+The vault maintains several invariants verified by the test suite:
+
+1. **No zombie shares** — if `totalSupply > 0`, then `totalAssets > 0`
+2. **Idle balance consistency** — `idleAssets() <= totalAssets()` always holds
+3. **Conversion rounding** — `convertToAssets(convertToShares(x)) <= x` (round-trip never inflates)
+4. **Deposits ≥ Withdrawals** — depositing and immediately withdrawing the same amount never yields more than deposited

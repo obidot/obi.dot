@@ -1,0 +1,14 @@
+{
+  "title": "Documentation",
+  "pages": [
+    "---",
+    "architecture",
+    "vault",
+    "strategy-execution",
+    "policy-engine",
+    "oracle",
+    "xcm",
+    "security",
+    "deployment"
+  ]
+}

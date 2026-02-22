@@ -1,4 +1,4 @@
-# AGENTS.md
+# Package Context: docs
 
 This file provides guidance to agents (LLMs) when working with code in this repository.
 
@@ -126,3 +126,7 @@ The theme switcher is explicitly disabled (src/lib/layout.shared.tsx:8). The sit
 
 ### Static Generation
 All documentation pages use `generateStaticParams` for static site generation at build time. Pages are pre-rendered, not server-rendered per request.
+
+## PR Instructions
+- Branch/Title format: `[docs] <Title>`
+- Always run `pnpm lint` and `pnpm format` before committing.
