@@ -1,0 +1,360 @@
+---
+title: AI Agent
+description: Autonomous AI agent module — architecture, LangChain tools, decision pipeline, services, cross-chain state aggregation, and Bifrost yield monitoring.
+---
+
+The Obidot AI Agent is an autonomous financial strategist that manages the vault system. Built with TypeScript, [LangChain](https://js.langchain.com/), and [Viem](https://viem.sh/), it runs an observation-decision-execution loop that monitors yield opportunities across Polkadot parachains and EVM chains, then signs and submits strategy intents to the vault's on-chain policy engine.
+
+## Architecture
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                     Autonomous Loop                          │
+│                                                              │
+│  ┌──────────┐   ┌───────────┐   ┌──────────────────────┐   │
+│  │ Phase 1   │   │ Phase 2    │   │ Phase 3               │   │
+│  │ Perceive  │──►│ Decide     │──►│ Execute               │   │
+│  │           │   │            │   │                        │   │
+│  │ Yields    │   │ LLM (GPT)  │   │ Sign EIP-712 intent  │   │
+│  │ Vault     │   │ System     │   │ Submit to vault       │   │
+│  │ Bifrost   │   │ Prompt     │   │ or Bifrost adapter    │   │
+│  │ Cross-    │   │            │   │                        │   │
+│  │ Chain     │   │            │   │                        │   │
+│  └──────────┘   └───────────┘   └──────────────────────┘   │
+│       │                                      │               │
+│       ▼                                      ▼               │
+│  ┌─────────────────┐            ┌─────────────────────┐     │
+│  │ Services         │            │ Signer Service       │     │
+│  │ • YieldService   │            │ • EIP-712 signing    │     │
+│  │ • CrossChain     │            │ • writeContract      │     │
+│  │   Service        │            │ • Bifrost adapter    │     │
+│  └─────────────────┘            └─────────────────────┘     │
+│                                                              │
+│  ┌─────────────────────────────────────────────────────┐    │
+│  │                    ObiKit SDK                         │    │
+│  │  PAK tools (balance, transfer, XCM, staking, swap)   │    │
+│  └─────────────────────────────────────────────────────┘    │
+└─────────────────────────────────────────────────────────────┘
+```
+
+## Module Structure
+
+```
+modules/agent/
+├── src/
+│   ├── main.ts                    # Entry point — starts the autonomous loop
+│   ├── agent/
+│   │   ├── loop.ts                # AutonomousLoop class — 3-phase cycle
+│   │   ├── systemPrompt.ts        # LLM system prompt (identity, rules, output format)
+│   │   └── tools.ts               # 6 LangChain tools (yield, vault, strategy, Bifrost, cross-chain)
+│   ├── config/
+│   │   ├── constants.ts           # Addresses, ABIs, protocol registry, chain configs
+│   │   └── env.ts                 # Environment variable parsing (Zod validated)
+│   ├── services/
+│   │   ├── yield.service.ts       # Yield fetcher (parachains + Bifrost products)
+│   │   ├── crosschain.service.ts  # Multi-chain state aggregator
+│   │   └── signer.service.ts      # EIP-712 signing + on-chain execution
+│   ├── types/
+│   │   └── index.ts               # Zod schemas, TypeScript types, decision union
+│   └── utils/
+│       └── logger.ts              # Pino structured logger
+├── package.json
+├── tsconfig.json
+└── .env.example
+```
+
+## Decision Types
+
+The agent produces exactly one of four decision types per cycle:
+
+### REALLOCATE — XCM Parachain Strategy
+
+Routes capital to a Polkadot parachain via the existing XCM strategy pipeline:
+
+```json
+{
+  "action": "REALLOCATE",
+  "targetParachain": 2034,
+  "targetProtocol": "0x1234...",
+  "amount": "1000000000000000000",
+  "maxSlippageBps": 50,
+  "reasoning": "Hydration Omnipool APY 12.3% vs current 8.1%, net benefit after XCM cost is 3.95%"
+}
+```
+
+### BIFROST_STRATEGY — Bifrost DeFi Operation
+
+Executes a specific Bifrost DeFi operation (liquid staking, DEX swap, farming, etc.):
+
+```json
+{
+  "action": "BIFROST_STRATEGY",
+  "strategyType": 0,
+  "amount": "500000000000000000",
+  "maxSlippageBps": 30,
+  "currencyIn": 0,
+  "currencyOut": 1,
+  "reasoning": "Mint vDOT via SLP: 9.2% staking yield, stable and low-risk"
+}
+```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `strategyType` | `0–6` | BifrostStrategyType enum value |
+| `currencyIn` | `0–4` | Input currency ID (DOT=0, vDOT=1, KSM=2, vKSM=3, BNC=4) |
+| `currencyOut` | `0–4` | Output currency ID (optional, for swaps) |
+| `poolId` | `number` | Farming pool ID (optional, for farm operations) |
+| `minOutput` | `string` | Minimum expected output in wei (optional) |
+
+### CROSS_CHAIN_REBALANCE — Hub ↔ Satellite
+
+Proposes moving liquidity between the hub vault and satellite vaults (logged for manual execution):
+
+```json
+{
+  "action": "CROSS_CHAIN_REBALANCE",
+  "targetChain": "ethereum",
+  "direction": "HUB_TO_SATELLITE",
+  "amount": "2000000000000000000",
+  "reasoning": "Ethereum satellite has high withdrawal demand, rebalance 2 ETH to improve liquidity"
+}
+```
+
+### NO_ACTION — Hold Position
+
+When no profitable opportunity exists or risk is too high:
+
+```json
+{
+  "action": "NO_ACTION",
+  "reasoning": "All APY deltas below 2% threshold after costs. Current positions are optimal."
+}
+```
+
+## LangChain Tools
+
+The agent registers 6 custom LangChain tools with the ObiKit SDK:
+
+### Perception Tools
+
+| Tool | Name | Purpose |
+|------|------|---------|
+| `FetchYieldsTool` | `fetch_yields` | Fetches APY rates from all tracked protocols (parachains + Bifrost) |
+| `FetchVaultStateTool` | `fetch_vault_state` | Reads on-chain vault state (idle balance, remote assets, caps, health) |
+| `FetchBifrostYieldsTool` | `fetch_bifrost_yields` | Fetches yield data for all 7 Bifrost products |
+| `FetchCrossChainStateTool` | `fetch_cross_chain_state` | Aggregates state from hub + all satellite EVM vaults |
+
+### Execution Tools
+
+| Tool | Name | Purpose |
+|------|------|---------|
+| `ExecuteStrategyTool` | `execute_strategy` | Signs and submits a REALLOCATE strategy intent via EIP-712 |
+| `ExecuteBifrostStrategyTool` | `execute_bifrost_strategy` | Executes a Bifrost DeFi operation via BifrostAdapter |
+
+### Tool Guardrails
+
+All execution tools enforce hard limits before submitting transactions:
+
+- **Maximum amount**: Capped at `MAX_STRATEGY_AMOUNT` (configurable, default 100 ETH equivalent)
+- **Maximum slippage**: Capped at 100 bps (1%)
+- **Action type validation**: Each tool rejects decisions with the wrong `action` type
+- **Zod schema validation**: All decisions are parsed through the `aiDecisionSchema` discriminated union
+
+## Services
+
+### YieldService
+
+Fetches yield data from DeFi protocols. For Bifrost, it tracks 7 distinct products:
+
+| Product | Category | APY Range | Currency |
+|---------|----------|-----------|----------|
+| Bifrost SLP vDOT | SLP | 7–11% | DOT → vDOT |
+| Bifrost SLP vKSM | SLP | 5.5–8.5% | KSM → vKSM |
+| Bifrost DEX DOT/vDOT | DEX | 8–18% | DOT ↔ vDOT |
+| Bifrost DEX BNC/DOT | DEX | 12–25% | BNC ↔ DOT |
+| Bifrost Farm DOT/vDOT LP | Farming | 15–35% | LP tokens |
+| Bifrost Farm BNC/DOT LP | Farming | 20–45% | LP tokens |
+| Bifrost SALP | SALP | 3–6% | DOT |
+
+Each product returns a `BifrostYield` object with APY, category, currency IDs, pool ID, and active status.
+
+### CrossChainService
+
+Aggregates vault state across all configured chains:
+
+```typescript
+class CrossChainService {
+  // Fetch combined hub + satellite state
+  async fetchCrossChainState(hubState: VaultState): Promise<CrossChainVaultState>
+
+  // Find satellites with stale sync data
+  getStaleSatellites(): SatelliteChainState[]
+
+  // Check if CrossChainRouter is operational
+  async isRouterActive(): Promise<boolean>
+}
+```
+
+The service creates Viem `PublicClient` instances for each configured satellite chain and reads on-chain state in parallel:
+
+| Read | Source | Data |
+|------|--------|------|
+| Hub cross-chain data | `ObidotVault` | `totalSatelliteAssets`, `globalTotalAssets` |
+| Satellite state | `ObidotVaultEVM` (per chain) | `totalAssets`, `globalTotalAssets`, `emergencyMode`, `lastSyncTimestamp`, `paused` |
+| Router status | `CrossChainRouter` | `paused` |
+
+### SignerService
+
+Manages EIP-712 signing and on-chain transaction execution:
+
+| Method | Purpose |
+|--------|---------|
+| `signStrategyIntent(intent)` | EIP-712 typed data signing for vault strategy intents |
+| `executeOnChain(intent, signature)` | Submit signed intent to `ObidotVault.executeStrategy()` |
+| `previewBifrostStrategy(...)` | Read `BifrostAdapter.previewStrategy()` |
+| `executeBifrostStrategy(...)` | Write `BifrostAdapter.executeBifrostStrategy()` |
+
+The service uses Viem's `createWalletClient` with the strategist's private key for signing and `createPublicClient` for reading state.
+
+## Autonomous Loop
+
+### Phase 1: Perception
+
+The loop gathers market data from all available sources:
+
+```typescript
+// 1. Fetch parachain yields
+const yields = await yieldService.fetchYields();
+
+// 2. Fetch Bifrost-specific yields
+const bifrostYields = await yieldService.fetchBifrostYields();
+
+// 3. Read vault state
+const vaultState = await fetchVaultStateTool.invoke();
+
+// 4. Fetch cross-chain state (if configured)
+const crossChainState = await crossChainService.fetchCrossChainState(vaultState);
+```
+
+### Phase 2: Decision
+
+The collected data is formatted into a user message and sent to the LLM along with the system prompt:
+
+```typescript
+const decision = await llm.invoke([
+  { role: "system", content: SYSTEM_PROMPT },
+  { role: "user", content: buildUserMessage(snapshot) },
+]);
+```
+
+The user message includes:
+- APY rates for each protocol (tabular format)
+- Bifrost product yields with categories and risk levels
+- Vault state (idle balance, remote assets, total, caps)
+- Cross-chain state (satellite balances, sync freshness, stale flags)
+
+### Phase 3: Execution
+
+Based on the decision's `action` type:
+
+| Action | Execution |
+|--------|-----------|
+| `REALLOCATE` | `execute_strategy` tool → EIP-712 sign → `vault.executeStrategy()` |
+| `BIFROST_STRATEGY` | `execute_bifrost_strategy` tool → `adapter.executeBifrostStrategy()` |
+| `CROSS_CHAIN_REBALANCE` | Logged for manual execution (admin-level operation) |
+| `NO_ACTION` | Logged, no transaction |
+
+## System Prompt
+
+The system prompt defines the agent's identity and constraints:
+
+### Identity
+
+> You are the **Obidot Autonomous CFO** — an AI financial strategist operating across Polkadot and EVM chains.
+
+### Risk Rules (Hard Constraints)
+
+1. Maximum slippage: never above 100 bps (1%)
+2. APY delta threshold: only act if delta exceeds configured minimum
+3. XCM cost awareness: factor ~0.1% per transfer
+4. ISMP cost awareness: factor ~0.25% per Hyperbridge message
+5. Capital preservation: NO_ACTION when in doubt
+6. Single protocol per cycle: one action only
+7. Amount limits: never exceed idle balance
+8. Deadline: max 10 minutes in the future
+9. Bifrost priority: prefer SLP (safest), then DEX, then Farming
+10. Impermanent loss: explicitly evaluate IL for DEX/farming positions
+
+### Decision Pipeline
+
+The prompt enforces a strict 3-step pipeline:
+
+1. **INGEST** — receive market snapshot (yields, vault state, cross-chain state)
+2. **ANALYZE** — compute net APY benefit after costs, assess risk per product category
+3. **DECIDE** — output exactly one JSON decision object
+
+## Configuration
+
+### Environment Variables
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `PRIVATE_KEY` | Yes | Strategist private key for EIP-712 signing |
+| `RPC_URL` | Yes | Polkadot Hub EVM RPC endpoint |
+| `VAULT_ADDRESS` | Yes | ObidotVault contract address |
+| `OPENAI_API_KEY` | Yes | OpenAI API key for GPT model |
+| `CROSS_CHAIN_ROUTER_ADDRESS` | No | CrossChainRouter contract address |
+| `BIFROST_ADAPTER_ADDRESS` | No | BifrostAdapter contract address |
+| `ETH_RPC_URL` | No | Ethereum satellite RPC |
+| `ETH_SATELLITE_VAULT` | No | Ethereum ObidotVaultEVM address |
+| `ARB_RPC_URL` | No | Arbitrum satellite RPC |
+| `ARB_SATELLITE_VAULT` | No | Arbitrum ObidotVaultEVM address |
+| `BASE_RPC_URL` | No | Base satellite RPC |
+| `BASE_SATELLITE_VAULT` | No | Base ObidotVaultEVM address |
+| `OP_RPC_URL` | No | Optimism satellite RPC |
+| `OP_SATELLITE_VAULT` | No | Optimism ObidotVaultEVM address |
+
+Cross-chain and Bifrost features are automatically enabled when their respective addresses are configured.
+
+### Protocol Registry
+
+The agent maintains a registry of known Bifrost protocols:
+
+```typescript
+const BIFROST_PROTOCOLS = {
+  SLP:     { palletIndex: 60, name: "Bifrost SLP",     protocol: "0x..." },
+  DEX:     { palletIndex: 61, name: "Bifrost DEX",     protocol: "0x..." },
+  FARMING: { palletIndex: 62, name: "Bifrost Farming", protocol: "0x..." },
+  SALP:    { palletIndex: 63, name: "Bifrost SALP",    protocol: "0x..." },
+};
+```
+
+### Satellite Chain Registry
+
+EVM satellite chains are configured via environment variables:
+
+```typescript
+const EVM_CHAINS: Record<string, EVMChainConfig> = {
+  ethereum: { name: "Ethereum",  rpcUrl: ETH_RPC_URL, vaultAddress: ETH_SATELLITE_VAULT },
+  arbitrum: { name: "Arbitrum",  rpcUrl: ARB_RPC_URL, vaultAddress: ARB_SATELLITE_VAULT },
+  base:     { name: "Base",      rpcUrl: BASE_RPC_URL, vaultAddress: BASE_SATELLITE_VAULT },
+  optimism: { name: "Optimism",  rpcUrl: OP_RPC_URL,  vaultAddress: OP_SATELLITE_VAULT },
+};
+```
+
+Chains without both `rpcUrl` and `vaultAddress` configured are automatically skipped.
+
+## Running the Agent
+
+```bash
+# Install dependencies
+pnpm install --filter @obidot/agent
+
+# Type check
+pnpm --filter @obidot/agent run typecheck
+
+# Start the agent
+pnpm --filter @obidot/agent run dev
+```
+
+The agent starts its autonomous loop, executing one cycle at a configurable interval (default: every 60 seconds). Each cycle runs the full perception → decision → execution pipeline.

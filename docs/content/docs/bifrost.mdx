@@ -1,0 +1,384 @@
+---
+title: Bifrost Integration
+description: Bifrost DeFi protocol integration — BifrostAdapter contract, strategy types, BifrostCodec XCM encoding, currency IDs, and pallet interfaces for SLP, DEX, Farming, and SALP.
+---
+
+Obidot integrates with [Bifrost](https://bifrost.finance/), one of Polkadot's most popular DeFi parachains (Parachain ID **2030**), to access liquid staking, DEX trading, yield farming, and parachain crowdloan participation — all from the Polkadot Hub EVM via native XCM.
+
+## Bifrost Protocol Overview
+
+Bifrost provides four core DeFi products, each implemented as a Substrate pallet:
+
+| Product | Pallet Index | Description | Typical APY |
+|---------|-------------|-------------|-------------|
+| **SLP** (Staking Liquidity Protocol) | `60` | Liquid staking — mint vDOT/vKSM derivative tokens | 7–11% |
+| **Zenlink DEX** | `61` | AMM DEX — token swaps and liquidity provision | 8–25% |
+| **Farming** | `62` | Yield farming — stake LP tokens for BNC rewards | 15–45% |
+| **SALP** (Slot Auction Liquidity) | `63` | Crowdloan participation — contribute DOT for derivatives | 3–6% |
+
+### Risk Spectrum
+
+```
+Lower Risk ◄────────────────────────────────────────────► Higher Risk
+   SLP              SALP             DEX              Farming
+ (staking)       (crowdloan)    (IL exposure)     (volatile rewards)
+  7-11%            3-6%           8-25%             15-45%
+```
+
+## Currency IDs
+
+Bifrost uses numeric currency identifiers for all tokens:
+
+| ID | Token | Description |
+|----|-------|-------------|
+| `0` | DOT | Native Polkadot token |
+| `1` | vDOT | Bifrost liquid staking DOT derivative |
+| `2` | KSM | Native Kusama token |
+| `3` | vKSM | Bifrost liquid staking KSM derivative |
+| `4` | BNC | Bifrost native token |
+
+These IDs are used in all XCM call encoding and strategy parameters.
+
+## BifrostAdapter Contract
+
+`BifrostAdapter` is the hub-side strategy adapter that encodes and dispatches XCM messages to the Bifrost parachain. It is called by the vault during strategy execution.
+
+### Strategy Types
+
+```solidity
+enum BifrostStrategyType {
+    MintVToken,      // 0 — Mint vDOT/vKSM via SLP (liquid staking)
+    RedeemVToken,    // 1 — Burn vDOT/vKSM back to DOT/KSM
+    DEXSwap,         // 2 — Swap tokens on Zenlink DEX
+    FarmDeposit,     // 3 — Deposit into farming pool
+    FarmWithdraw,    // 4 — Withdraw from farming pool
+    FarmClaim,       // 5 — Claim pending farming rewards
+    SALPContribute   // 6 — Contribute DOT to crowdloan
+}
+```
+
+### Strategy Struct
+
+Every Bifrost strategy is described by a `BifrostStrategy` struct:
+
+```solidity
+struct BifrostStrategy {
+    BifrostStrategyType strategyType; // Which operation to execute
+    uint32 currencyIdA;               // Primary currency ID (input)
+    uint32 currencyIdB;               // Secondary currency ID (output, for swaps)
+    uint256 amount;                   // Operation amount
+    uint256 minOutput;                // Minimum expected output (slippage guard)
+    uint256 poolId;                   // Farming pool ID (for farm operations)
+    bytes32 beneficiary;              // AccountId32 on Bifrost chain
+}
+```
+
+### Execution Flow
+
+```
+AI Strategist
+    │
+    ▼
+ObidotVault.executeStrategy()
+    │
+    ▼
+BifrostAdapter.executeBifrostStrategy(strategy)
+    │
+    ├── 1. Validate inputs (non-zero amount, valid beneficiary)
+    ├── 2. Route to BifrostCodec encoder based on strategy type
+    ├── 3. Get SCALE-encoded XCM destination (Bifrost parachain 2030)
+    ├── 4. Dispatch via XCM precompile: IXcm.send(dest, xcmMessage)
+    ├── 5. Record strategy with monotonic ID
+    └── 6. Emit BifrostStrategyDispatched event
+```
+
+### Access Control
+
+| Role | Holder | Purpose |
+|------|--------|---------|
+| `DEFAULT_ADMIN_ROLE` | Governance | Deploy-time configuration |
+| `STRATEGY_EXECUTOR_ROLE` | Master `ObidotVault` | Call `executeBifrostStrategy` |
+
+### Preview Support
+
+The adapter supports previewing strategy XCM payloads without dispatching:
+
+```solidity
+// Preview what XCM message would be generated
+(bytes memory xcmMessage, bytes memory destination) = adapter.previewStrategy(strategy);
+```
+
+The hub vault also exposes convenience preview functions:
+
+```solidity
+// Preview a vDOT mint
+(bytes memory msg, bytes memory dest) = vault.previewBifrostMint(
+    0,  // DOT currency ID
+    1 ether,
+    beneficiaryAccountId32
+);
+
+// Preview a DEX swap
+(bytes memory msg, bytes memory dest) = vault.previewBifrostSwap(
+    0,  // DOT in
+    1,  // vDOT out
+    1 ether,
+    0.97 ether, // 3% max slippage
+    beneficiaryAccountId32
+);
+```
+
+### Errors
+
+| Error | Condition |
+|-------|-----------|
+| `UnsupportedStrategy(strategyType)` | Unknown strategy type value |
+| `ZeroStrategyAmount()` | Amount is zero (except `FarmClaim`) |
+| `ZeroBeneficiary()` | Beneficiary is zero bytes |
+| `XcmDispatchFailed()` | XCM precompile call failed |
+
+> **Note:** `FarmClaim` (type 5) is exempt from the zero-amount check because claiming has no input amount — it harvests whatever rewards have accumulated.
+
+## BifrostCodec Library
+
+`BifrostCodec` is a pure Solidity library that constructs SCALE-encoded XCM V4 instruction payloads for all Bifrost operations. The encoded messages are passed to the XCM precompile's `send()` function.
+
+### XCM Message Structure
+
+Every Bifrost XCM message follows the same V4 instruction sequence:
+
+```
+XCM V4 Message:
+  1. WithdrawAsset(DOT, feeAmount)     — Withdraw fee from sovereign account
+  2. BuyExecution(DOT, Unlimited)      — Pay for execution weight
+  3. Transact(SovereignAccount, call)  — Execute the pallet call
+  4. RefundSurplus                     — Refund unused fees
+  5. DepositAsset(beneficiary)         — Deposit results to beneficiary
+```
+
+### Pallet Call Encoding
+
+Each Bifrost operation maps to a specific pallet call with SCALE encoding:
+
+#### SLP — Liquid Staking (Pallet 60)
+
+```
+Mint vToken:   [60, 0, currencyId(LE32), amount(Compact), None(0x00)]
+Redeem:        [60, 1, vCurrencyId(LE32), amount(Compact)]
+```
+
+#### DEX — Token Swaps (Pallet 61)
+
+```
+Swap:          [61, 0, currencyIn(LE32), currencyOut(LE32),
+                amountIn(Compact), amountOutMin(Compact)]
+```
+
+#### Farming — Yield Farming (Pallet 62)
+
+```
+Deposit:       [62, 0, poolId(Compact), amount(Compact)]
+Withdraw:      [62, 1, poolId(Compact), amount(Compact)]
+Claim:         [62, 2, poolId(Compact)]
+```
+
+#### SALP — Crowdloans (Pallet 63)
+
+```
+Contribute:    [63, 0, parachainId(Compact), amount(Compact)]
+```
+
+### SCALE Compact Encoding
+
+The codec implements SCALE compact encoding for variable-length integers:
+
+| Range | Encoding | Bytes |
+|-------|----------|-------|
+| 0–63 | `value << 2` | 1 |
+| 64–16,383 | `(value << 2) \| 0x01` | 2 (LE) |
+| 16,384–1,073,741,823 | `(value << 2) \| 0x02` | 4 (LE) |
+| ≥ 1,073,741,824 | `0x03 + (byteLen - 4) << 2` + raw LE bytes | variable |
+
+### Destination Encoding
+
+```solidity
+// Bifrost parachain as XCM V4 destination
+function bifrostDestination() internal pure returns (bytes memory) {
+    // V4, parents=1, interior=X1(Parachain(2030))
+}
+
+// Specific Bifrost account
+function bifrostAccountDestination(bytes32 accountId)
+    internal pure returns (bytes memory) {
+    // V4, parents=1, interior=X2(Parachain(2030), AccountId32(accountId))
+}
+```
+
+### High-Level Encoder Functions
+
+| Function | Parameters | Purpose |
+|----------|-----------|---------|
+| `encodeMintVToken` | `currencyId, amount, beneficiary` | SLP: stake → vToken |
+| `encodeRedeemVToken` | `vCurrencyId, amount, beneficiary` | SLP: vToken → underlying |
+| `encodeDEXSwap` | `currencyIn, currencyOut, amountIn, amountOutMin, beneficiary` | DEX swap |
+| `encodeFarmingDeposit` | `poolId, amount, beneficiary` | Farm: deposit LP/vTokens |
+| `encodeFarmingWithdraw` | `poolId, amount, beneficiary` | Farm: withdraw |
+| `encodeFarmingClaim` | `poolId, beneficiary` | Farm: harvest rewards |
+| `encodeSALPContribute` | `parachainId, amount, beneficiary` | SALP: crowdloan contribution |
+
+### Errors
+
+| Error | Condition |
+|-------|-----------|
+| `UnsupportedCurrency(currencyId)` | Currency ID not in 0–4 range |
+| `ZeroAmount()` | Zero amount for operations that require non-zero |
+
+## Bifrost Protocol Interfaces
+
+The codebase includes full interface definitions for each Bifrost protocol, used for type safety and documentation.
+
+### IBifrostSLP — Staking Liquidity Protocol
+
+```solidity
+interface IBifrostSLP {
+    function mint(MintParams calldata params)
+        external returns (uint256 vTokenAmount);
+    function redeem(RedeemParams calldata params)
+        external returns (uint256 underlyingAmount);
+    function getExchangeRate(uint32 vCurrencyId)
+        external view returns (uint256 rate);  // 1e18 scaled
+    function totalStaked(uint32 currencyId)
+        external view returns (uint256);
+    function isMintingAvailable(uint32 currencyId)
+        external view returns (bool);
+    function minimumStake(uint32 currencyId)
+        external view returns (uint256);
+}
+```
+
+**Token Types:** The SLP defines a comprehensive token type enum including `Native`, `VToken`, `Token2`, `VSToken`, `VSBond`, `LPToken`, `ForeignAsset`, `BLP`, and `StableLPToken`.
+
+### IBifrostDEX — Zenlink DEX
+
+```solidity
+interface IBifrostDEX {
+    function swapExactIn(SwapParams calldata params)
+        external returns (uint256 amountOut);
+    function swapExactInWithPath(SwapPathParams calldata params)
+        external returns (uint256 amountOut);  // Multi-hop routing
+    function getAmountOut(uint32 currencyIn, uint32 currencyOut, uint256 amountIn)
+        external view returns (uint256 amountOut);
+    function getPool(uint32 currencyA, uint32 currencyB)
+        external view returns (PoolInfo memory);
+}
+```
+
+### IBifrostFarming — Yield Farming
+
+```solidity
+interface IBifrostFarming {
+    function deposit(DepositParams calldata params) external;
+    function withdraw(WithdrawParams calldata params) external;
+    function claimRewards(uint256 poolId) external returns (uint256 rewardAmount);
+    function getPoolInfo(uint256 poolId)
+        external view returns (FarmingPool memory);
+    function getUserPosition(uint256 poolId, address user)
+        external view returns (UserPosition memory);
+    function getActivePools() external view returns (uint256[] memory);
+    function pendingRewards(uint256 poolId, address user)
+        external view returns (uint256);
+}
+```
+
+### IBifrostSALP — Slot Auction Liquidity
+
+```solidity
+interface IBifrostSALP {
+    function contribute(ContributeParams calldata params)
+        external returns (uint256 vsTokenAmount, uint256 vsBondAmount);
+    function redeemVsBond(RedeemParams calldata params)
+        external returns (uint256 underlyingAmount);
+    function getCrowdloanInfo(uint32 parachainId)
+        external view returns (CrowdloanInfo memory);
+    function getActiveCrowdloans() external view returns (uint32[] memory);
+    function isLeaseExpired(uint32 parachainId, uint32 leasePeriod)
+        external view returns (bool);
+}
+```
+
+**Derivative Tokenomics:** SALP produces two derivative tokens per contribution:
+- **vsToken** — Liquid derivative representing the crowdloan contribution (tradeable)
+- **vsBond** — Non-fungible bond representing the specific lease period (redeemable at expiry)
+
+## Strategy Execution Examples
+
+### Mint vDOT (Liquid Staking)
+
+```solidity
+BifrostAdapter.BifrostStrategy memory strategy = BifrostAdapter.BifrostStrategy({
+    strategyType: BifrostAdapter.BifrostStrategyType.MintVToken,
+    currencyIdA: 0,        // DOT
+    currencyIdB: 0,        // unused
+    amount: 100 ether,     // 100 DOT
+    minOutput: 95 ether,   // 5% slippage tolerance
+    poolId: 0,             // unused
+    beneficiary: vaultAccountId32
+});
+
+(uint256 strategyId, bytes memory xcmMsg) = adapter.executeBifrostStrategy(strategy);
+```
+
+### DEX Swap (DOT → vDOT)
+
+```solidity
+BifrostAdapter.BifrostStrategy memory strategy = BifrostAdapter.BifrostStrategy({
+    strategyType: BifrostAdapter.BifrostStrategyType.DEXSwap,
+    currencyIdA: 0,        // DOT in
+    currencyIdB: 1,        // vDOT out
+    amount: 50 ether,      // 50 DOT
+    minOutput: 48 ether,   // ~4% slippage
+    poolId: 0,             // unused
+    beneficiary: vaultAccountId32
+});
+```
+
+### Farm Deposit + Claim
+
+```solidity
+// Deposit LP tokens into farming pool #1
+BifrostAdapter.BifrostStrategy memory deposit = BifrostAdapter.BifrostStrategy({
+    strategyType: BifrostAdapter.BifrostStrategyType.FarmDeposit,
+    currencyIdA: 0,
+    currencyIdB: 0,
+    amount: 10 ether,
+    minOutput: 0,
+    poolId: 1,            // Farming pool ID
+    beneficiary: vaultAccountId32
+});
+
+// Claim farming rewards (amount unused for claims)
+BifrostAdapter.BifrostStrategy memory claim = BifrostAdapter.BifrostStrategy({
+    strategyType: BifrostAdapter.BifrostStrategyType.FarmClaim,
+    currencyIdA: 0,
+    currencyIdB: 0,
+    amount: 0,            // Not needed for claims
+    minOutput: 0,
+    poolId: 1,
+    beneficiary: vaultAccountId32
+});
+```
+
+## File Organization
+
+```
+contracts/src/
+├── adapters/
+│   └── BifrostAdapter.sol        # Strategy adapter (dispatches XCM)
+├── interfaces/
+│   ├── IBifrostSLP.sol           # Staking Liquidity Protocol
+│   ├── IBifrostDEX.sol           # Zenlink DEX
+│   ├── IBifrostFarming.sol       # Yield farming
+│   └── IBifrostSALP.sol          # Slot Auction Liquidity
+└── libraries/
+    └── BifrostCodec.sol          # SCALE + XCM V4 encoding
+```

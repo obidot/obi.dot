@@ -5,19 +5,29 @@ description: High-level architecture of the Obidot autonomous cross-chain financ
 
 ## System Overview
 
-Obidot is designed as a modular system where each component has a clearly defined responsibility. The core smart contract — `ObidotVault` — acts as the coordination point between depositors, an AI strategist, keepers, and the Polkadot XCM transport layer.
+Obidot is designed as a modular system where each component has a clearly defined responsibility. The core smart contract — `ObidotVault` — acts as the coordination point between depositors, an AI strategist, keepers, and the Polkadot XCM transport layer. The system extends across chains via Hyperbridge ISMP, with satellite vaults on EVM chains and Bifrost DeFi integration on Polkadot.
 
 ```
+                                    Polkadot Hub
+                                    ┌─────────────────────────────────┐
 Depositors ──► ObidotVault (ERC-4626) ──► XCM Precompile ──► Parachain DeFi
-                  │                              ▲
-                  ├── Policy Engine               │
-                  ├── Oracle Slippage Guard        │
-                  ├── EIP-712 Signature Verify     │
-                  └── Remote Asset Accounting      │
-                                                   │
-AI Strategist ─── signs StrategyIntent ────────────┘
-                                                   │
-Keeper ─────── reports outcome (P&L) ──────────────┘
+                  │                              ▲                │
+                  ├── Policy Engine               │                │
+                  ├── Oracle Slippage Guard        │                ▼
+                  ├── EIP-712 Signature Verify     │         BifrostAdapter
+                  ├── Remote Asset Accounting      │           │
+                  └── CrossChainRouter ◄───────────┘           ▼
+                         │                              Bifrost (2030)
+AI Strategist ─── signs StrategyIntent ────────┘        SLP / DEX / Farm / SALP
+                         │
+Keeper ─────── reports outcome (P&L) ──────────┘
+                         │
+                    Hyperbridge (ISMP)
+                    ┌────┴────────────────┐
+                    ▼                     ▼
+              Ethereum              Arbitrum/Optimism/Base
+          ObidotVaultEVM            ObidotVaultEVM
+           (Satellite)               (Satellite)
 ```
 
 ## Actor Model
@@ -123,19 +133,21 @@ Anyone can call `executeStrategy()` with a valid signed intent. This permissionl
 
 ## Accounting Model
 
-The vault tracks two categories of assets:
+The vault tracks three categories of assets:
 
 | Category | Description |
 |----------|-------------|
 | **Idle Assets** | Underlying tokens held directly in the vault contract (`IERC20(asset()).balanceOf(address(this))`) |
 | **Remote Assets** | Value deployed to parachains, tracked via `totalRemoteAssets` state variable |
+| **Satellite Assets** | Value held in satellite vaults on EVM chains, tracked via `totalSatelliteAssets` |
 
 ```
-totalAssets() = idle + totalRemoteAssets     (normal mode)
-totalAssets() = idle                         (emergency mode)
+totalAssets()       = idle + totalRemoteAssets              (hub, normal mode)
+totalAssets()       = idle                                  (hub, emergency mode)
+globalTotalAssets() = totalAssets() + totalSatelliteAssets  (cross-chain aggregate)
 ```
 
-This dual-balance model means share prices reflect both local and remote capital. When the vault enters emergency mode, remote assets are excluded so depositors can withdraw their proportional share of whatever is locally available.
+This multi-balance model means share prices reflect all capital across the system. The hub vault holds the authoritative share price. Satellite vaults receive synced global state via Hyperbridge ISMP messages and use `globalTotalAssets` / `globalTotalShares` for consistent pricing.
 
 ## Security Layers
 
@@ -155,17 +167,50 @@ Obidot employs defense-in-depth with multiple independent security mechanisms:
 ```
 contracts/
 ├── src/
-│   ├── ObidotVault.sol          # Core vault contract
-│   ├── Gateway.sol              # Gateway contract
+│   ├── ObidotVault.sol          # Hub vault (Polkadot Hub EVM)
+│   ├── ObidotVaultEVM.sol       # Satellite vault (Ethereum/L2s)
+│   ├── adapters/
+│   │   ├── HyperbridgeAdapter.sol  # Abstract ISMP base contract
+│   │   ├── CrossChainRouter.sol    # Hub-side ISMP message router
+│   │   └── BifrostAdapter.sol      # Bifrost DeFi strategy adapter
 │   ├── interfaces/
 │   │   ├── IAggregatorV3.sol    # Chainlink-compatible oracle interface
-│   │   ├── IGateway.sol         # Gateway interface
-│   │   └── IXcm.sol             # XCM precompile interface
+│   │   ├── IXcm.sol             # XCM precompile interface
+│   │   ├── IIsmpHost.sol        # Hyperbridge ISMP host interface
+│   │   ├── IIsmpModule.sol      # ISMP callback interface
+│   │   ├── IBifrostSLP.sol      # Bifrost Staking Liquidity Protocol
+│   │   ├── IBifrostDEX.sol      # Bifrost Zenlink DEX
+│   │   ├── IBifrostFarming.sol  # Bifrost yield farming
+│   │   └── IBifrostSALP.sol     # Bifrost Slot Auction Liquidity
 │   └── libraries/
-│       └── MultiLocation.sol    # SCALE-encoding for XCM locations
+│       ├── MultiLocation.sol    # SCALE-encoding for XCM locations
+│       ├── CrossChainCodec.sol  # ISMP message encoding/decoding
+│       └── BifrostCodec.sol     # Bifrost XCM V4 payload encoding
 ├── script/
-│   └── Deploy.s.sol             # Deployment scripts
+│   ├── Deploy.s.sol             # Hub vault deployment
+│   └── DeployCrossChain.s.sol   # Cross-chain infrastructure deployment
 ├── test/
-│   └── ObidotVault.t.sol        # Full test suite (91+ tests)
+│   ├── ObidotVault.t.sol        # Hub vault tests (91+ tests)
+│   ├── CrossChain.t.sol         # Cross-chain integration tests
+│   ├── CrossChainCodec.t.sol    # Codec roundtrip + fuzz tests
+│   └── BifrostCodec.t.sol       # Bifrost encoding tests
 └── foundry.toml                 # Foundry configuration
+
+modules/agent/
+├── src/
+│   ├── main.ts                  # Entry point
+│   ├── agent/
+│   │   ├── loop.ts              # 3-phase autonomous loop
+│   │   ├── systemPrompt.ts      # LLM system prompt
+│   │   └── tools.ts             # 6 LangChain tools
+│   ├── config/
+│   │   ├── constants.ts         # Addresses, ABIs, protocols
+│   │   └── env.ts               # Environment variables
+│   ├── services/
+│   │   ├── yield.service.ts     # Yield monitoring
+│   │   ├── crosschain.service.ts # Multi-chain state aggregation
+│   │   └── signer.service.ts    # EIP-712 signing + execution
+│   └── types/
+│       └── index.ts             # Schemas, types, decision union
+└── package.json
 ```

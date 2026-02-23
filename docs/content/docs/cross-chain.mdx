@@ -1,0 +1,395 @@
+---
+title: Cross-Chain (Hyperbridge)
+description: Cross-chain architecture using Hyperbridge ISMP — message types, HyperbridgeAdapter base contract, CrossChainRouter hub router, CrossChainCodec encoding, and satellite synchronization.
+---
+
+Obidot extends beyond single-chain Polkadot Hub operations to support **multi-chain vault infrastructure** via [Hyperbridge](https://hyperbridge.network/), the Polkadot-native cross-chain messaging protocol based on ISMP (Interoperable State Machine Protocol). This enables satellite ERC-4626 vaults on Ethereum, Arbitrum, Optimism, Base, and other EVM chains to synchronize state with the hub vault on Polkadot Hub.
+
+## Architecture Overview
+
+The cross-chain system follows a **hub-and-spoke model**:
+
+```
+      Ethereum ─────┐                    ┌──── Bifrost (XCM)
+      Arbitrum ─────┤    Hyperbridge     │
+      Optimism ─────┼──── (ISMP) ────── Hub Vault ──── XCM Precompile
+      Base ─────────┤                    │
+      ...           └────────────────────┘
+```
+
+| Component | Chain | Contract | Purpose |
+|-----------|-------|----------|---------|
+| Hub Vault | Polkadot Hub | `ObidotVault` | Master vault, holds authoritative share price |
+| Cross-Chain Router | Polkadot Hub | `CrossChainRouter` | Dispatches/receives ISMP messages |
+| Bifrost Adapter | Polkadot Hub | `BifrostAdapter` | Encodes XCM for Bifrost DeFi |
+| Satellite Vault | Ethereum/L2s | `ObidotVaultEVM` | Local ERC-4626 vault synced with hub |
+| ISMP Host | Each chain | System contract | Hyperbridge entry point |
+
+## ISMP Protocol
+
+Hyperbridge ISMP provides a **state-proof-based** cross-chain messaging protocol. Unlike optimistic bridges with challenge periods or multisig bridges with trust assumptions, ISMP verifies messages cryptographically using consensus proofs of the source chain's state.
+
+### Key Properties
+
+- **Trustless** — Messages are verified via consensus proofs, not validator committees
+- **Permissionless** — Any relayer can deliver proofs
+- **Bidirectional** — Supports POST requests (arbitrary messages) and GET requests (state proof queries)
+- **Timeout-safe** — Messages that aren't delivered within the timeout period trigger rollback callbacks
+
+### IIsmpHost Interface
+
+The ISMP Host is a system contract on each chain that provides the entry point for cross-chain messaging:
+
+```solidity
+interface IIsmpHost {
+    struct DispatchPost {
+        bytes dest;       // Destination state machine identifier
+        bytes to;         // Receiving module address
+        bytes body;       // Message payload
+        uint64 timeout;   // Timeout in seconds (0 = none)
+        uint256 gaslimit; // Execution gas limit on destination
+    }
+
+    /// Dispatch a POST request, returns commitment hash
+    function dispatch(DispatchPost calldata post)
+        external payable returns (bytes32 commitment);
+
+    /// Estimate fee for a POST dispatch
+    function dispatchFee(DispatchPost calldata post)
+        external view returns (uint256 fee);
+
+    /// Returns this state machine's identifier
+    function host() external view returns (bytes memory);
+
+    /// Current host timestamp
+    function timestamp() external view returns (uint256);
+
+    /// Outgoing request nonce
+    function nonce() external view returns (uint256);
+}
+```
+
+### IIsmpModule Callbacks
+
+Contracts that receive cross-chain messages implement `IIsmpModule`:
+
+```solidity
+interface IIsmpModule {
+    /// Called when a POST request arrives
+    function onAccept(IncomingPostRequest calldata incoming) external;
+
+    /// Called when a POST times out — implement rollback logic
+    function onPostRequestTimeout(PostRequest calldata request) external;
+}
+```
+
+The `IncomingPostRequest` contains the full `PostRequest` struct (source, dest, nonce, from, to, timeoutTimestamp, body) plus the relayer's address.
+
+## HyperbridgeAdapter (Base Contract)
+
+`HyperbridgeAdapter` is the abstract base contract that both `CrossChainRouter` (hub) and `ObidotVaultEVM` (satellite) inherit from. It provides core ISMP messaging plumbing.
+
+### Roles & Constants
+
+| Constant | Value | Purpose |
+|----------|-------|---------|
+| `DISPATCHER_ROLE` | `keccak256("DISPATCHER_ROLE")` | Authorizes addresses to dispatch messages |
+| `DEFAULT_TIMEOUT` | `7200` (2 hours) | Default ISMP message timeout |
+| `DEFAULT_GAS_LIMIT` | `500,000` | Default gas for cross-chain execution |
+
+### Peer Registration
+
+Before two chains can communicate, they must register each other as **peers**. A peer is identified by a chain ID (bytes) and a module address (the contract authorized to send/receive messages on that chain).
+
+```solidity
+// Admin registers satellite chains
+adapter.registerPeer(
+    bytes("ETHEREUM"),
+    abi.encodePacked(satelliteVaultAddress)
+);
+```
+
+The adapter maintains:
+- `registeredPeers[chainHash]` — maps chain ID hash → authorized module address
+- `knownChains[chainHash]` — quick existence check
+
+### Message Dispatch
+
+Internal dispatch is handled by `_dispatchMessage`:
+
+1. Estimate fee via `ismpHost.dispatchFee(post)`
+2. Construct the `DispatchPost` with destination chain, recipient module, body, timeout, and gas limit
+3. Call `ismpHost.dispatch{value: fee}(post)` to send the message
+4. Emit `MessageDispatched` event with the commitment hash
+
+### Message Reception
+
+When a message arrives, the ISMP host calls `onAccept`. The adapter:
+
+1. Verifies the caller is the ISMP host (`onlyIsmpHost` modifier)
+2. Validates the source chain is registered (`knownChains`)
+3. Validates the sender module matches the registered peer (`registeredPeers`)
+4. Delegates to the child contract's `_processMessage(source, body)` implementation
+
+### Timeout Handling
+
+If a message isn't delivered within `DEFAULT_TIMEOUT` (2 hours), the ISMP host calls `onPostRequestTimeout`. The adapter delegates to `_handleTimeout(dest, body)` for rollback logic.
+
+## CrossChainRouter (Hub Router)
+
+`CrossChainRouter` is deployed on Polkadot Hub alongside the master `ObidotVault`. It handles all cross-chain message routing between the hub and satellite vaults.
+
+### Architecture
+
+```
+ObidotVault (Hub)
+    │
+    ├── setCrossChainRouter(router)  ← Admin configures
+    │
+    ▼
+CrossChainRouter
+    │
+    ├── broadcastAssetSync()         ← Vault calls after state changes
+    ├── broadcastStrategyReport()    ← Vault calls after strategy outcome
+    ├── broadcastEmergencySync()     ← Vault calls on emergency
+    ├── sendDepositAck()             ← Vault acknowledges satellite deposit
+    └── sendWithdrawFulfill()        ← Vault fulfills satellite withdrawal
+```
+
+### Outbound Messages (Hub → Satellites)
+
+The router provides three **broadcast** methods that send the same message to all registered satellites:
+
+| Method | Trigger | Message Type |
+|--------|---------|-------------|
+| `broadcastAssetSync(globalTotalAssets, globalTotalShares, totalRemoteAssets)` | After deposits, withdrawals, strategy outcomes | `MSG_ASSET_SYNC` |
+| `broadcastStrategyReport(strategyId, success, returnedAmount, pnl, newTotalRemoteAssets)` | After keeper reports strategy outcome | `MSG_STRATEGY_REPORT` |
+| `broadcastEmergencySync(paused, emergencyMode, reason)` | Admin triggers emergency | `MSG_EMERGENCY_SYNC` |
+
+And two **unicast** methods that send to a specific satellite:
+
+| Method | Trigger | Message Type |
+|--------|---------|-------------|
+| `sendDepositAck(destChainId, depositNonce, globalTotalAssets, accepted)` | Hub processes satellite deposit | `MSG_DEPOSIT_ACK` |
+| `sendWithdrawFulfill(destChainId, withdrawNonce, amount, fullyFulfilled)` | Hub fulfills satellite withdrawal | `MSG_WITHDRAW_FULFILL` |
+
+### Inbound Messages (Satellites → Hub)
+
+The router handles two types of incoming messages from satellites:
+
+| Message Type | Handler | Action |
+|-------------|---------|--------|
+| `MSG_DEPOSIT_SYNC` | `_handleDepositSync` | Records satellite deposit, updates `satelliteAssets`, increments `pendingSatelliteDeposits` |
+| `MSG_WITHDRAW_REQUEST` | `_handleWithdrawRequest` | Stores pending withdrawal, transfers assets from vault if available |
+
+### Access Control
+
+| Role | Holder | Purpose |
+|------|--------|---------|
+| `DEFAULT_ADMIN_ROLE` | Governance/multisig | Configure satellites, pause/unpause |
+| `VAULT_ROLE` | Master `ObidotVault` | Call broadcast/send methods |
+| `DISPATCHER_ROLE` | Router itself (self-granted) | Dispatch ISMP messages |
+
+## CrossChainCodec
+
+The `CrossChainCodec` library encodes and decodes all cross-chain messages using a **type-prefix** format:
+
+```
+[messageType (1 byte)][payload (abi.encoded)]
+```
+
+### Message Types
+
+| Constant | Value | Direction | Purpose |
+|----------|-------|-----------|---------|
+| `MSG_DEPOSIT_SYNC` | `0x01` | Satellite → Hub | Notify hub of new deposits |
+| `MSG_WITHDRAW_REQUEST` | `0x02` | Satellite → Hub | Request withdrawal from hub |
+| `MSG_ASSET_SYNC` | `0x03` | Hub → Satellite | Broadcast global asset totals |
+| `MSG_STRATEGY_REPORT` | `0x04` | Hub → Satellite | Report strategy outcome (P&L) |
+| `MSG_EMERGENCY_SYNC` | `0x05` | Hub → Satellite | Propagate pause/emergency state |
+| `MSG_DEPOSIT_ACK` | `0x06` | Hub → Satellite | Acknowledge deposit acceptance |
+| `MSG_WITHDRAW_FULFILL` | `0x07` | Hub → Satellite | Fulfill withdrawal request |
+
+### Message Structs
+
+**Satellite → Hub:**
+
+```solidity
+struct DepositSyncMessage {
+    bytes chainId;           // Source chain identifier
+    address depositor;       // Who deposited
+    uint256 amount;          // Asset amount deposited
+    uint256 sharesMinted;    // Shares minted on satellite
+    uint256 nonce;           // Deposit sequence number
+}
+
+struct WithdrawRequestMessage {
+    bytes chainId;           // Source chain identifier
+    address withdrawer;      // Who is withdrawing
+    uint256 amount;          // Asset amount requested
+    uint256 sharesToBurn;    // Shares to burn on satellite
+    uint256 nonce;           // Withdrawal sequence number
+}
+```
+
+**Hub → Satellite:**
+
+```solidity
+struct AssetSyncMessage {
+    uint256 globalTotalAssets;   // Hub + all satellites + remote DeFi
+    uint256 globalTotalShares;   // Total supply of vault shares
+    uint256 totalRemoteAssets;   // Assets deployed to DeFi protocols
+    uint256 timestamp;           // Sync timestamp
+}
+
+struct StrategyReportMessage {
+    uint256 strategyId;          // Strategy identifier
+    bool success;                // Execution success
+    uint256 returnedAmount;      // Assets returned from DeFi
+    int256 pnl;                  // Profit/loss (can be negative)
+    uint256 newTotalRemoteAssets; // Updated remote assets
+}
+
+struct EmergencySyncMessage {
+    bool paused;                 // Whether vault is paused
+    bool emergencyMode;          // Whether emergency mode is active
+    bytes reason;                // Human-readable reason
+}
+
+struct DepositAckMessage {
+    uint256 depositNonce;        // Which deposit is acknowledged
+    uint256 globalTotalAssets;   // Updated global total
+    bool accepted;               // Whether hub accepted the deposit
+}
+
+struct WithdrawFulfillMessage {
+    uint256 withdrawNonce;       // Which withdrawal is fulfilled
+    uint256 amount;              // Assets being sent
+    bool fullyFulfilled;         // Whether fully satisfied
+}
+```
+
+### Encoding Pattern
+
+All messages follow the same pattern:
+
+```solidity
+// Encode
+bytes memory encoded = abi.encodePacked(
+    MSG_ASSET_SYNC,
+    abi.encode(globalTotalAssets, globalTotalShares, totalRemoteAssets, block.timestamp)
+);
+
+// Decode
+function decodeAssetSync(bytes calldata body) internal pure returns (AssetSyncMessage memory) {
+    // Skip 1-byte type prefix, abi.decode the rest
+    (uint256 a, uint256 b, uint256 c, uint256 d) = abi.decode(body[1:], (uint256, uint256, uint256, uint256));
+    return AssetSyncMessage(a, b, c, d);
+}
+```
+
+### Errors
+
+| Error | Condition |
+|-------|-----------|
+| `MessageTooShort(length, minLength)` | Body shorter than 33 bytes (1 type + 32 payload) |
+| `UnknownMessageType(messageType)` | First byte doesn't match any `MSG_*` constant |
+
+## Timeout & Rollback Behavior
+
+When ISMP messages time out (default: 2 hours), the system handles rollback:
+
+| Message Type | Rollback Action |
+|-------------|-----------------|
+| `MSG_DEPOSIT_SYNC` | Satellite's deposit is treated as unconfirmed; hub never received it |
+| `MSG_WITHDRAW_REQUEST` | Satellite's `totalPendingWithdrawals` is decremented |
+| `MSG_WITHDRAW_FULFILL` | Hub's `pendingWithdrawalRequests` is re-incremented |
+| Other messages | Logged only; broadcasts are retryable |
+
+## Hub Vault Extensions
+
+The master `ObidotVault` on Polkadot Hub has been extended with cross-chain awareness:
+
+### New State Variables
+
+```solidity
+address public crossChainRouter;              // CrossChainRouter contract
+address public bifrostAdapter;                // BifrostAdapter contract
+uint256 public totalSatelliteAssets;          // Sum across all satellites
+mapping(bytes32 => uint256) public satelliteChainAssets;  // Per-chain tracking
+```
+
+### New View Functions
+
+```solidity
+/// Global total: hub assets + all satellite deposits
+function globalTotalAssets() external view returns (uint256) {
+    return totalAssets() + totalSatelliteAssets;
+}
+
+/// Hub holds the authoritative share supply
+function globalTotalShares() external view returns (uint256) {
+    return totalSupply();
+}
+```
+
+### Admin Configuration
+
+```solidity
+// Set the cross-chain router (admin only)
+vault.setCrossChainRouter(routerAddress);
+
+// Set the Bifrost adapter (admin only)
+vault.setBifrostAdapter(adapterAddress);
+
+// Keeper updates satellite assets after sync
+vault.updateSatelliteAssets(chainIdHash, newAmount);
+```
+
+## Message Flow Examples
+
+### Deposit on Satellite
+
+```
+1. User calls deposit(1000 USDC) on ObidotVaultEVM (Ethereum)
+2. Satellite vault mints shares, transfers USDC from user
+3. Satellite dispatches MSG_DEPOSIT_SYNC via ISMP
+4. Hyperbridge relayer delivers proof to CrossChainRouter (Hub)
+5. Router updates satelliteAssets[ethereum] += 1000
+6. Router sends MSG_DEPOSIT_ACK back to satellite
+7. Satellite receives ACK, marks deposit as confirmed
+```
+
+### Strategy Outcome Broadcast
+
+```
+1. Keeper calls reportStrategyOutcome() on hub vault
+2. Hub vault calculates P&L, updates accounting
+3. Hub vault calls router.broadcastStrategyReport()
+4. Router dispatches MSG_STRATEGY_REPORT to ALL satellites
+5. Each satellite receives the report, updates global state
+```
+
+### Emergency Propagation
+
+```
+1. Admin triggers emergency on hub vault
+2. Hub vault calls router.broadcastEmergencySync(true, true, "exploit detected")
+3. Router sends MSG_EMERGENCY_SYNC to ALL satellites (bypasses pause check)
+4. Each satellite pauses and enables emergency mode
+5. Users can withdraw proportional share of local funds
+```
+
+## File Organization
+
+```
+contracts/src/
+├── adapters/
+│   ├── HyperbridgeAdapter.sol    # Abstract ISMP base contract
+│   └── CrossChainRouter.sol      # Hub-side message router
+├── interfaces/
+│   ├── IIsmpHost.sol             # ISMP host interface
+│   └── IIsmpModule.sol           # ISMP callback interface
+└── libraries/
+    └── CrossChainCodec.sol       # Message encoding/decoding
+```

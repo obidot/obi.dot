@@ -1,9 +1,9 @@
 ---
 title: Obidot Documentation
-description: Autonomous Cross-Chain Finance Layer for Polkadot — an ERC-4626 yield-bearing vault with AI-driven strategy execution via native XCM.
+description: Autonomous Cross-Chain Finance Layer for Polkadot — an ERC-4626 yield-bearing vault with AI-driven strategy execution across multiple chains via Hyperbridge and native XCM.
 ---
 
-Welcome to the Obidot documentation. Obidot is an **Autonomous Cross-Chain Finance Layer** for Polkadot, built as an ERC-4626 yield-bearing vault deployed to the Polkadot Hub EVM (REVM). It enables an off-chain AI agent to autonomously route funds to other Polkadot parachains using native XCM precompiles, while enforcing strict on-chain risk policies.
+Welcome to the Obidot documentation. Obidot is an **Autonomous Cross-Chain Finance Layer** for Polkadot, built as an ERC-4626 yield-bearing vault deployed to the Polkadot Hub EVM (REVM). It enables an off-chain AI agent to autonomously route funds across Polkadot parachains via native XCM and to EVM chains via Hyperbridge ISMP, while enforcing strict on-chain risk policies.
 
 ## Core Concepts
 
@@ -14,6 +14,10 @@ Welcome to the Obidot documentation. Obidot is an **Autonomous Cross-Chain Finan
   <Card title="Policy Engine" href="/docs/policy-engine" />
   <Card title="Oracle Integration" href="/docs/oracle" />
   <Card title="XCM Cross-Chain" href="/docs/xcm" />
+  <Card title="Cross-Chain (Hyperbridge)" href="/docs/cross-chain" />
+  <Card title="Bifrost Integration" href="/docs/bifrost" />
+  <Card title="Satellite Vault (EVM)" href="/docs/satellite-vault" />
+  <Card title="AI Agent" href="/docs/agent" />
   <Card title="Security Model" href="/docs/security" />
   <Card title="Deployment" href="/docs/deployment" />
 </Cards>
@@ -37,6 +41,9 @@ Depositors interact with a standard ERC-4626 interface — `deposit`, `mint`, `w
 - **On-Chain Policy Engine** — Parachain and protocol whitelists, per-protocol exposure caps, daily loss circuit breaker
 - **Oracle-Based Slippage Protection** — Pyth Network price feeds validate expected returns against real-time prices
 - **Native XCM Dispatch** — Cross-chain messages sent via the Polkadot Hub XCM precompile at `0x00000000000000000000000000000000000a0000`
+- **Hyperbridge Cross-Chain** — Satellite vaults on Ethereum, Arbitrum, Optimism, and Base connected via ISMP for trustless cross-chain state sync and fund transfers
+- **Bifrost DeFi Strategies** — Liquid staking (SLP), DEX swaps, yield farming, and SALP via on-chain Bifrost adapter with SCALE-encoded XCM calls
+- **Autonomous AI Agent** — LangChain-powered agent with on-chain perception tools, Bifrost yield analysis, and cross-chain rebalancing
 - **Emergency Mode** — Admin can pause the vault and enable proportional withdrawals that bypass remote asset accounting
 
 ## Target Network

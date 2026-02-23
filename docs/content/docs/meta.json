@@ -8,6 +8,10 @@
     "policy-engine",
     "oracle",
     "xcm",
+    "cross-chain",
+    "bifrost",
+    "satellite-vault",
+    "agent",
     "security",
     "deployment"
   ]
