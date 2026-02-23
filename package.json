@@ -1,1 +1,23 @@
-{}
+{
+  "name": "obidot",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Obidot — Autonomous Cross-Chain Finance Layer for Polkadot",
+  "packageManager": "pnpm@10.11.0",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "turbo run build",
+    "dev": "turbo run dev",
+    "test": "turbo run test",
+    "test:forge": "pnpm --filter pvm-core run test:forge",
+    "lint": "turbo run lint",
+    "typecheck": "turbo run typecheck",
+    "format": "turbo run format",
+    "clean": "turbo run clean"
+  },
+  "devDependencies": {
+    "turbo": "^2.5.0"
+  }
+}
