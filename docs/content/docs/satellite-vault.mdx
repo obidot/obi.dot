@@ -1,0 +1,360 @@
+---
+title: Satellite Vault (EVM)
+description: ObidotVaultEVM satellite vault reference — ERC-4626 vault on Ethereum/L2s, cross-chain deposit/withdraw sync, emergency propagation, and state management.
+---
+
+`ObidotVaultEVM` is an ERC-4626 vault deployed on EVM chains (Ethereum, Arbitrum, Optimism, Base, etc.) that synchronizes bidirectionally with the hub `ObidotVault` on Polkadot Hub via Hyperbridge ISMP. It serves as a **thin vault** — local deposits and withdrawals are handled independently, but actual DeFi strategy execution happens on the hub side.
+
+## Architecture
+
+```
+User (Ethereum)                                         Polkadot Hub
+    │                                                       │
+    ▼                                                       │
+ObidotVaultEVM                                              │
+    │                                                       │
+    ├── deposit() → mint shares locally                     │
+    │   └── _syncDepositToHub() ──── ISMP ────► CrossChainRouter
+    │                                                       │   │
+    ├── withdraw() → burn shares locally                    │   ▼
+    │   ├── if sufficient local balance → transfer          │  ObidotVault
+    │   └── if insufficient → _requestWithdrawFromHub()     │   │
+    │       └── ──────────────────── ISMP ────►              │   │
+    │                                                       │   │
+    ◄── onAccept() ◄──── ISMP ──── (hub broadcasts)        │   │
+        ├── AssetSync       → update global state           │   │
+        ├── StrategyReport  → update accounting             │   │
+        ├── EmergencySync   → mirror pause/emergency        │   │
+        ├── DepositAck      → confirm deposit               │   │
+        └── WithdrawFulfill → release pending withdrawal    │   │
+```
+
+## Contract Details
+
+### Inheritance
+
+```solidity
+contract ObidotVaultEVM is
+    ERC4626,
+    AccessControl,
+    Pausable,
+    ReentrancyGuard,
+    IIsmpModule
+```
+
+| Base | Purpose |
+|------|---------|
+| `ERC4626` | Standard yield-bearing vault interface |
+| `AccessControl` | Role-based permissions |
+| `Pausable` | Emergency pause capability |
+| `ReentrancyGuard` | Protection against reentrancy |
+| `IIsmpModule` | ISMP callback interface for cross-chain messages |
+
+### Share Token
+
+| Property | Value |
+|----------|-------|
+| Name | `Obidot Cross-Chain Vault Share` |
+| Symbol | `obVAULT` |
+| Decimals Offset | `3` (10^3 virtual shares, matches hub vault) |
+
+The decimals offset matches the hub vault to ensure consistent share pricing across chains.
+
+## State Variables
+
+### Cross-Chain Configuration
+
+| Variable | Type | Purpose |
+|----------|------|---------|
+| `ismpHost` | `IIsmpHost` (immutable) | Hyperbridge ISMP host on this chain |
+| `hubChainId` | `bytes` | Hub chain's ISMP identifier (e.g., `"POLKADOT-HUB"`) |
+| `hubRouterModule` | `bytes` | Hub router module address for message verification |
+| `chainIdentifier` | `bytes` | This chain's ISMP identifier |
+
+### Global State (Synced from Hub)
+
+| Variable | Type | Purpose |
+|----------|------|---------|
+| `globalTotalAssets` | `uint256` | Global total assets as last reported by hub |
+| `globalTotalShares` | `uint256` | Global total shares as last reported by hub |
+| `hubRemoteAssets` | `uint256` | Hub's total remote assets in DeFi protocols |
+| `lastSyncTimestamp` | `uint256` | Timestamp of last successful hub sync |
+
+### Local State
+
+| Variable | Type | Purpose |
+|----------|------|---------|
+| `depositCap` | `uint256` | Maximum total deposits allowed |
+| `maxSyncAge` | `uint256` | Maximum acceptable age of hub sync data |
+| `depositSyncNonce` | `uint256` | Outgoing deposit sync counter |
+| `withdrawRequestNonce` | `uint256` | Outgoing withdrawal request counter |
+| `emergencyMode` | `bool` | Whether emergency withdrawal is active |
+| `totalPendingWithdrawals` | `uint256` | Total assets in pending withdrawal requests |
+| `pendingWithdrawals` | `mapping(uint256 => PendingWithdrawal)` | Per-nonce withdrawal details |
+| `depositAcknowledged` | `mapping(uint256 => bool)` | Per-nonce deposit confirmation status |
+
+## Deposit Flow
+
+When a user deposits on a satellite chain:
+
+1. **Local**: ERC-4626 `deposit(assets, receiver)` mints shares based on local `totalAssets()`
+2. **Sync**: `_syncDepositToHub()` dispatches a `MSG_DEPOSIT_SYNC` via ISMP containing the depositor, amount, shares minted, and sequence nonce
+3. **Hub**: CrossChainRouter receives the message, updates `satelliteAssets[chain]`
+4. **Ack**: Hub sends `MSG_DEPOSIT_ACK` back to confirm acceptance
+
+```solidity
+// User deposits 1000 USDC on Ethereum satellite
+vault.deposit(1000e6, userAddress);
+
+// Internally:
+// 1. Transfers 1000 USDC from user
+// 2. Mints proportional shares
+// 3. Dispatches ISMP message to hub
+```
+
+### Deposit Cap Enforcement
+
+```solidity
+function maxDeposit(address) public view override returns (uint256) {
+    uint256 currentTotal = totalAssets();
+    if (currentTotal >= depositCap) return 0;
+    return depositCap - currentTotal;
+}
+```
+
+## Withdrawal Flow
+
+Withdrawals have two paths depending on available local balance:
+
+### Path 1: Sufficient Local Balance
+
+If the satellite vault holds enough idle assets locally:
+
+```
+User calls withdraw(amount) → shares burned → assets transferred → done
+```
+
+### Path 2: Insufficient Local Balance (Cross-Chain)
+
+If local balance is insufficient:
+
+1. Satellite sends `MSG_WITHDRAW_REQUEST` to hub via ISMP
+2. Satellite reverts with `WithdrawalPending(amount)` — a **revert-as-status** pattern
+3. Hub fulfills the request by transferring assets and sending `MSG_WITHDRAW_FULFILL`
+4. Satellite receives fulfillment, marks withdrawal as complete
+5. User retries `withdraw()` — now succeeds with fulfilled assets
+
+```solidity
+// First attempt — reverts if insufficient local balance
+try vault.withdraw(amount, receiver, owner) {
+    // Success — local balance was sufficient
+} catch (bytes memory data) {
+    // WithdrawalPending(amount) — cross-chain request sent
+    // User must wait for hub fulfillment and retry
+}
+```
+
+### Pending Withdrawal Struct
+
+```solidity
+struct PendingWithdrawal {
+    address withdrawer;    // Who requested
+    uint256 amount;        // Asset amount
+    uint256 sharesToBurn;  // Shares to burn on fulfillment
+    bool fulfilled;        // Whether hub has sent assets
+}
+```
+
+## Cross-Chain Message Handling
+
+The satellite vault implements `IIsmpModule.onAccept()` to process incoming messages from the hub:
+
+### Message Router
+
+```solidity
+function onAccept(IncomingPostRequest calldata incoming) external {
+    // 1. Verify caller is ISMP host
+    // 2. Verify source is hub chain
+    // 3. Verify sender is hub router module
+    // 4. Route by message type:
+    uint8 msgType = CrossChainCodec.messageType(incoming.request.body);
+
+    if (msgType == CrossChainCodec.MSG_ASSET_SYNC)
+        _handleAssetSync(body);
+    else if (msgType == CrossChainCodec.MSG_STRATEGY_REPORT)
+        _handleStrategyReport(body);
+    else if (msgType == CrossChainCodec.MSG_EMERGENCY_SYNC)
+        _handleEmergencySync(body);
+    else if (msgType == CrossChainCodec.MSG_DEPOSIT_ACK)
+        _handleDepositAck(body);
+    else if (msgType == CrossChainCodec.MSG_WITHDRAW_FULFILL)
+        _handleWithdrawFulfill(body);
+}
+```
+
+### Asset Sync (MSG_ASSET_SYNC)
+
+Updates the satellite's view of global state:
+
+```solidity
+function _handleAssetSync(bytes calldata body) internal {
+    AssetSyncMessage memory msg = CrossChainCodec.decodeAssetSync(body);
+    globalTotalAssets = msg.globalTotalAssets;
+    globalTotalShares = msg.globalTotalShares;
+    hubRemoteAssets = msg.totalRemoteAssets;
+    lastSyncTimestamp = msg.timestamp;
+    emit AssetSyncReceived(msg.globalTotalAssets, msg.globalTotalShares, msg.timestamp);
+}
+```
+
+### Strategy Report (MSG_STRATEGY_REPORT)
+
+Records strategy outcomes for local tracking:
+
+```solidity
+function _handleStrategyReport(bytes calldata body) internal {
+    StrategyReportMessage memory msg = CrossChainCodec.decodeStrategyReport(body);
+    hubRemoteAssets = msg.newTotalRemoteAssets;
+    emit StrategyReportReceived(msg.strategyId, msg.success, msg.pnl);
+}
+```
+
+### Emergency Sync (MSG_EMERGENCY_SYNC)
+
+Mirrors the hub's emergency state:
+
+```solidity
+function _handleEmergencySync(bytes calldata body) internal {
+    EmergencySyncMessage memory msg = CrossChainCodec.decodeEmergencySync(body);
+    if (msg.paused && !paused()) _pause();
+    if (msg.emergencyMode && !emergencyMode) emergencyMode = true;
+    emit EmergencySyncReceived(msg.paused, msg.emergencyMode);
+}
+```
+
+### Withdrawal Fulfillment (MSG_WITHDRAW_FULFILL)
+
+Completes a pending cross-chain withdrawal:
+
+```solidity
+function _handleWithdrawFulfill(bytes calldata body) internal {
+    WithdrawFulfillMessage memory msg = CrossChainCodec.decodeWithdrawFulfill(body);
+    PendingWithdrawal storage pw = pendingWithdrawals[msg.withdrawNonce];
+    pw.fulfilled = true;
+    totalPendingWithdrawals -= pw.amount;
+    emit WithdrawalFulfilled(msg.withdrawNonce, msg.amount, msg.fullyFulfilled);
+}
+```
+
+## Timeout Handling
+
+If ISMP messages time out (default: 2 hours), the satellite handles rollback:
+
+| Timed Out Message | Rollback Action |
+|-------------------|-----------------|
+| `MSG_DEPOSIT_SYNC` | Deposit treated as unconfirmed (hub never saw it) |
+| `MSG_WITHDRAW_REQUEST` | `totalPendingWithdrawals` decremented; user can retry |
+
+## Emergency Mode
+
+Emergency mode on the satellite mirrors the hub's emergency system:
+
+### Activation
+
+1. **Hub-initiated**: Hub broadcasts `MSG_EMERGENCY_SYNC` → satellite auto-pauses and enables emergency mode
+2. **Local**: Admin calls `enableEmergencyMode()` directly on the satellite
+
+### Behavior in Emergency Mode
+
+- Vault is paused (no new deposits)
+- Withdrawals are allowed, but only based on **local idle balance** (ignoring global state)
+- `totalAssets()` returns only local balance, enabling proportional withdrawals
+- Users get their fair share of whatever assets are held locally
+
+### Recovery
+
+Admin calls `unpause()` which also clears `emergencyMode`:
+
+```solidity
+function unpause() external onlyRole(DEFAULT_ADMIN_ROLE) {
+    _unpause();
+    emergencyMode = false;
+}
+```
+
+## Sync Freshness
+
+The satellite tracks how recently it received data from the hub:
+
+```solidity
+/// Whether the last hub sync is fresh enough for operations
+function isSyncFresh() public view returns (bool) {
+    return (block.timestamp - lastSyncTimestamp) <= maxSyncAge;
+}
+```
+
+Default `maxSyncAge` is 3600 seconds (1 hour). If sync data becomes stale, operations may be restricted. The admin can adjust this:
+
+```solidity
+vault.setMaxSyncAge(7200); // 2 hours
+```
+
+## Admin Functions
+
+| Function | Purpose |
+|----------|---------|
+| `setDepositCap(newCap)` | Update the maximum total deposit limit |
+| `setMaxSyncAge(newMaxAge)` | Update how long sync data is considered fresh |
+| `setHubConfig(hubChainId, hubRouterModule)` | Update hub connection parameters |
+| `pause()` | Pause the vault (blocks deposits) |
+| `unpause()` | Unpause and clear emergency mode |
+| `enableEmergencyMode()` | Pause + enable proportional local withdrawals |
+
+## Events
+
+| Event | When |
+|-------|------|
+| `DepositSynced(depositor, amount, shares, nonce)` | After deposit dispatched to hub |
+| `WithdrawalRequested(withdrawer, amount, shares, nonce)` | After cross-chain withdrawal request sent |
+| `AssetSyncReceived(globalTotal, globalShares, timestamp)` | Hub asset sync received |
+| `StrategyReportReceived(strategyId, success, pnl)` | Hub strategy report received |
+| `EmergencySyncReceived(paused, emergencyMode)` | Hub emergency state received |
+| `DepositAckReceived(depositNonce, accepted)` | Hub acknowledged deposit |
+| `WithdrawalFulfilled(withdrawNonce, amount, fullyFulfilled)` | Hub fulfilled withdrawal |
+| `DepositCapUpdated(newCap)` | Deposit cap changed |
+
+## Errors
+
+| Error | Condition |
+|-------|-----------|
+| `UnauthorizedHost(caller, expected)` | Message not from ISMP host |
+| `UnauthorizedSource(source)` | Source chain is not the hub |
+| `UnauthorizedSender(from)` | Sender module is not the hub router |
+| `UnknownMessageType(messageType)` | Unrecognized message type byte |
+| `DepositCapExceeded(totalAfterDeposit, cap)` | Deposit would exceed cap |
+| `SyncDataStale(lastSync, maxAge)` | Hub sync data too old |
+| `WithdrawalPending(amount)` | Cross-chain withdrawal in progress (revert-as-status) |
+| `ZeroAddress()` | Zero address in configuration |
+| `InvalidCap()` | Invalid deposit cap value |
+
+## Deployment
+
+Deploy a satellite vault on any EVM chain:
+
+```bash
+FOUNDRY_PROFILE=default forge script script/DeployCrossChain.s.sol:DeploySatelliteVault \
+    --rpc-url $ETH_RPC_URL --broadcast
+```
+
+**Required environment variables:**
+
+| Variable | Description | Example |
+|----------|-------------|---------|
+| `UNDERLYING_ASSET` | ERC-20 token address | `0xA0b8...` (USDC) |
+| `ISMP_HOST` | Hyperbridge ISMP host on this chain | `0x1234...` |
+| `HUB_CHAIN_ID` | Hub chain ISMP identifier | `POLKADOT-HUB` |
+| `HUB_ROUTER_MODULE` | CrossChainRouter address on hub | `0xABCD...` |
+| `CHAIN_IDENTIFIER` | This chain's ISMP identifier | `ETHEREUM` |
+| `DEPOSIT_CAP` | Maximum total deposits (default: 1M) | `1000000000000000000000000` |
+| `MAX_SYNC_AGE` | Max sync data age in seconds (default: 3600) | `3600` |
+| `ADMIN_ADDRESS` | Admin multisig/governance address | `0x9876...` |

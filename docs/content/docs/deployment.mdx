@@ -227,6 +227,140 @@ After `DeployWithSetup` completes, you still need to:
 2. Call `setProtocolExposureCap()` for each protocol
 3. Transfer `DEFAULT_ADMIN_ROLE` to a multisig if needed
 
+### `DeployCrossChain` — Hub Cross-Chain Infrastructure
+
+Deploys the `CrossChainRouter` and `BifrostAdapter` on the Polkadot Hub, then wires them into an existing `ObidotVault`.
+
+#### Environment Variables
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `PRIVATE_KEY` | Yes | Deployer's private key |
+| `UNDERLYING_ASSET` | Yes | ERC-20 token address on the hub |
+| `ISMP_HOST` | Yes | Hyperbridge ISMP host contract on the hub |
+| `MASTER_VAULT` | Yes | Already-deployed `ObidotVault` address |
+| `ADMIN_ADDRESS` | Yes | Admin that receives roles on the new contracts |
+
+```bash
+export PRIVATE_KEY=<deployer-private-key>
+export UNDERLYING_ASSET=<erc20-address>
+export ISMP_HOST=<hyperbridge-ismp-host-on-polkadot-hub>
+export MASTER_VAULT=<obidot-vault-address>
+export ADMIN_ADDRESS=<admin-multisig-or-eoa>
+
+forge script script/DeployCrossChain.s.sol:DeployCrossChain \
+  --rpc-url polkadot_hub_testnet \
+  --broadcast \
+  -vvvv
+```
+
+#### What It Does
+
+1. Deploys `CrossChainRouter(ismpHost, asset, masterVault, admin)`
+2. Deploys `BifrostAdapter(admin, masterVault)`
+3. Calls `vault.setCrossChainRouter(router)` and `vault.setBifrostAdapter(adapter)` on the master vault (requires deployer to hold `DEFAULT_ADMIN_ROLE`)
+4. Whitelists the Bifrost parachain (ID `2030`)
+5. Runs post-deployment verification:
+
+| Check | Expected |
+|-------|----------|
+| `router.asset()` | Matches `UNDERLYING_ASSET` |
+| `router.ismpHost()` | Matches `ISMP_HOST` |
+| `router.masterVault()` | Matches `MASTER_VAULT` |
+| `router.hasRole(DEFAULT_ADMIN_ROLE, admin)` | `true` |
+| `router.hasRole(VAULT_ROLE, masterVault)` | `true` |
+| `router.paused()` | `false` |
+| `bifrostAdapter.hasRole(DEFAULT_ADMIN_ROLE, admin)` | `true` |
+| `bifrostAdapter.hasRole(STRATEGY_EXECUTOR_ROLE, masterVault)` | `true` |
+
+### `DeploySatelliteVault` — Satellite EVM Chain
+
+Deploys an `ObidotVaultEVM` on Ethereum, Arbitrum, Optimism, Base, or any other EVM chain that Hyperbridge supports.
+
+#### Environment Variables
+
+| Variable | Required | Default | Description |
+|----------|----------|---------|-------------|
+| `PRIVATE_KEY` | Yes | — | Deployer's private key |
+| `UNDERLYING_ASSET` | Yes | — | ERC-20 address on the target chain |
+| `ISMP_HOST` | Yes | — | Hyperbridge ISMP host on the target chain |
+| `HUB_ROUTER_MODULE` | Yes | — | `abi.encode(routerAddress)` of the hub router |
+| `CHAIN_IDENTIFIER` | Yes | — | Human-readable chain ID (e.g. `"ETHEREUM"`) |
+| `ADMIN_ADDRESS` | Yes | — | Admin address |
+| `HUB_CHAIN_ID` | No | `"POLKADOT-HUB"` | ISMP chain identifier for the hub |
+| `DEPOSIT_CAP` | No | `1_000_000 ether` | Maximum deposits |
+| `MAX_SYNC_AGE` | No | `3600` (1 hour) | Max age (seconds) before synced state is stale |
+
+```bash
+export PRIVATE_KEY=<deployer-private-key>
+export UNDERLYING_ASSET=<erc20-on-target-chain>
+export ISMP_HOST=<ismp-host-on-target-chain>
+export HUB_ROUTER_MODULE=$(cast abi-encode "f(address)" $ROUTER_ADDRESS)
+export CHAIN_IDENTIFIER="ETHEREUM"
+export ADMIN_ADDRESS=<admin-address>
+
+forge script script/DeployCrossChain.s.sol:DeploySatelliteVault \
+  --rpc-url <target-rpc> \
+  --broadcast \
+  --verify \
+  -vvvv
+```
+
+#### Post-Deploy Verification
+
+| Check | Expected |
+|-------|----------|
+| `satellite.asset()` | Matches `UNDERLYING_ASSET` |
+| `satellite.ismpHost()` | Matches `ISMP_HOST` |
+| `satellite.depositCap()` | Matches configured cap |
+| `satellite.maxSyncAge()` | Matches configured age |
+| `satellite.hasRole(DEFAULT_ADMIN_ROLE, admin)` | `true` |
+| `satellite.paused()` | `false` |
+| `satellite.emergencyMode()` | `false` |
+
+### `RegisterSatellitePeers` — Peer Registration
+
+After deploying all satellites, run this on the **hub** to register each satellite as a peer in the `CrossChainRouter`.
+
+#### Environment Variables
+
+| Variable | Required | Default | Description |
+|----------|----------|---------|-------------|
+| `PRIVATE_KEY` | Yes | — | Admin private key (must hold `DEFAULT_ADMIN_ROLE` on router) |
+| `ROUTER_ADDRESS` | Yes | — | `CrossChainRouter` address on the hub |
+| `ETH_SATELLITE_MODULE` | No | `address(0)` | `ObidotVaultEVM` address on Ethereum (skip if `0`) |
+| `ARB_SATELLITE_MODULE` | No | `address(0)` | `ObidotVaultEVM` address on Arbitrum |
+| `OP_SATELLITE_MODULE` | No | `address(0)` | `ObidotVaultEVM` address on Optimism |
+| `BASE_SATELLITE_MODULE` | No | `address(0)` | `ObidotVaultEVM` address on Base |
+
+```bash
+export PRIVATE_KEY=<admin-private-key>
+export ROUTER_ADDRESS=<router-address-on-hub>
+export ETH_SATELLITE_MODULE=<satellite-address-on-ethereum>
+export ARB_SATELLITE_MODULE=<satellite-address-on-arbitrum>
+
+forge script script/DeployCrossChain.s.sol:RegisterSatellitePeers \
+  --rpc-url polkadot_hub_testnet \
+  --broadcast \
+  -vvvv
+```
+
+For each non-zero satellite address, the script calls `router.addSatelliteChain(chainId, abi.encode(module))` and logs the final satellite chain count.
+
+### Cross-Chain Deployment Workflow
+
+The full multi-chain deployment follows this order:
+
+```
+1. Deploy ObidotVault on Polkadot Hub          (Deploy / DeployWithSetup)
+2. Deploy CrossChainRouter + BifrostAdapter    (DeployCrossChain)
+3. Deploy ObidotVaultEVM on each target chain  (DeploySatelliteVault × N)
+4. Register all satellites on the hub          (RegisterSatellitePeers)
+5. Fund router & satellites with native tokens for ISMP dispatch fees
+6. Configure policy engine (parachains, protocols, caps)
+7. Grant STRATEGIST_ROLE to the AI agent
+```
+
 ## Local Development
 
 ### Running a Local Node
@@ -375,12 +509,20 @@ Before going to production, verify the following:
 - [ ] Target parachains whitelisted via `setParachainAllowed()`
 - [ ] Target protocols whitelisted via `setProtocolAllowed()`
 - [ ] Exposure caps set for each whitelisted protocol
+- [ ] Cross-chain router deployed and wired into the vault
+- [ ] BifrostAdapter deployed and connected
+- [ ] Satellite vaults deployed on all target EVM chains
+- [ ] Satellite peers registered in the hub router
+- [ ] Router and satellites funded with native tokens for ISMP fees
 - [ ] Monitoring and alerting configured for key events:
   - `StrategyExecuted`
   - `StrategyOutcomeReported`
   - `EmergencyModeToggled`
   - `ParachainWhitelistUpdated`
   - `ProtocolWhitelistUpdated`
+  - `SatelliteChainAdded` / `SatelliteChainRemoved`
+  - `CrossChainMessageDispatched`
+  - `CrossChainMessageReceived`
 - [ ] Keeper infrastructure running and reporting outcomes
 - [ ] AI strategist connected and signing intents
 - [ ] `DEFAULT_ADMIN_ROLE` transferred to multisig if deployer was an EOA
