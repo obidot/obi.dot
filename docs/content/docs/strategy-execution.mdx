@@ -1,0 +1,445 @@
+---
+title: Strategy Execution
+description: Complete guide to the strategy execution pipeline — StrategyIntent struct, EIP-712 signing, permissionless relaying, validation pipeline, and outcome reporting.
+---
+
+Strategy execution is the core mechanism by which the AI strategist deploys capital from the vault to remote parachains. It uses a **sign-then-relay** pattern: the strategist signs an EIP-712 typed data struct off-chain, and any relayer can submit the signed intent on-chain for execution.
+
+## StrategyIntent Struct
+
+Every strategy execution begins with a `StrategyIntent` — a typed data structure that fully describes the intended capital deployment:
+
+```solidity
+struct StrategyIntent {
+    address asset;           // Must match the vault's underlying asset
+    uint256 amount;          // Amount of underlying asset to deploy
+    uint256 minReturn;       // Minimum expected return from the remote strategy
+    uint256 maxSlippageBps;  // Maximum acceptable slippage in basis points (max 5000 = 50%)
+    uint256 deadline;        // Unix timestamp after which this intent expires
+    uint256 nonce;           // Per-strategist sequential nonce for replay protection
+    bytes   xcmCall;         // SCALE-encoded VersionedXcm message payload
+    uint32  targetParachain; // Destination parachain ID for policy validation
+    address targetProtocol;  // Target protocol address for exposure tracking
+}
+```
+
+### Field Details
+
+| Field | Type | Constraints |
+|-------|------|-------------|
+| `asset` | `address` | Must equal `vault.asset()` or the transaction reverts with `AssetMismatch` |
+| `amount` | `uint256` | Must be non-zero (`ZeroAmount`), must not exceed vault idle balance (`InsufficientIdleBalance`) |
+| `minReturn` | `uint256` | Must pass the oracle slippage check (`OracleSlippageCheckFailed`) |
+| `maxSlippageBps` | `uint256` | Must be ≤ 5000 (50%) or reverts with `SlippageTooHigh` |
+| `deadline` | `uint256` | Must be ≥ `block.timestamp` or reverts with `DeadlineExpired` |
+| `nonce` | `uint256` | Must equal the strategist's current nonce (`InvalidNonce`) |
+| `xcmCall` | `bytes` | SCALE-encoded VersionedXcm payload; validated by XCM weight estimation |
+| `targetParachain` | `uint32` | Must be in the parachain whitelist (`ParachainNotAllowed`) |
+| `targetProtocol` | `address` | Must be in the protocol whitelist (`ProtocolNotAllowed`) |
+
+## EIP-712 Signing
+
+Strategy intents are signed using [EIP-712](https://eips.ethereum.org/EIPS/eip-712) typed structured data hashing. This provides:
+
+- **Human-readable signing** — Wallets can display the structured data to the signer
+- **Domain separation** — The signature is bound to a specific contract on a specific chain
+- **Replay protection** — Sequential nonces prevent intent reuse
+
+### Domain Separator
+
+The `DOMAIN_SEPARATOR` is computed at deploy time and stored as an immutable value:
+
+```solidity
+DOMAIN_SEPARATOR = keccak256(
+    abi.encode(
+        keccak256("EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)"),
+        keccak256("ObidotVault"),
+        keccak256("1"),
+        block.chainid,
+        address(this)
+    )
+);
+```
+
+This binds every signature to:
+- The contract name (`ObidotVault`)
+- Version `1`
+- The specific chain ID
+- The specific contract address
+
+### Type Hash
+
+```solidity
+bytes32 public constant STRATEGY_INTENT_TYPEHASH = keccak256(
+    "StrategyIntent(address asset,uint256 amount,uint256 minReturn,uint256 maxSlippageBps,uint256 deadline,uint256 nonce,bytes xcmCall,uint32 targetParachain,address targetProtocol)"
+);
+```
+
+### Digest Computation
+
+The final EIP-712 digest that the strategist signs:
+
+```
+digest = keccak256("\x19\x01" || DOMAIN_SEPARATOR || structHash)
+```
+
+Where `structHash` is:
+
+```solidity
+structHash = keccak256(abi.encode(
+    STRATEGY_INTENT_TYPEHASH,
+    intent.asset,
+    intent.amount,
+    intent.minReturn,
+    intent.maxSlippageBps,
+    intent.deadline,
+    intent.nonce,
+    keccak256(intent.xcmCall),  // bytes fields are hashed
+    intent.targetParachain,
+    intent.targetProtocol
+));
+```
+
+Note that `xcmCall` is a dynamic `bytes` type, so it is hashed with `keccak256` before encoding, per the EIP-712 specification.
+
+### On-Chain Digest Helper
+
+The vault exposes a view function for computing the digest on-chain (useful for off-chain tooling):
+
+```solidity
+function computeIntentDigest(StrategyIntent calldata intent) external view returns (bytes32);
+```
+
+### Signing Off-Chain
+
+Using ethers.js v6:
+
+```javascript
+const domain = {
+  name: "ObidotVault",
+  version: "1",
+  chainId: 420420417,
+  verifyingContract: vaultAddress,
+};
+
+const types = {
+  StrategyIntent: [
+    { name: "asset", type: "address" },
+    { name: "amount", type: "uint256" },
+    { name: "minReturn", type: "uint256" },
+    { name: "maxSlippageBps", type: "uint256" },
+    { name: "deadline", type: "uint256" },
+    { name: "nonce", type: "uint256" },
+    { name: "xcmCall", type: "bytes" },
+    { name: "targetParachain", type: "uint32" },
+    { name: "targetProtocol", type: "address" },
+  ],
+};
+
+const intent = {
+  asset: underlyingAssetAddress,
+  amount: parseEther("1000"),
+  minReturn: parseEther("995"),
+  maxSlippageBps: 100, // 1%
+  deadline: Math.floor(Date.now() / 1000) + 3600, // 1 hour
+  nonce: await vault.nonces(strategistAddress),
+  xcmCall: encodedXcmPayload,
+  targetParachain: 2004, // Moonbeam
+  targetProtocol: protocolAddress,
+};
+
+const signature = await strategistSigner.signTypedData(domain, types, intent);
+```
+
+## Permissionless Relaying
+
+The `executeStrategy()` function can be called by **anyone** — it has no access control modifier. The security comes entirely from the EIP-712 signature: the vault recovers the signer's address and verifies that the signer holds `STRATEGIST_ROLE`.
+
+This design enables several deployment patterns:
+
+| Pattern | Description |
+|---------|-------------|
+| **Self-relay** | The strategist submits its own transactions |
+| **Dedicated relayer** | A separate service submits on behalf of the strategist |
+| **MEV-protected relay** | Use Flashbots or similar to prevent front-running |
+| **Gasless strategist** | The AI agent doesn't need native tokens for gas |
+
+```solidity
+function executeStrategy(
+    StrategyIntent calldata intent,
+    bytes calldata signature
+) external whenNotPaused nonReentrant returns (uint256 strategyId);
+```
+
+## Validation Pipeline
+
+When `executeStrategy()` is called, the vault runs a sequential validation pipeline. If any step fails, the entire transaction reverts with a descriptive custom error.
+
+### Step 1: Deadline Check
+
+```solidity
+if (block.timestamp > intent.deadline) {
+    revert DeadlineExpired(intent.deadline, block.timestamp);
+}
+```
+
+Prevents execution of stale intents. The strategist sets a deadline when signing — typically a few minutes to a few hours in the future.
+
+### Step 2: Basic Validation
+
+Three checks in sequence:
+
+```solidity
+if (intent.amount == 0) revert ZeroAmount();
+if (intent.asset != asset()) revert AssetMismatch(asset(), intent.asset);
+if (intent.maxSlippageBps > MAX_SLIPPAGE_BPS) revert SlippageTooHigh(intent.maxSlippageBps);
+```
+
+- **Zero amount**: Prevents no-op strategies
+- **Asset mismatch**: Ensures the intent targets the correct underlying asset
+- **Slippage cap**: Maximum slippage is capped at 5000 bps (50%)
+
+### Step 3: Signature Recovery
+
+The vault recovers the signer's address from the EIP-712 signature using the `ecrecover` precompile:
+
+```solidity
+address strategist = _recoverStrategist(intent, signature);
+if (strategist == address(0)) revert InvalidSignature();
+if (!hasRole(STRATEGIST_ROLE, strategist)) revert UnauthorizedStrategist(strategist);
+```
+
+The recovery includes **EIP-2 s-value malleability protection** — signatures with high `s` values are rejected to prevent signature malleability attacks:
+
+```solidity
+if (uint256(s) > 0x7FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF5D576E7357A4501DDFE92F46681B20A0) {
+    return address(0);
+}
+```
+
+The signature must be exactly 65 bytes in the standard `r || s || v` format.
+
+### Step 4: Nonce Check
+
+```solidity
+uint256 expectedNonce = nonces[strategist];
+if (intent.nonce != expectedNonce) revert InvalidNonce(expectedNonce, intent.nonce);
+nonces[strategist] = expectedNonce + 1;
+```
+
+Each strategist has an independent sequential nonce. This prevents:
+- **Replay attacks**: The same intent cannot be executed twice
+- **Out-of-order execution**: Intents must be executed in the order they were signed
+
+Query the current nonce for a strategist:
+
+```solidity
+mapping(address => uint256) public nonces;
+```
+
+### Step 5: Policy Engine Enforcement
+
+The vault's on-chain policy engine validates the intent against configured constraints:
+
+1. **Parachain whitelist**: `allowedParachains[intent.targetParachain]` must be `true`
+2. **Protocol whitelist**: `allowedTargets[intent.targetProtocol]` must be `true`
+3. **Exposure cap**: `protocolExposure[protocol] + amount` must not exceed `maxProtocolExposure[protocol]` (if cap > 0)
+4. **Circuit breaker**: `dailyLossAccumulator` must not already exceed `maxDailyLoss`
+
+See the [Policy Engine](/docs/policy-engine) page for full details.
+
+### Step 6: Oracle Slippage Validation
+
+The vault fetches the current price from the Pyth oracle and validates that `minReturn` meets the slippage bound:
+
+```
+oracleMinimum = amount × price × (10000 - maxSlippageBps) / (10000 × 10^oracleDecimals)
+```
+
+If `intent.minReturn < oracleMinimum`, the transaction reverts with `OracleSlippageCheckFailed`.
+
+See the [Oracle Integration](/docs/oracle) page for full details.
+
+### Step 7: XCM Weight Estimation
+
+The vault calls the XCM precompile's `weighMessage()` to estimate the execution weight, then applies a **10% safety margin**:
+
+```
+adjustedRefTime = estimatedRefTime × 110 / 100
+adjustedProofSize = estimatedProofSize × 110 / 100
+```
+
+If either adjusted value exceeds the configured maximum, the transaction reverts with `XcmOverweight`.
+
+See the [XCM Cross-Chain](/docs/xcm) page for full details.
+
+### Step 8: Accounting Update & Dispatch
+
+After all validations pass:
+
+1. **Idle balance check**: Verify the vault holds enough idle assets
+2. **Strategy ID assignment**: Increment `strategyCounter` and assign the ID
+3. **Remote asset tracking**: `totalRemoteAssets += intent.amount`
+4. **Protocol exposure**: `protocolExposure[targetProtocol] += intent.amount`
+5. **Record creation**: Store a `StrategyRecord` with status `Sent`
+6. **XCM dispatch**: Encode the destination using `MultiLocation.siblingParachain()`, approve the XCM precompile, and call `XCM_PRECOMPILE.send(dest, intent.xcmCall)`
+7. **Event emission**: Emit `StrategyExecuted`
+
+## Strategy Records
+
+Every executed strategy is recorded on-chain:
+
+```solidity
+struct StrategyRecord {
+    StrategyStatus status;     // Pending, Sent, Executed, Failed
+    address strategist;        // Recovered signer address
+    uint256 amount;            // Deployed amount
+    uint256 minReturn;         // Expected minimum return
+    uint32  targetParachain;   // Destination chain
+    address targetProtocol;    // Target protocol
+    uint256 executedAt;        // Block timestamp of execution
+}
+```
+
+Records are stored in:
+
+```solidity
+mapping(uint256 => StrategyRecord) public strategies;
+```
+
+### Strategy Lifecycle
+
+```
+                  ┌─────────┐
+                  │  (new)  │
+                  └────┬────┘
+                       │ executeStrategy()
+                       ▼
+                  ┌─────────┐
+                  │  Sent   │
+                  └────┬────┘
+                       │ reportStrategyOutcome()
+                  ┌────┴────┐
+                  ▼         ▼
+            ┌──────────┐ ┌────────┐
+            │ Executed │ │ Failed │
+            └──────────┘ └────────┘
+```
+
+## Outcome Reporting
+
+After a strategy is dispatched via XCM, a keeper monitors the remote chain and reports the result back to the vault:
+
+```solidity
+function reportStrategyOutcome(
+    uint256 strategyId,
+    bool success,
+    uint256 returnedAmount
+) external onlyRole(KEEPER_ROLE) nonReentrant;
+```
+
+### Access Control
+
+Only addresses with `KEEPER_ROLE` can report outcomes. The admin receives this role at deployment and can grant it to additional keeper addresses.
+
+### Validations
+
+- The `strategyId` must exist (`StrategyNotFound`)
+- The strategy must be in `Sent` status (`InvalidStrategyStatus`)
+
+### Accounting Updates
+
+1. **Status update**: Set to `Executed` (success) or `Failed` (failure)
+2. **P&L calculation**: `pnl = int256(returnedAmount) - int256(record.amount)`
+3. **Remote assets**: `totalRemoteAssets -= record.amount` (clamped to 0)
+4. **Protocol exposure**: `protocolExposure[protocol] -= record.amount` (clamped to 0)
+5. **Loss tracking**: If `pnl < 0`, the loss is added to `dailyLossAccumulator`
+6. **Circuit breaker**: If `dailyLossAccumulator > maxDailyLoss`, vault auto-pauses and enters emergency mode
+
+### Event
+
+```solidity
+event StrategyOutcomeReported(
+    uint256 indexed strategyId,
+    StrategyStatus newStatus,
+    uint256 returnedAmount,
+    int256 pnl
+);
+```
+
+## Error Reference
+
+| Error | Condition |
+|-------|-----------|
+| `DeadlineExpired(deadline, currentTime)` | `block.timestamp > intent.deadline` |
+| `ZeroAmount()` | `intent.amount == 0` |
+| `AssetMismatch(expected, provided)` | `intent.asset != vault.asset()` |
+| `SlippageTooHigh(maxSlippageBps)` | `intent.maxSlippageBps > 5000` |
+| `InvalidSignature()` | Recovered address is `address(0)` |
+| `UnauthorizedStrategist(recovered)` | Recovered signer lacks `STRATEGIST_ROLE` |
+| `InvalidNonce(expected, provided)` | `intent.nonce != nonces[strategist]` |
+| `ParachainNotAllowed(parachainId)` | Parachain not in whitelist |
+| `ProtocolNotAllowed(protocol)` | Protocol not in whitelist |
+| `ExposureCapExceeded(protocol, current, amount, cap)` | Exposure would exceed cap |
+| `DailyLossThresholdBreached(current, additional, max)` | Daily losses already exceeded |
+| `OracleDataInvalid(answer, updatedAt)` | Stale or non-positive oracle price |
+| `OracleSlippageCheckFailed(minReturn, oracleMinimum)` | `minReturn` too low vs oracle |
+| `XcmOverweight(refTime, proofSize, maxRef, maxProof)` | XCM message too heavy |
+| `InsufficientIdleBalance(available, requested)` | Vault doesn't hold enough idle assets |
+| `StrategyNotFound(strategyId)` | No strategy record for the given ID |
+| `InvalidStrategyStatus(id, current, expected)` | Strategy not in `Sent` status |
+
+## Event Reference
+
+| Event | Emitted When |
+|-------|-------------|
+| `StrategyExecuted(strategyId, strategist, targetParachain, targetProtocol, amount, minReturn)` | Strategy successfully validated and dispatched |
+| `StrategyOutcomeReported(strategyId, newStatus, returnedAmount, pnl)` | Keeper reports a strategy outcome |
+
+## Example: Full Strategy Lifecycle
+
+### 1. Strategist Signs Intent
+
+The AI agent analyzes yield opportunities across parachains and constructs a `StrategyIntent` to deploy 1,000 tokens to a DeFi protocol on Moonbeam (parachain 2004), expecting at least 995 tokens back (0.5% slippage tolerance):
+
+```javascript
+const intent = {
+  asset: DOT_ADDRESS,
+  amount: parseEther("1000"),
+  minReturn: parseEther("995"),
+  maxSlippageBps: 100,       // 1% max slippage
+  deadline: now + 3600,       // 1 hour validity
+  nonce: 0,                   // First intent from this strategist
+  xcmCall: xcmPayload,        // SCALE-encoded XCM instructions
+  targetParachain: 2004,      // Moonbeam
+  targetProtocol: PROTOCOL,   // Target DeFi protocol
+};
+
+const sig = await strategist.signTypedData(domain, types, intent);
+```
+
+### 2. Relayer Submits On-Chain
+
+```javascript
+const tx = await vault.executeStrategy(intent, sig);
+const receipt = await tx.wait();
+// Extract strategyId from StrategyExecuted event
+```
+
+### 3. Keeper Reports Outcome
+
+After observing the remote execution result on Moonbeam:
+
+```javascript
+// Strategy returned 1,010 tokens (1% profit)
+await vault.reportStrategyOutcome(
+  strategyId,
+  true,        // success
+  parseEther("1010")
+);
+// Emits StrategyOutcomeReported with pnl = +10 tokens
+```
+
+### 4. Share Price Reflects Yield
+
+The 10-token profit increases `totalAssets()`, which increases the share price for all vault depositors. The yield is automatically socialized across all share holders.

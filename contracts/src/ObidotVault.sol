@@ -1,18 +1,25 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.28;
 
-import {ERC4626} from "@openzeppelin/contracts/token/ERC20/extensions/ERC4626.sol";
+import {
+    ERC4626
+} from "@openzeppelin/contracts/token/ERC20/extensions/ERC4626.sol";
 import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import {
+    SafeERC20
+} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {AccessControl} from "@openzeppelin/contracts/access/AccessControl.sol";
 import {Pausable} from "@openzeppelin/contracts/utils/Pausable.sol";
-import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
+import {
+    ReentrancyGuard
+} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
 
 import {IXcm} from "./interfaces/IXcm.sol";
 import {IAggregatorV3} from "./interfaces/IAggregatorV3.sol";
 import {MultiLocation} from "./libraries/MultiLocation.sol";
+import {BifrostCodec} from "./libraries/BifrostCodec.sol";
 
 /// @title ObidotVault — Autonomous Cross-Chain Finance Layer
 /// @notice ERC-4626 yield-bearing vault that allows an off-chain AI strategist to
@@ -250,6 +257,33 @@ contract ObidotVault is ERC4626, AccessControl, Pausable, ReentrancyGuard {
         string reason
     );
 
+    /// @notice Emitted when the cross-chain router is updated.
+    event CrossChainRouterUpdated(address indexed newRouter);
+
+    /// @notice Emitted when the Bifrost adapter is updated.
+    event BifrostAdapterUpdated(address indexed newAdapter);
+
+    /// @notice Emitted when satellite assets are updated.
+    event SatelliteAssetsUpdated(
+        bytes32 indexed chainHash,
+        uint256 amount,
+        uint256 newTotal
+    );
+
+    /// @notice Emitted when a Bifrost-specific strategy is executed.
+    event BifrostStrategyExecuted(
+        uint256 indexed strategyId,
+        uint8 bifrostStrategyType,
+        uint256 amount
+    );
+
+    /// @notice Emitted when asset sync is broadcast to satellites.
+    event AssetSyncBroadcasted(
+        uint256 totalAssets,
+        uint256 totalShares,
+        uint256 remoteAssets
+    );
+
     // ─────────────────────────────────────────────────────────────────────
     //  State
     // ─────────────────────────────────────────────────────────────────────
@@ -313,7 +347,22 @@ contract ObidotVault is ERC4626, AccessControl, Pausable, ReentrancyGuard {
 
     /// @notice When true, withdrawals ignore remote asset accounting.
     bool public emergencyMode;
+    // ── Cross-Chain Integration ──────────────────────────────────────────
 
+    /// @notice The CrossChainRouter contract for satellite vault communication.
+    address public crossChainRouter;
+
+    /// @notice The BifrostAdapter contract for Bifrost DeFi operations.
+    address public bifrostAdapter;
+
+    /// @notice Total assets deposited across all satellite vaults.
+    uint256 public totalSatelliteAssets;
+
+    /// @notice Tracks assets per satellite chain (chainIdHash => amount).
+    mapping(bytes32 => uint256) public satelliteChainAssets;
+
+    /// @notice Bifrost-specific strategy type identifier for the strategy intent.
+    mapping(uint256 => uint8) public strategyBifrostType;
     // ─────────────────────────────────────────────────────────────────────
     //  Constructor
     // ─────────────────────────────────────────────────────────────────────
@@ -971,5 +1020,118 @@ contract ObidotVault is ERC4626, AccessControl, Pausable, ReentrancyGuard {
         bytes4 interfaceId
     ) public view override(AccessControl) returns (bool) {
         return super.supportsInterface(interfaceId);
+    }
+
+    // ─────────────────────────────────────────────────────────────────────
+    //  Cross-Chain — Router & Adapter Configuration
+    // ─────────────────────────────────────────────────────────────────────
+
+    /// @notice Set the CrossChainRouter address for satellite vault communication.
+    /// @param _router The CrossChainRouter contract address.
+    function setCrossChainRouter(
+        address _router
+    ) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        if (_router == address(0)) revert ZeroAddress();
+        crossChainRouter = _router;
+        emit CrossChainRouterUpdated(_router);
+    }
+
+    /// @notice Set the BifrostAdapter address for Bifrost DeFi operations.
+    /// @param _adapter The BifrostAdapter contract address.
+    function setBifrostAdapter(
+        address _adapter
+    ) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        if (_adapter == address(0)) revert ZeroAddress();
+        bifrostAdapter = _adapter;
+        emit BifrostAdapterUpdated(_adapter);
+    }
+
+    // ─────────────────────────────────────────────────────────────────────
+    //  Cross-Chain — Satellite Asset Tracking
+    // ─────────────────────────────────────────────────────────────────────
+
+    /// @notice Update satellite assets for a given chain (called by keeper after processing deposits).
+    /// @param chainIdHash The keccak256 hash of the satellite chain identifier.
+    /// @param amount The new total assets for that satellite chain.
+    function updateSatelliteAssets(
+        bytes32 chainIdHash,
+        uint256 amount
+    ) external onlyRole(KEEPER_ROLE) {
+        uint256 previousAmount = satelliteChainAssets[chainIdHash];
+        satelliteChainAssets[chainIdHash] = amount;
+
+        // Adjust global tracking
+        if (amount > previousAmount) {
+            totalSatelliteAssets += (amount - previousAmount);
+        } else {
+            uint256 diff = previousAmount - amount;
+            if (totalSatelliteAssets >= diff) {
+                totalSatelliteAssets -= diff;
+            } else {
+                totalSatelliteAssets = 0;
+            }
+        }
+
+        emit SatelliteAssetsUpdated(chainIdHash, amount, totalSatelliteAssets);
+    }
+
+    /// @notice Returns the global total assets including satellite deposits.
+    /// @dev Hub total + satellite deposits gives the cross-chain aggregate.
+    function globalTotalAssets() external view returns (uint256) {
+        return totalAssets() + totalSatelliteAssets;
+    }
+
+    /// @notice Returns the global total share supply (hub shares only for now).
+    /// @dev In the multi-vault sync model, satellites track their own shares locally
+    ///      and sync with the hub for pricing. The hub holds the authoritative share price.
+    function globalTotalShares() external view returns (uint256) {
+        return totalSupply();
+    }
+
+    // ─────────────────────────────────────────────────────────────────────
+    //  Cross-Chain — Bifrost Strategy Support
+    // ─────────────────────────────────────────────────────────────────────
+
+    /// @notice Get encoded XCM message for a Bifrost vToken mint operation.
+    /// @dev Utility for the agent to preview the XCM payload before signing.
+    /// @param currencyId The currency to stake (e.g., 0 for DOT).
+    /// @param amount The amount to stake.
+    /// @param beneficiary The Bifrost AccountId32 receiving vTokens.
+    /// @return xcmMessage The encoded XCM message.
+    /// @return dest The encoded destination MultiLocation.
+    function previewBifrostMint(
+        uint32 currencyId,
+        uint256 amount,
+        bytes32 beneficiary
+    ) external pure returns (bytes memory xcmMessage, bytes memory dest) {
+        xcmMessage = BifrostCodec.encodeMintVToken(
+            currencyId,
+            amount,
+            beneficiary
+        );
+        dest = BifrostCodec.bifrostDestination();
+    }
+
+    /// @notice Get encoded XCM message for a Bifrost DEX swap.
+    /// @param currencyIn Input currency ID.
+    /// @param currencyOut Output currency ID.
+    /// @param amountIn Amount to swap.
+    /// @param amountOutMin Minimum output (slippage protection).
+    /// @param beneficiary The Bifrost AccountId32.
+    /// @return xcmMessage The encoded XCM message.
+    function previewBifrostSwap(
+        uint32 currencyIn,
+        uint32 currencyOut,
+        uint256 amountIn,
+        uint256 amountOutMin,
+        bytes32 beneficiary
+    ) external pure returns (bytes memory xcmMessage) {
+        xcmMessage = BifrostCodec.encodeDEXSwap(
+            currencyIn,
+            currencyOut,
+            amountIn,
+            amountOutMin,
+            beneficiary
+        );
     }
 }

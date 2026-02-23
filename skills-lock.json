@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "skills": {
+    "workflow-orchestration-patterns": {
+      "source": "wshobson/agents",
+      "sourceType": "github",
+      "computedHash": "d12e6620618a62f76928b3eadc24720953581ea47700fe92ba07aa511e338617"
+    }
+  }
+}

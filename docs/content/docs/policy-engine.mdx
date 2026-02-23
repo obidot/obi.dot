@@ -1,0 +1,386 @@
+---
+title: Policy Engine
+description: On-chain policy engine reference — parachain and protocol whitelists, per-protocol exposure caps, daily loss circuit breaker, and admin configuration functions.
+---
+
+The on-chain policy engine is the primary mechanism that constrains the AI strategist's operational scope. Every strategy intent must pass all policy checks before the vault dispatches the XCM message. The admin configures these policies, and they are enforced automatically on every `executeStrategy()` call.
+
+## Overview
+
+The policy engine enforces four independent constraints, checked in sequence during strategy execution:
+
+| Constraint | Purpose | Revert Error |
+|-----------|---------|-------------|
+| **Parachain Whitelist** | Only allow capital deployment to approved chains | `ParachainNotAllowed` |
+| **Protocol Whitelist** | Only allow interaction with approved DeFi protocols | `ProtocolNotAllowed` |
+| **Exposure Caps** | Limit maximum capital allocated to any single protocol | `ExposureCapExceeded` |
+| **Circuit Breaker** | Auto-pause vault when daily losses exceed threshold | `DailyLossThresholdBreached` |
+
+All four checks happen inside the internal `_enforcePolicyEngine()` function, which is called during step 5 of the [strategy execution pipeline](/docs/strategy-execution#step-5-policy-engine-enforcement).
+
+```solidity
+function _enforcePolicyEngine(StrategyIntent calldata intent) internal view {
+    // 1. Parachain whitelist
+    if (!allowedParachains[intent.targetParachain]) {
+        revert ParachainNotAllowed(intent.targetParachain);
+    }
+
+    // 2. Protocol whitelist
+    if (!allowedTargets[intent.targetProtocol]) {
+        revert ProtocolNotAllowed(intent.targetProtocol);
+    }
+
+    // 3. Protocol exposure cap
+    uint256 currentExposure = protocolExposure[intent.targetProtocol];
+    uint256 cap = maxProtocolExposure[intent.targetProtocol];
+    if (cap > 0 && currentExposure + intent.amount > cap) {
+        revert ExposureCapExceeded(
+            intent.targetProtocol, currentExposure, intent.amount, cap
+        );
+    }
+
+    // 4. Daily loss circuit breaker check
+    if (maxDailyLoss > 0 && dailyLossAccumulator > maxDailyLoss) {
+        revert DailyLossThresholdBreached(dailyLossAccumulator, 0, maxDailyLoss);
+    }
+}
+```
+
+## Parachain Whitelist
+
+The parachain whitelist controls which destination chains the strategist can target. Each parachain is identified by its `uint32` parachain ID within the Polkadot relay chain.
+
+### State
+
+```solidity
+mapping(uint32 => bool) public allowedParachains;
+```
+
+### Configuration
+
+```solidity
+function setParachainAllowed(uint32 parachainId, bool allowed)
+    external onlyRole(DEFAULT_ADMIN_ROLE);
+```
+
+- Only callable by the admin
+- Emits `ParachainWhitelistUpdated(parachainId, allowed)`
+- Setting `allowed = true` adds the parachain to the whitelist
+- Setting `allowed = false` removes it
+
+### Common Parachain IDs
+
+The `DeployWithSetup` deployment script whitelists these parachains by default:
+
+| Parachain | ID |
+|-----------|------|
+| Acala | `2000` |
+| Moonbeam | `2004` |
+| Astar | `2006` |
+| Bifrost | `2030` |
+| HydraDX | `2034` |
+
+### Enforcement
+
+During strategy execution, the vault checks:
+
+```solidity
+if (!allowedParachains[intent.targetParachain]) {
+    revert ParachainNotAllowed(intent.targetParachain);
+}
+```
+
+If the AI strategist signs an intent targeting an unlisted parachain, the transaction reverts regardless of who submits it.
+
+### Example
+
+```solidity
+// Admin whitelists Moonbeam
+vault.setParachainAllowed(2004, true);
+
+// Admin removes Astar from the whitelist
+vault.setParachainAllowed(2006, false);
+
+// Now any strategy targeting parachain 2006 will revert
+```
+
+## Protocol Whitelist
+
+The protocol whitelist controls which specific DeFi protocol addresses the strategist can interact with. This provides finer-grained control than the parachain whitelist — even if a chain is allowed, only approved protocol contracts on that chain can receive funds.
+
+### State
+
+```solidity
+mapping(address => bool) public allowedTargets;
+```
+
+### Configuration
+
+```solidity
+function setProtocolAllowed(address protocol, bool allowed)
+    external onlyRole(DEFAULT_ADMIN_ROLE);
+```
+
+- Only callable by the admin
+- Reverts with `ZeroAddress()` if `protocol == address(0)`
+- Emits `ProtocolWhitelistUpdated(protocol, allowed)`
+
+### Enforcement
+
+```solidity
+if (!allowedTargets[intent.targetProtocol]) {
+    revert ProtocolNotAllowed(intent.targetProtocol);
+}
+```
+
+### Example
+
+```solidity
+// Whitelist a lending protocol on Moonbeam
+vault.setProtocolAllowed(0x1234...abcd, true);
+
+// Revoke access
+vault.setProtocolAllowed(0x1234...abcd, false);
+```
+
+## Per-Protocol Exposure Caps
+
+Exposure caps limit the maximum amount of capital that can be deployed to any single protocol at any given time. This prevents the strategist from concentrating all vault assets into one protocol, reducing counterparty risk.
+
+### State
+
+```solidity
+/// Current capital deployed to each protocol
+mapping(address => uint256) public protocolExposure;
+
+/// Maximum capital allowed per protocol (0 = unlimited)
+mapping(address => uint256) public maxProtocolExposure;
+```
+
+### Configuration
+
+```solidity
+function setProtocolExposureCap(address protocol, uint256 cap)
+    external onlyRole(DEFAULT_ADMIN_ROLE);
+```
+
+- Only callable by the admin
+- Reverts with `ZeroAddress()` if `protocol == address(0)`
+- Emits `ExposureCapUpdated(protocol, cap)`
+- Setting `cap = 0` means **unlimited** (no cap enforced)
+
+### Enforcement
+
+```solidity
+uint256 currentExposure = protocolExposure[intent.targetProtocol];
+uint256 cap = maxProtocolExposure[intent.targetProtocol];
+if (cap > 0 && currentExposure + intent.amount > cap) {
+    revert ExposureCapExceeded(
+        intent.targetProtocol, currentExposure, intent.amount, cap
+    );
+}
+```
+
+The check only applies when `cap > 0`. If no cap has been set (or it was explicitly set to 0), the strategist can deploy any amount.
+
+### Exposure Tracking
+
+Protocol exposure is updated at two points:
+
+1. **On strategy dispatch** (`executeStrategy`): `protocolExposure[protocol] += amount`
+2. **On outcome reporting** (`reportStrategyOutcome`): `protocolExposure[protocol] -= record.amount` (clamped to 0)
+
+This means exposure tracks the amount of capital currently deployed and at-risk, not the cumulative historical deployment.
+
+### Example
+
+```solidity
+// Cap deployment to a lending protocol at 100,000 tokens
+vault.setProtocolExposureCap(lendingProtocol, 100_000 ether);
+
+// First strategy: deploy 60,000 tokens → succeeds
+// protocolExposure[lendingProtocol] = 60,000
+
+// Second strategy: deploy 50,000 tokens → reverts with ExposureCapExceeded
+// 60,000 + 50,000 = 110,000 > 100,000
+
+// After the first strategy is reported as complete:
+// protocolExposure[lendingProtocol] = 0
+// Now the second strategy would succeed
+
+// Remove the cap entirely
+vault.setProtocolExposureCap(lendingProtocol, 0);
+```
+
+## Daily Loss Circuit Breaker
+
+The circuit breaker is an automatic safety mechanism that pauses the vault when cumulative losses within a 24-hour window exceed a configured threshold. This limits the damage from a malfunctioning AI agent, oracle manipulation, or adverse market conditions.
+
+### State
+
+```solidity
+/// Maximum cumulative loss allowed per day before circuit-breaking
+uint256 public maxDailyLoss;
+
+/// Accumulated losses in the current daily window
+uint256 public dailyLossAccumulator;
+
+/// Timestamp when the daily loss accumulator was last reset
+uint256 public lastLossResetTimestamp;
+```
+
+### Configuration
+
+```solidity
+function setMaxDailyLoss(uint256 newMaxDailyLoss)
+    external onlyRole(DEFAULT_ADMIN_ROLE);
+```
+
+- Only callable by the admin
+- Emits `DailyLossThresholdUpdated(newMaxDailyLoss)`
+- Setting to `0` disables the circuit breaker entirely
+
+### 24-Hour Rolling Window
+
+The loss accumulator uses a simple 24-hour window with automatic reset:
+
+```solidity
+uint256 internal constant DAILY_WINDOW = 1 days;
+
+function _resetDailyLossIfNeeded() internal {
+    if (block.timestamp >= lastLossResetTimestamp + DAILY_WINDOW) {
+        dailyLossAccumulator = 0;
+        lastLossResetTimestamp = block.timestamp;
+    }
+}
+```
+
+The reset happens lazily — it's triggered during `reportStrategyOutcome()` whenever a loss is detected and at least 24 hours have passed since the last reset.
+
+### How Losses Are Tracked
+
+When a keeper reports a strategy outcome, the vault calculates the profit or loss:
+
+```solidity
+int256 pnl = int256(returnedAmount) - int256(record.amount);
+```
+
+If `pnl < 0` (a loss):
+
+1. The daily loss window is checked and potentially reset
+2. The absolute loss is added to the accumulator: `dailyLossAccumulator += uint256(-pnl)`
+3. If `dailyLossAccumulator > maxDailyLoss` (and `maxDailyLoss > 0`):
+   - The vault is **automatically paused**
+   - **Emergency mode is enabled** (allowing proportional withdrawals)
+   - A `EmergencyModeToggled(true)` event is emitted
+
+### Pre-Execution Check
+
+The policy engine also checks the circuit breaker state before executing new strategies:
+
+```solidity
+if (maxDailyLoss > 0 && dailyLossAccumulator > maxDailyLoss) {
+    revert DailyLossThresholdBreached(dailyLossAccumulator, 0, maxDailyLoss);
+}
+```
+
+This prevents new strategy execution if the threshold has already been breached but the vault hasn't been paused yet (an edge case that shouldn't normally occur).
+
+### Querying Loss Status
+
+```solidity
+function dailyLossStatus()
+    external view
+    returns (uint256 accumulated, uint256 maxAllowed, uint256 windowResetAt);
+```
+
+Returns:
+- `accumulated` — Current `dailyLossAccumulator` value
+- `maxAllowed` — Current `maxDailyLoss` threshold
+- `windowResetAt` — Timestamp when the current window expires (`lastLossResetTimestamp + 1 days`)
+
+### Recovery After Circuit Breaker
+
+When the circuit breaker triggers:
+
+1. The vault is paused and in emergency mode
+2. Depositors can withdraw their proportional share of idle assets
+3. The admin must call `unpause()` to restore normal operation
+4. Unpausing automatically disables emergency mode
+5. The admin may want to adjust `maxDailyLoss`, revoke the strategist, or investigate before unpausing
+
+### Example Scenario
+
+```
+Time T+0:   Strategy A dispatched with 50,000 tokens
+Time T+1:   Keeper reports A failed, returned 40,000 tokens
+            → pnl = -10,000
+            → dailyLossAccumulator = 10,000
+
+Time T+2:   Strategy B dispatched with 30,000 tokens
+Time T+3:   Keeper reports B executed, returned 22,000 tokens
+            → pnl = -8,000
+            → dailyLossAccumulator = 18,000
+
+Time T+4:   Strategy C dispatched with 20,000 tokens
+Time T+5:   Keeper reports C failed, returned 0 tokens
+            → pnl = -20,000
+            → dailyLossAccumulator = 38,000
+
+            If maxDailyLoss = 30,000:
+            → 38,000 > 30,000 → CIRCUIT BREAKER TRIGGERED
+            → Vault paused, emergency mode enabled
+            → No new strategies can execute
+            → Depositors can still withdraw
+```
+
+## Admin Functions Reference
+
+All policy configuration functions require `DEFAULT_ADMIN_ROLE`.
+
+| Function | Parameters | Description |
+|----------|-----------|-------------|
+| `setParachainAllowed` | `(uint32 parachainId, bool allowed)` | Add/remove parachain from whitelist |
+| `setProtocolAllowed` | `(address protocol, bool allowed)` | Add/remove protocol from whitelist |
+| `setProtocolExposureCap` | `(address protocol, uint256 cap)` | Set max exposure for a protocol (0 = unlimited) |
+| `setMaxDailyLoss` | `(uint256 newMaxDailyLoss)` | Update daily loss circuit breaker threshold (0 = disabled) |
+| `setDepositCap` | `(uint256 newCap)` | Update vault deposit cap (must be non-zero) |
+| `setOracle` | `(address newOracle)` | Update the Pyth oracle address |
+| `setXcmWeightLimits` | `(uint64 maxRefTime, uint64 maxProofSize)` | Update XCM weight limits |
+
+## Events Reference
+
+| Event | Emitted When |
+|-------|-------------|
+| `ParachainWhitelistUpdated(uint32 indexed parachainId, bool allowed)` | Parachain added/removed from whitelist |
+| `ProtocolWhitelistUpdated(address indexed protocol, bool allowed)` | Protocol added/removed from whitelist |
+| `ExposureCapUpdated(address indexed protocol, uint256 newCap)` | Protocol exposure cap changed |
+| `DailyLossThresholdUpdated(uint256 newThreshold)` | Daily loss threshold changed |
+| `EmergencyModeToggled(bool enabled)` | Circuit breaker triggered or emergency mode toggled |
+
+## Design Rationale
+
+### Why On-Chain Policy?
+
+The policy engine runs entirely on-chain rather than in the AI agent's logic. This provides several guarantees:
+
+1. **Trustlessness** — Depositors don't need to trust the AI agent's implementation; the smart contract enforces bounds regardless of what the agent attempts
+2. **Transparency** — All policy parameters are publicly readable on-chain
+3. **Auditability** — Every policy change emits an event, creating a complete audit trail
+4. **Immutable enforcement** — Even a compromised AI agent private key cannot bypass policy constraints
+
+### Why Whitelists Instead of Blacklists?
+
+Obidot uses **allowlists** (whitelists) rather than denylists (blacklists) for both parachains and protocols. This is a deliberate security choice:
+
+- **Default deny** — New parachains and protocols are blocked by default until explicitly approved
+- **Smaller attack surface** — The admin only needs to vet the chains and protocols they add, rather than maintaining an ever-growing blocklist
+- **Simpler governance** — Adding a new target is a conscious decision that requires admin action
+
+### Why Per-Protocol (Not Per-Chain) Exposure Caps?
+
+Exposure caps are tracked per protocol address rather than per parachain because:
+
+- A single parachain may host multiple DeFi protocols with different risk profiles
+- A low-risk lending protocol on Moonbeam should have a different cap than a high-risk options protocol on the same chain
+- Per-protocol tracking enables more granular risk management
