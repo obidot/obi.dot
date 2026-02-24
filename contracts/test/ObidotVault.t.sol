@@ -205,9 +205,8 @@ contract ObidotVaultTestBase is Test {
     uint32 internal constant PARA_MOONBEAM = 2004;
     address internal targetProtocol = makeAddr("targetProtocol");
 
-    // ── XCM precompile canonical address ─────────────────────────────────
-    address internal constant XCM_PRECOMPILE_ADDR =
-        0x00000000000000000000000000000000000a0000;
+    /// @dev The on-chain address of the XCM (Cross-Consensus Message) precompile
+    address internal constant XCM_PRECOMPILE_ADDR = address(0xA0000);
 
     function setUp() public virtual {
         // Warp to a reasonable timestamp so oracle staleness checks don't underflow
@@ -593,11 +592,14 @@ contract ObidotVault_Fuzz_Test is ObidotVaultTestBase {
             uint256 returned = vault.redeem(shares, alice, alice);
             // Victim should not lose more than a small fraction
             // With 1e3 virtual shares, loss is bounded by donation / 1e3
+            uint256 depositFloor = (deposit * 999) / 1000;
+            uint256 donationPenalty = donation / 1000;
+            uint256 expectedMin = depositFloor > donationPenalty
+                ? depositFloor - donationPenalty
+                : 0;
             assertGe(
                 returned,
-                (deposit * 999) / 1000 > 0
-                    ? (deposit * 999) / 1000 - donation / 1000
-                    : 0,
+                expectedMin,
                 "Loss from inflation should be bounded"
             );
         }
