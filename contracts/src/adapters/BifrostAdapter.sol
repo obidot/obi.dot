@@ -27,9 +27,11 @@ contract BifrostAdapter is AccessControl, ReentrancyGuard {
     bytes32 public constant STRATEGY_EXECUTOR_ROLE =
         keccak256("STRATEGY_EXECUTOR_ROLE");
 
+    /// @dev The on-chain address of the XCM (Cross-Consensus Message) precompile
+    address public constant XCM_PRECOMPILE_ADDR = address(0xA0000);
+
     /// @notice XCM precompile address on Polkadot Hub EVM.
-    IXcm public constant XCM_PRECOMPILE =
-        IXcm(0x00000000000000000000000000000000000a0000);
+    IXcm public constant XCM_PRECOMPILE = IXcm(XCM_PRECOMPILE_ADDR);
 
     // ─────────────────────────────────────────────────────────────────────
     //  Enums

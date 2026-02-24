@@ -43,9 +43,11 @@ contract ObidotVault is ERC4626, AccessControl, Pausable, ReentrancyGuard {
     /// @notice Role identifier for keepers that report remote strategy outcomes.
     bytes32 public constant KEEPER_ROLE = keccak256("KEEPER_ROLE");
 
+    /// @dev The on-chain address of the XCM (Cross-Consensus Message) precompile
+    address public constant XCM_PRECOMPILE_ADDR = address(0xA0000);
+
     /// @notice XCM precompile address on Polkadot Hub EVM.
-    IXcm public constant XCM_PRECOMPILE =
-        IXcm(0x00000000000000000000000000000000000a0000);
+    IXcm public constant XCM_PRECOMPILE = IXcm(XCM_PRECOMPILE_ADDR);
 
     /// @notice EIP-712 domain typehash.
     bytes32 public constant DOMAIN_TYPEHASH =
