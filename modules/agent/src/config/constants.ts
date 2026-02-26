@@ -181,7 +181,35 @@ export const VAULT_ABI = [
     stateMutability: "view",
   },
 
+  // ── Strategy Tracking ───────────────────────────────────────────────────
+  {
+    type: "function",
+    name: "strategies",
+    inputs: [{ name: "strategyId", type: "uint256" }],
+    outputs: [
+      { name: "strategist", type: "address" },
+      { name: "targetProtocol", type: "address" },
+      { name: "targetParachain", type: "uint32" },
+      { name: "amount", type: "uint256" },
+      { name: "minReturn", type: "uint256" },
+      { name: "executedAt", type: "uint256" },
+      { name: "status", type: "uint8" },
+    ],
+    stateMutability: "view",
+  },
+
   // ── Write Functions ────────────────────────────────────────────────────
+  {
+    type: "function",
+    name: "reportStrategyOutcome",
+    inputs: [
+      { name: "strategyId", type: "uint256" },
+      { name: "success", type: "bool" },
+      { name: "returnedAmount", type: "uint256" },
+    ],
+    outputs: [],
+    stateMutability: "nonpayable",
+  },
   {
     type: "function",
     name: "executeStrategy",

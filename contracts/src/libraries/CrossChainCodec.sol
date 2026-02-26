@@ -136,107 +136,48 @@ library CrossChainCodec {
     // ─────────────────────────────────────────────────────────────────────
 
     /// @notice Encode a deposit sync message.
-    function encodeDepositSync(
-        DepositSyncMessage memory msg_
-    ) internal pure returns (bytes memory) {
-        return
-            abi.encodePacked(
-                MSG_DEPOSIT_SYNC,
-                abi.encode(
-                    msg_.chainId,
-                    msg_.depositor,
-                    msg_.amount,
-                    msg_.sharesMinted,
-                    msg_.nonce
-                )
-            );
+    function encodeDepositSync(DepositSyncMessage memory msg_) internal pure returns (bytes memory) {
+        return abi.encodePacked(
+            MSG_DEPOSIT_SYNC, abi.encode(msg_.chainId, msg_.depositor, msg_.amount, msg_.sharesMinted, msg_.nonce)
+        );
     }
 
     /// @notice Encode a withdrawal request message.
-    function encodeWithdrawRequest(
-        WithdrawRequestMessage memory msg_
-    ) internal pure returns (bytes memory) {
-        return
-            abi.encodePacked(
-                MSG_WITHDRAW_REQUEST,
-                abi.encode(
-                    msg_.chainId,
-                    msg_.withdrawer,
-                    msg_.amount,
-                    msg_.sharesToBurn,
-                    msg_.nonce
-                )
-            );
+    function encodeWithdrawRequest(WithdrawRequestMessage memory msg_) internal pure returns (bytes memory) {
+        return abi.encodePacked(
+            MSG_WITHDRAW_REQUEST, abi.encode(msg_.chainId, msg_.withdrawer, msg_.amount, msg_.sharesToBurn, msg_.nonce)
+        );
     }
 
     /// @notice Encode an asset sync message.
-    function encodeAssetSync(
-        AssetSyncMessage memory msg_
-    ) internal pure returns (bytes memory) {
-        return
-            abi.encodePacked(
-                MSG_ASSET_SYNC,
-                abi.encode(
-                    msg_.globalTotalAssets,
-                    msg_.globalTotalShares,
-                    msg_.totalRemoteAssets,
-                    msg_.timestamp
-                )
-            );
+    function encodeAssetSync(AssetSyncMessage memory msg_) internal pure returns (bytes memory) {
+        return abi.encodePacked(
+            MSG_ASSET_SYNC,
+            abi.encode(msg_.globalTotalAssets, msg_.globalTotalShares, msg_.totalRemoteAssets, msg_.timestamp)
+        );
     }
 
     /// @notice Encode a strategy report message.
-    function encodeStrategyReport(
-        StrategyReportMessage memory msg_
-    ) internal pure returns (bytes memory) {
-        return
-            abi.encodePacked(
-                MSG_STRATEGY_REPORT,
-                abi.encode(
-                    msg_.strategyId,
-                    msg_.success,
-                    msg_.returnedAmount,
-                    msg_.pnl,
-                    msg_.newTotalRemoteAssets
-                )
-            );
+    function encodeStrategyReport(StrategyReportMessage memory msg_) internal pure returns (bytes memory) {
+        return abi.encodePacked(
+            MSG_STRATEGY_REPORT,
+            abi.encode(msg_.strategyId, msg_.success, msg_.returnedAmount, msg_.pnl, msg_.newTotalRemoteAssets)
+        );
     }
 
     /// @notice Encode an emergency sync message.
-    function encodeEmergencySync(
-        EmergencySyncMessage memory msg_
-    ) internal pure returns (bytes memory) {
-        return
-            abi.encodePacked(
-                MSG_EMERGENCY_SYNC,
-                abi.encode(msg_.paused, msg_.emergencyMode, msg_.reason)
-            );
+    function encodeEmergencySync(EmergencySyncMessage memory msg_) internal pure returns (bytes memory) {
+        return abi.encodePacked(MSG_EMERGENCY_SYNC, abi.encode(msg_.paused, msg_.emergencyMode, msg_.reason));
     }
 
     /// @notice Encode a deposit acknowledgment message.
-    function encodeDepositAck(
-        DepositAckMessage memory msg_
-    ) internal pure returns (bytes memory) {
-        return
-            abi.encodePacked(
-                MSG_DEPOSIT_ACK,
-                abi.encode(
-                    msg_.depositNonce,
-                    msg_.globalTotalAssets,
-                    msg_.accepted
-                )
-            );
+    function encodeDepositAck(DepositAckMessage memory msg_) internal pure returns (bytes memory) {
+        return abi.encodePacked(MSG_DEPOSIT_ACK, abi.encode(msg_.depositNonce, msg_.globalTotalAssets, msg_.accepted));
     }
 
     /// @notice Encode a withdrawal fulfillment message.
-    function encodeWithdrawFulfill(
-        WithdrawFulfillMessage memory msg_
-    ) internal pure returns (bytes memory) {
-        return
-            abi.encodePacked(
-                MSG_WITHDRAW_FULFILL,
-                abi.encode(msg_.withdrawNonce, msg_.amount, msg_.fullyFulfilled)
-            );
+    function encodeWithdrawFulfill(WithdrawFulfillMessage memory msg_) internal pure returns (bytes memory) {
+        return abi.encodePacked(MSG_WITHDRAW_FULFILL, abi.encode(msg_.withdrawNonce, msg_.amount, msg_.fullyFulfilled));
     }
 
     // ─────────────────────────────────────────────────────────────────────
@@ -250,90 +191,48 @@ library CrossChainCodec {
     }
 
     /// @notice Decode a deposit sync message.
-    function decodeDepositSync(
-        bytes calldata body
-    ) internal pure returns (DepositSyncMessage memory msg_) {
+    function decodeDepositSync(bytes calldata body) internal pure returns (DepositSyncMessage memory msg_) {
         if (body.length < 33) revert MessageTooShort(body.length, 33);
-        (
-            msg_.chainId,
-            msg_.depositor,
-            msg_.amount,
-            msg_.sharesMinted,
-            msg_.nonce
-        ) = abi.decode(body[1:], (bytes, address, uint256, uint256, uint256));
+        (msg_.chainId, msg_.depositor, msg_.amount, msg_.sharesMinted, msg_.nonce) =
+            abi.decode(body[1:], (bytes, address, uint256, uint256, uint256));
     }
 
     /// @notice Decode a withdrawal request message.
-    function decodeWithdrawRequest(
-        bytes calldata body
-    ) internal pure returns (WithdrawRequestMessage memory msg_) {
+    function decodeWithdrawRequest(bytes calldata body) internal pure returns (WithdrawRequestMessage memory msg_) {
         if (body.length < 33) revert MessageTooShort(body.length, 33);
-        (
-            msg_.chainId,
-            msg_.withdrawer,
-            msg_.amount,
-            msg_.sharesToBurn,
-            msg_.nonce
-        ) = abi.decode(body[1:], (bytes, address, uint256, uint256, uint256));
+        (msg_.chainId, msg_.withdrawer, msg_.amount, msg_.sharesToBurn, msg_.nonce) =
+            abi.decode(body[1:], (bytes, address, uint256, uint256, uint256));
     }
 
     /// @notice Decode an asset sync message.
-    function decodeAssetSync(
-        bytes calldata body
-    ) internal pure returns (AssetSyncMessage memory msg_) {
+    function decodeAssetSync(bytes calldata body) internal pure returns (AssetSyncMessage memory msg_) {
         if (body.length < 33) revert MessageTooShort(body.length, 33);
-        (
-            msg_.globalTotalAssets,
-            msg_.globalTotalShares,
-            msg_.totalRemoteAssets,
-            msg_.timestamp
-        ) = abi.decode(body[1:], (uint256, uint256, uint256, uint256));
+        (msg_.globalTotalAssets, msg_.globalTotalShares, msg_.totalRemoteAssets, msg_.timestamp) =
+            abi.decode(body[1:], (uint256, uint256, uint256, uint256));
     }
 
     /// @notice Decode a strategy report message.
-    function decodeStrategyReport(
-        bytes calldata body
-    ) internal pure returns (StrategyReportMessage memory msg_) {
+    function decodeStrategyReport(bytes calldata body) internal pure returns (StrategyReportMessage memory msg_) {
         if (body.length < 33) revert MessageTooShort(body.length, 33);
-        (
-            msg_.strategyId,
-            msg_.success,
-            msg_.returnedAmount,
-            msg_.pnl,
-            msg_.newTotalRemoteAssets
-        ) = abi.decode(body[1:], (uint256, bool, uint256, int256, uint256));
+        (msg_.strategyId, msg_.success, msg_.returnedAmount, msg_.pnl, msg_.newTotalRemoteAssets) =
+            abi.decode(body[1:], (uint256, bool, uint256, int256, uint256));
     }
 
     /// @notice Decode an emergency sync message.
-    function decodeEmergencySync(
-        bytes calldata body
-    ) internal pure returns (EmergencySyncMessage memory msg_) {
+    function decodeEmergencySync(bytes calldata body) internal pure returns (EmergencySyncMessage memory msg_) {
         if (body.length < 33) revert MessageTooShort(body.length, 33);
-        (msg_.paused, msg_.emergencyMode, msg_.reason) = abi.decode(
-            body[1:],
-            (bool, bool, bytes)
-        );
+        (msg_.paused, msg_.emergencyMode, msg_.reason) = abi.decode(body[1:], (bool, bool, bytes));
     }
 
     /// @notice Decode a deposit acknowledgment message.
-    function decodeDepositAck(
-        bytes calldata body
-    ) internal pure returns (DepositAckMessage memory msg_) {
+    function decodeDepositAck(bytes calldata body) internal pure returns (DepositAckMessage memory msg_) {
         if (body.length < 33) revert MessageTooShort(body.length, 33);
-        (msg_.depositNonce, msg_.globalTotalAssets, msg_.accepted) = abi.decode(
-            body[1:],
-            (uint256, uint256, bool)
-        );
+        (msg_.depositNonce, msg_.globalTotalAssets, msg_.accepted) = abi.decode(body[1:], (uint256, uint256, bool));
     }
 
     /// @notice Decode a withdrawal fulfillment message.
-    function decodeWithdrawFulfill(
-        bytes calldata body
-    ) internal pure returns (WithdrawFulfillMessage memory msg_) {
+    function decodeWithdrawFulfill(bytes calldata body) internal pure returns (WithdrawFulfillMessage memory msg_) {
         if (body.length < 33) revert MessageTooShort(body.length, 33);
-        (msg_.withdrawNonce, msg_.amount, msg_.fullyFulfilled) = abi.decode(
-            body[1:],
-            (uint256, uint256, bool)
-        );
+        (msg_.withdrawNonce, msg_.amount, msg_.fullyFulfilled) = abi.decode(body[1:], (uint256, uint256, bool));
     }
 }

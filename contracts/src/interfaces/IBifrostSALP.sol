@@ -67,10 +67,7 @@ interface IBifrostSALP {
 
     /// @notice Emitted when vsBond tokens are redeemed after lease expiry.
     event VsBondRedeemed(
-        address indexed user,
-        uint32 indexed parachainId,
-        uint256 vsBondAmount,
-        uint256 underlyingReturned
+        address indexed user, uint32 indexed parachainId, uint256 vsBondAmount, uint256 underlyingReturned
     );
 
     // ──────────────────────────────────────────────────────────────────────
@@ -81,45 +78,33 @@ interface IBifrostSALP {
     /// @param params The contribution parameters.
     /// @return vsTokenAmount Amount of vsTokens received.
     /// @return vsBondAmount Amount of vsBond tokens received.
-    function contribute(
-        ContributeParams calldata params
-    ) external returns (uint256 vsTokenAmount, uint256 vsBondAmount);
+    function contribute(ContributeParams calldata params)
+        external
+        returns (uint256 vsTokenAmount, uint256 vsBondAmount);
 
     /// @notice Redeem expired vsBond tokens for the underlying contribution.
     /// @dev Only callable after the lease period has ended.
     /// @param params The redemption parameters.
     /// @return underlyingAmount Amount of underlying tokens returned.
-    function redeemVsBond(
-        RedeemParams calldata params
-    ) external returns (uint256 underlyingAmount);
+    function redeemVsBond(RedeemParams calldata params) external returns (uint256 underlyingAmount);
 
     /// @notice Get information about an active crowdloan campaign.
     /// @param parachainId The parachain ID.
     /// @return info The crowdloan information.
-    function getCrowdloanInfo(
-        uint32 parachainId
-    ) external view returns (CrowdloanInfo memory info);
+    function getCrowdloanInfo(uint32 parachainId) external view returns (CrowdloanInfo memory info);
 
     /// @notice Get all currently active crowdloan campaigns.
     /// @return parachainIds Array of parachain IDs with active crowdloans.
-    function getActiveCrowdloans()
-        external
-        view
-        returns (uint32[] memory parachainIds);
+    function getActiveCrowdloans() external view returns (uint32[] memory parachainIds);
 
     /// @notice Check if a crowdloan's lease period has expired (vsBond redeemable).
     /// @param parachainId The parachain ID.
     /// @param leasePeriod The lease period to check.
     /// @return expired True if the lease has expired.
-    function isLeaseExpired(
-        uint32 parachainId,
-        uint64 leasePeriod
-    ) external view returns (bool expired);
+    function isLeaseExpired(uint32 parachainId, uint64 leasePeriod) external view returns (bool expired);
 
     /// @notice Get the current vsToken exchange rate for a parachain's crowdloan.
     /// @param parachainId The parachain ID.
     /// @return rate The exchange rate (scaled by 1e18).
-    function getVsTokenRate(
-        uint32 parachainId
-    ) external view returns (uint256 rate);
+    function getVsTokenRate(uint32 parachainId) external view returns (uint256 rate);
 }

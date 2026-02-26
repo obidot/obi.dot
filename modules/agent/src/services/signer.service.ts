@@ -397,6 +397,101 @@ export class SignerService {
   }
 
   // ─────────────────────────────────────────────────────────────────────
+  //  Strategy Outcome Tracking
+  // ─────────────────────────────────────────────────────────────────────
+
+  /**
+   * Strategy status enum matching the on-chain StrategyStatus.
+   *   0 = Pending, 1 = Sent, 2 = Executed, 3 = Failed
+   */
+  static readonly StrategyStatus = {
+    Pending: 0,
+    Sent: 1,
+    Executed: 2,
+    Failed: 3,
+  } as const;
+
+  /**
+   * Query the on-chain status of a strategy by ID.
+   *
+   * @param strategyId - The strategy ID returned by executeStrategy.
+   * @returns Strategy record: strategist, protocol, status, amount, etc.
+   */
+  async fetchStrategyRecord(strategyId: bigint): Promise<{
+    strategist: Address;
+    targetProtocol: Address;
+    targetParachain: number;
+    amount: bigint;
+    minReturn: bigint;
+    executedAt: bigint;
+    status: number;
+  }> {
+    const result = await this.publicClient.readContract({
+      address: VAULT_ADDRESS,
+      abi: VAULT_ABI,
+      functionName: "strategies",
+      args: [strategyId],
+    });
+
+    // Destructure the tuple returned by the contract
+    const [strategist, targetProtocol, targetParachain, amount, minReturn, executedAt, status] =
+      result as [Address, Address, number, bigint, bigint, bigint, number];
+
+    return { strategist, targetProtocol, targetParachain, amount, minReturn, executedAt, status };
+  }
+
+  /**
+   * Report the outcome of a remote strategy execution.
+   *
+   * Calls `reportStrategyOutcome()` on the vault contract (KEEPER_ROLE required).
+   *
+   * @param strategyId     - The strategy ID to report on.
+   * @param success        - Whether the remote execution succeeded.
+   * @param returnedAmount - Amount of assets returned.
+   * @returns Transaction hash.
+   */
+  async reportOutcome(
+    strategyId: bigint,
+    success: boolean,
+    returnedAmount: bigint,
+  ): Promise<Hex> {
+    signerLog.info(
+      {
+        strategyId: strategyId.toString(),
+        success,
+        returnedAmount: returnedAmount.toString(),
+      },
+      "Reporting strategy outcome",
+    );
+
+    const txHash = await this.walletClient.writeContract({
+      account: this.account,
+      chain: polkadotHubTestnet,
+      address: VAULT_ADDRESS,
+      abi: VAULT_ABI,
+      functionName: "reportStrategyOutcome",
+      args: [strategyId, success, returnedAmount],
+    });
+
+    const receipt = await this.publicClient.waitForTransactionReceipt({
+      hash: txHash,
+    });
+
+    signerLog.info(
+      {
+        txHash,
+        strategyId: strategyId.toString(),
+        success,
+        blockNumber: receipt.blockNumber.toString(),
+        status: receipt.status,
+      },
+      "Strategy outcome reported on-chain",
+    );
+
+    return txHash;
+  }
+
+  // ─────────────────────────────────────────────────────────────────────
   //  Bifrost Adapter Interaction
   // ─────────────────────────────────────────────────────────────────────
 

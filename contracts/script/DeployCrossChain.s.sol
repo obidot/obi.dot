@@ -46,12 +46,7 @@ contract DeployCrossChain is Script {
         vm.startBroadcast(deployerPrivateKey);
 
         // ── 1. Deploy CrossChainRouter ───────────────────────────────────
-        CrossChainRouter router = new CrossChainRouter(
-            ismpHost,
-            IERC20(underlyingAsset),
-            masterVault,
-            admin
-        );
+        CrossChainRouter router = new CrossChainRouter(ismpHost, IERC20(underlyingAsset), masterVault, admin);
         console.log("CrossChainRouter deployed at:", address(router));
 
         // ── 2. Deploy BifrostAdapter ─────────────────────────────────────
@@ -66,19 +61,12 @@ contract DeployCrossChain is Script {
         try vault.setCrossChainRouter(address(router)) {
             console.log("Vault crossChainRouter set  :", address(router));
         } catch {
-            console.log(
-                "WARN: Could not set crossChainRouter (deployer may not have admin role)"
-            );
+            console.log("WARN: Could not set crossChainRouter (deployer may not have admin role)");
         }
         try vault.setBifrostAdapter(address(bifrostAdapter)) {
-            console.log(
-                "Vault bifrostAdapter set    :",
-                address(bifrostAdapter)
-            );
+            console.log("Vault bifrostAdapter set    :", address(bifrostAdapter));
         } catch {
-            console.log(
-                "WARN: Could not set bifrostAdapter (deployer may not have admin role)"
-            );
+            console.log("WARN: Could not set bifrostAdapter (deployer may not have admin role)");
         }
         // ── 4. Ensure Bifrost parachain is whitelisted ───────────────────
         try vault.setParachainAllowed(2030, true) {
@@ -89,28 +77,15 @@ contract DeployCrossChain is Script {
         vm.stopBroadcast();
 
         // ── Post-deploy verification ─────────────────────────────────────
-        _verify(
-            router,
-            bifrostAdapter,
-            underlyingAsset,
-            ismpHost,
-            masterVault,
-            admin
-        );
+        _verify(router, bifrostAdapter, underlyingAsset, ismpHost, masterVault, admin);
 
         console.log("");
         console.log("=== Hub Cross-Chain Deployment Complete ===");
         console.log("Next steps:");
-        console.log(
-            "  1. Register satellite chains via router.addSatelliteChain()"
-        );
+        console.log("  1. Register satellite chains via router.addSatelliteChain()");
         console.log("  2. Deploy ObidotVaultEVM on each target EVM chain");
-        console.log(
-            "  3. Register peers bidirectionally between router and satellites"
-        );
-        console.log(
-            "  4. Fund router with native tokens for ISMP dispatch fees"
-        );
+        console.log("  3. Register peers bidirectionally between router and satellites");
+        console.log("  4. Fund router with native tokens for ISMP dispatch fees");
     }
 
     function _verify(
@@ -121,37 +96,18 @@ contract DeployCrossChain is Script {
         address masterVault,
         address admin
     ) internal view {
-        require(
-            address(router.asset()) == underlyingAsset,
-            "Router: asset mismatch"
-        );
-        require(
-            address(router.ismpHost()) == ismpHost,
-            "Router: ISMP host mismatch"
-        );
-        require(
-            router.masterVault() == masterVault,
-            "Router: master vault mismatch"
-        );
-        require(
-            router.hasRole(router.DEFAULT_ADMIN_ROLE(), admin),
-            "Router: admin role missing"
-        );
-        require(
-            router.hasRole(router.VAULT_ROLE(), masterVault),
-            "Router: vault role missing"
-        );
+        require(address(router.asset()) == underlyingAsset, "Router: asset mismatch");
+        require(address(router.ismpHost()) == ismpHost, "Router: ISMP host mismatch");
+        require(router.masterVault() == masterVault, "Router: master vault mismatch");
+        require(router.hasRole(router.DEFAULT_ADMIN_ROLE(), admin), "Router: admin role missing");
+        require(router.hasRole(router.VAULT_ROLE(), masterVault), "Router: vault role missing");
         require(!router.paused(), "Router: should not be paused");
 
         require(
-            bifrostAdapter.hasRole(bifrostAdapter.DEFAULT_ADMIN_ROLE(), admin),
-            "BifrostAdapter: admin role missing"
+            bifrostAdapter.hasRole(bifrostAdapter.DEFAULT_ADMIN_ROLE(), admin), "BifrostAdapter: admin role missing"
         );
         require(
-            bifrostAdapter.hasRole(
-                bifrostAdapter.STRATEGY_EXECUTOR_ROLE(),
-                masterVault
-            ),
+            bifrostAdapter.hasRole(bifrostAdapter.STRATEGY_EXECUTOR_ROLE(), masterVault),
             "BifrostAdapter: vault executor role missing"
         );
 
@@ -184,10 +140,7 @@ contract DeploySatelliteVault is Script {
         uint256 deployerPrivateKey = vm.envUint("PRIVATE_KEY");
         address underlyingAsset = vm.envAddress("UNDERLYING_ASSET");
         address ismpHost = vm.envAddress("ISMP_HOST");
-        string memory hubChainIdStr = vm.envOr(
-            "HUB_CHAIN_ID",
-            string("POLKADOT-HUB")
-        );
+        string memory hubChainIdStr = vm.envOr("HUB_CHAIN_ID", string("POLKADOT-HUB"));
         bytes memory hubRouterModule = vm.envBytes("HUB_ROUTER_MODULE");
         string memory chainIdStr = vm.envString("CHAIN_IDENTIFIER");
         uint256 depositCap = vm.envOr("DEPOSIT_CAP", uint256(1_000_000 ether));
@@ -231,16 +184,10 @@ contract DeploySatelliteVault is Script {
 
         // ── Verification ─────────────────────────────────────────────────
         require(satellite.asset() == underlyingAsset, "Asset mismatch");
-        require(
-            address(satellite.ismpHost()) == ismpHost,
-            "ISMP host mismatch"
-        );
+        require(address(satellite.ismpHost()) == ismpHost, "ISMP host mismatch");
         require(satellite.depositCap() == depositCap, "Deposit cap mismatch");
         require(satellite.maxSyncAge() == maxSyncAge, "Max sync age mismatch");
-        require(
-            satellite.hasRole(satellite.DEFAULT_ADMIN_ROLE(), admin),
-            "Admin role missing"
-        );
+        require(satellite.hasRole(satellite.DEFAULT_ADMIN_ROLE(), admin), "Admin role missing");
         require(!satellite.paused(), "Should not be paused");
         require(!satellite.emergencyMode(), "Emergency mode should be off");
 
@@ -248,12 +195,8 @@ contract DeploySatelliteVault is Script {
         console.log("");
         console.log("=== Satellite Deployment Complete ===");
         console.log("Next steps:");
-        console.log(
-            "  1. On the hub, call router.addSatelliteChain() with this chain's ID and vault address"
-        );
-        console.log(
-            "  2. Fund this contract with native tokens for ISMP dispatch fees"
-        );
+        console.log("  1. On the hub, call router.addSatelliteChain() with this chain's ID and vault address");
+        console.log("  2. Fund this contract with native tokens for ISMP dispatch fees");
         console.log("  3. Approve underlying asset for deposits");
     }
 }
@@ -325,10 +268,7 @@ contract RegisterSatellitePeers is Script {
         address baseModule = vm.envOr("BASE_SATELLITE_MODULE", address(0));
 
         if (baseModule != address(0)) {
-            router.addSatelliteChain(
-                bytes(baseChainId),
-                abi.encode(baseModule)
-            );
+            router.addSatelliteChain(bytes(baseChainId), abi.encode(baseModule));
             console.log("Registered satellite:", baseChainId, "->", baseModule);
         }
 

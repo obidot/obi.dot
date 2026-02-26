@@ -2,9 +2,7 @@
 pragma solidity ^0.8.28;
 
 import {AccessControl} from "@openzeppelin/contracts/access/AccessControl.sol";
-import {
-    ReentrancyGuard
-} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
+import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 
 import {IIsmpHost} from "../interfaces/IIsmpHost.sol";
 import {IIsmpModule} from "../interfaces/IIsmpModule.sol";
@@ -16,11 +14,7 @@ import {IIsmpModule} from "../interfaces/IIsmpModule.sol";
 /// @dev Inheriting contracts implement `_processMessage()` to handle incoming
 ///      cross-chain messages and `_handleTimeout()` for rollback logic.
 ///      Only the ISMP host can call `onAccept()` and timeout callbacks.
-abstract contract HyperbridgeAdapter is
-    IIsmpModule,
-    AccessControl,
-    ReentrancyGuard
-{
+abstract contract HyperbridgeAdapter is IIsmpModule, AccessControl, ReentrancyGuard {
     // ─────────────────────────────────────────────────────────────────────
     //  Constants
     // ─────────────────────────────────────────────────────────────────────
@@ -58,12 +52,7 @@ abstract contract HyperbridgeAdapter is
     // ─────────────────────────────────────────────────────────────────────
 
     /// @notice Emitted when a cross-chain message is dispatched.
-    event MessageDispatched(
-        bytes32 indexed commitment,
-        bytes dest,
-        uint64 timeout,
-        uint256 bodyLength
-    );
+    event MessageDispatched(bytes32 indexed commitment, bytes dest, uint64 timeout, uint256 bodyLength);
 
     /// @notice Emitted when a cross-chain message is received and processed.
     event MessageReceived(bytes source, uint64 nonce, uint256 bodyLength);
@@ -125,10 +114,7 @@ abstract contract HyperbridgeAdapter is
     /// @notice Register a peer chain and its authorized module address.
     /// @param chainId The chain identifier (e.g., "ETHEREUM", "POLKADOT-HUB").
     /// @param moduleAddress The module address on that chain (abi.encode(address) for EVM).
-    function registerPeer(
-        bytes calldata chainId,
-        bytes calldata moduleAddress
-    ) external onlyRole(DEFAULT_ADMIN_ROLE) {
+    function registerPeer(bytes calldata chainId, bytes calldata moduleAddress) external onlyRole(DEFAULT_ADMIN_ROLE) {
         bytes32 chainHash = keccak256(chainId);
         registeredPeers[chainHash] = moduleAddress;
         knownChains[chainHash] = true;
@@ -137,9 +123,7 @@ abstract contract HyperbridgeAdapter is
 
     /// @notice Remove a registered peer chain.
     /// @param chainId The chain identifier to remove.
-    function removePeer(
-        bytes calldata chainId
-    ) external onlyRole(DEFAULT_ADMIN_ROLE) {
+    function removePeer(bytes calldata chainId) external onlyRole(DEFAULT_ADMIN_ROLE) {
         bytes32 chainHash = keccak256(chainId);
         delete registeredPeers[chainHash];
         knownChains[chainHash] = false;
@@ -154,17 +138,8 @@ abstract contract HyperbridgeAdapter is
     /// @param destChainId The destination chain identifier.
     /// @param body The message body to send.
     /// @return commitment The unique commitment hash for this message.
-    function _dispatchMessage(
-        bytes memory destChainId,
-        bytes memory body
-    ) internal returns (bytes32 commitment) {
-        return
-            _dispatchMessageWithParams(
-                destChainId,
-                body,
-                DEFAULT_TIMEOUT,
-                DEFAULT_GAS_LIMIT
-            );
+    function _dispatchMessage(bytes memory destChainId, bytes memory body) internal returns (bytes32 commitment) {
+        return _dispatchMessageWithParams(destChainId, body, DEFAULT_TIMEOUT, DEFAULT_GAS_LIMIT);
     }
 
     /// @notice Dispatch a cross-chain message with custom parameters.
@@ -173,12 +148,10 @@ abstract contract HyperbridgeAdapter is
     /// @param timeout Message timeout in seconds.
     /// @param gasLimit Execution gas limit on the destination.
     /// @return commitment The unique commitment hash for this message.
-    function _dispatchMessageWithParams(
-        bytes memory destChainId,
-        bytes memory body,
-        uint64 timeout,
-        uint256 gasLimit
-    ) internal returns (bytes32 commitment) {
+    function _dispatchMessageWithParams(bytes memory destChainId, bytes memory body, uint64 timeout, uint256 gasLimit)
+        internal
+        returns (bytes32 commitment)
+    {
         bytes32 destHash = keccak256(destChainId);
         bytes memory peerModule = registeredPeers[destHash];
         if (peerModule.length == 0) revert UnknownSourceChain(destChainId);
@@ -207,9 +180,7 @@ abstract contract HyperbridgeAdapter is
     // ─────────────────────────────────────────────────────────────────────
 
     /// @inheritdoc IIsmpModule
-    function onAccept(
-        IncomingPostRequest calldata incoming
-    ) external override onlyIsmpHost nonReentrant {
+    function onAccept(IncomingPostRequest calldata incoming) external override onlyIsmpHost nonReentrant {
         PostRequest calldata request = incoming.request;
 
         // Validate source chain is registered
@@ -224,42 +195,30 @@ abstract contract HyperbridgeAdapter is
             revert UnauthorizedSourceModule(request.from);
         }
 
-        emit MessageReceived(
-            request.source,
-            request.nonce,
-            request.body.length
-        );
+        emit MessageReceived(request.source, request.nonce, request.body.length);
 
         // Delegate to the implementing contract
         _processMessage(request.source, request.body);
     }
 
     /// @inheritdoc IIsmpModule
-    function onPostRequestTimeout(
-        PostRequest calldata request
-    ) external override onlyIsmpHost nonReentrant {
+    function onPostRequestTimeout(PostRequest calldata request) external override onlyIsmpHost nonReentrant {
         emit MessageTimeout(request.dest, request.nonce, request.body.length);
         _handleTimeout(request.dest, request.body);
     }
 
     /// @inheritdoc IIsmpModule
-    function onPostResponse(
-        IncomingPostResponse calldata
-    ) external override onlyIsmpHost {
+    function onPostResponse(IncomingPostResponse calldata) external override onlyIsmpHost {
         // Not used in this architecture — responses are handled via separate POST messages
     }
 
     /// @inheritdoc IIsmpModule
-    function onPostResponseTimeout(
-        PostResponse calldata
-    ) external override onlyIsmpHost {
+    function onPostResponseTimeout(PostResponse calldata) external override onlyIsmpHost {
         // Not used
     }
 
     /// @inheritdoc IIsmpModule
-    function onGetResponse(
-        IncomingGetResponse calldata
-    ) external override onlyIsmpHost {
+    function onGetResponse(IncomingGetResponse calldata) external override onlyIsmpHost {
         // Not used — state queries are handled off-chain
     }
 
@@ -275,27 +234,19 @@ abstract contract HyperbridgeAdapter is
     /// @dev Process an incoming cross-chain message.
     /// @param source The source chain identifier.
     /// @param body The message body.
-    function _processMessage(
-        bytes calldata source,
-        bytes calldata body
-    ) internal virtual;
+    function _processMessage(bytes calldata source, bytes calldata body) internal virtual;
 
     /// @dev Handle a timeout for a previously dispatched message.
     /// @param dest The destination chain identifier.
     /// @param body The message body that timed out.
-    function _handleTimeout(
-        bytes calldata dest,
-        bytes calldata body
-    ) internal virtual;
+    function _handleTimeout(bytes calldata dest, bytes calldata body) internal virtual;
 
     // ─────────────────────────────────────────────────────────────────────
     //  ERC-165
     // ─────────────────────────────────────────────────────────────────────
 
     /// @inheritdoc AccessControl
-    function supportsInterface(
-        bytes4 interfaceId
-    ) public view override returns (bool) {
+    function supportsInterface(bytes4 interfaceId) public view override returns (bool) {
         return super.supportsInterface(interfaceId);
     }
 

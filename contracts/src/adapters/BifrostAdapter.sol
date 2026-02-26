@@ -2,9 +2,7 @@
 pragma solidity ^0.8.28;
 
 import {AccessControl} from "@openzeppelin/contracts/access/AccessControl.sol";
-import {
-    ReentrancyGuard
-} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
+import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 
 import {BifrostCodec} from "../libraries/BifrostCodec.sol";
 import {IXcm} from "../interfaces/IXcm.sol";
@@ -24,8 +22,7 @@ contract BifrostAdapter is AccessControl, ReentrancyGuard {
     // ─────────────────────────────────────────────────────────────────────
 
     /// @notice Role for addresses authorized to execute strategies via this adapter.
-    bytes32 public constant STRATEGY_EXECUTOR_ROLE =
-        keccak256("STRATEGY_EXECUTOR_ROLE");
+    bytes32 public constant STRATEGY_EXECUTOR_ROLE = keccak256("STRATEGY_EXECUTOR_ROLE");
 
     /// @dev The on-chain address of the XCM (Cross-Consensus Message) precompile
     address public constant XCM_PRECOMPILE_ADDR = address(0xA0000);
@@ -46,6 +43,7 @@ contract BifrostAdapter is AccessControl, ReentrancyGuard {
         FarmWithdraw, // Withdraw from farming pool
         FarmClaim, // Claim farming rewards
         SALPContribute // Contribute to crowdloan
+
     }
 
     // ─────────────────────────────────────────────────────────────────────
@@ -101,10 +99,7 @@ contract BifrostAdapter is AccessControl, ReentrancyGuard {
 
     /// @notice Emitted when a Bifrost strategy is dispatched via XCM.
     event BifrostStrategyDispatched(
-        uint256 indexed strategyId,
-        BifrostStrategyType indexed strategyType,
-        uint256 amount,
-        bytes32 beneficiary
+        uint256 indexed strategyId, BifrostStrategyType indexed strategyType, uint256 amount, bytes32 beneficiary
     );
 
     // ─────────────────────────────────────────────────────────────────────
@@ -136,18 +131,13 @@ contract BifrostAdapter is AccessControl, ReentrancyGuard {
     /// @param strategy The strategy parameters.
     /// @return strategyId The unique ID for this adapter-level strategy.
     /// @return xcmMessage The encoded XCM message that was dispatched.
-    function executeBifrostStrategy(
-        BifrostStrategy calldata strategy
-    )
+    function executeBifrostStrategy(BifrostStrategy calldata strategy)
         external
         onlyRole(STRATEGY_EXECUTOR_ROLE)
         nonReentrant
         returns (uint256 strategyId, bytes memory xcmMessage)
     {
-        if (
-            strategy.amount == 0 &&
-            strategy.strategyType != BifrostStrategyType.FarmClaim
-        ) {
+        if (strategy.amount == 0 && strategy.strategyType != BifrostStrategyType.FarmClaim) {
             revert ZeroStrategyAmount();
         }
         if (strategy.beneficiary == bytes32(0)) revert ZeroBeneficiary();
@@ -175,12 +165,7 @@ contract BifrostAdapter is AccessControl, ReentrancyGuard {
             dispatched: true
         });
 
-        emit BifrostStrategyDispatched(
-            strategyId,
-            strategy.strategyType,
-            strategy.amount,
-            strategy.beneficiary
-        );
+        emit BifrostStrategyDispatched(strategyId, strategy.strategyType, strategy.amount, strategy.beneficiary);
     }
 
     // ─────────────────────────────────────────────────────────────────────
@@ -190,9 +175,7 @@ contract BifrostAdapter is AccessControl, ReentrancyGuard {
     /// @notice Preview the XCM message that would be dispatched for a strategy.
     /// @param strategy The strategy parameters.
     /// @return xcmMessage The encoded XCM message.
-    function previewStrategy(
-        BifrostStrategy calldata strategy
-    ) external pure returns (bytes memory xcmMessage) {
+    function previewStrategy(BifrostStrategy calldata strategy) external pure returns (bytes memory xcmMessage) {
         return _encodeStrategy(strategy);
     }
 
@@ -207,61 +190,27 @@ contract BifrostAdapter is AccessControl, ReentrancyGuard {
     // ─────────────────────────────────────────────────────────────────────
 
     /// @dev Route strategy encoding to the appropriate BifrostCodec function.
-    function _encodeStrategy(
-        BifrostStrategy calldata strategy
-    ) internal pure returns (bytes memory) {
+    function _encodeStrategy(BifrostStrategy calldata strategy) internal pure returns (bytes memory) {
         if (strategy.strategyType == BifrostStrategyType.MintVToken) {
-            return
-                BifrostCodec.encodeMintVToken(
-                    strategy.currencyIdA,
-                    strategy.amount,
-                    strategy.beneficiary
-                );
+            return BifrostCodec.encodeMintVToken(strategy.currencyIdA, strategy.amount, strategy.beneficiary);
         } else if (strategy.strategyType == BifrostStrategyType.RedeemVToken) {
-            return
-                BifrostCodec.encodeRedeemVToken(
-                    strategy.currencyIdA,
-                    strategy.amount,
-                    strategy.beneficiary
-                );
+            return BifrostCodec.encodeRedeemVToken(strategy.currencyIdA, strategy.amount, strategy.beneficiary);
         } else if (strategy.strategyType == BifrostStrategyType.DEXSwap) {
-            return
-                BifrostCodec.encodeDEXSwap(
-                    strategy.currencyIdA,
-                    strategy.currencyIdB,
-                    strategy.amount,
-                    strategy.minOutput,
-                    strategy.beneficiary
-                );
+            return BifrostCodec.encodeDEXSwap(
+                strategy.currencyIdA, strategy.currencyIdB, strategy.amount, strategy.minOutput, strategy.beneficiary
+            );
         } else if (strategy.strategyType == BifrostStrategyType.FarmDeposit) {
-            return
-                BifrostCodec.encodeFarmingDeposit(
-                    strategy.poolId,
-                    strategy.amount,
-                    strategy.beneficiary
-                );
+            return BifrostCodec.encodeFarmingDeposit(strategy.poolId, strategy.amount, strategy.beneficiary);
         } else if (strategy.strategyType == BifrostStrategyType.FarmWithdraw) {
-            return
-                BifrostCodec.encodeFarmingWithdraw(
-                    strategy.poolId,
-                    strategy.amount,
-                    strategy.beneficiary
-                );
+            return BifrostCodec.encodeFarmingWithdraw(strategy.poolId, strategy.amount, strategy.beneficiary);
         } else if (strategy.strategyType == BifrostStrategyType.FarmClaim) {
-            return
-                BifrostCodec.encodeFarmingClaim(
-                    strategy.poolId,
-                    strategy.beneficiary
-                );
-        } else if (
-            strategy.strategyType == BifrostStrategyType.SALPContribute
-        ) {
-            return
-                BifrostCodec.encodeSALPContribute(
-                    strategy.currencyIdA, // parachainId stored in currencyIdA for SALP
-                    strategy.amount,
-                    strategy.beneficiary
-                );
+            return BifrostCodec.encodeFarmingClaim(strategy.poolId, strategy.beneficiary);
+        } else if (strategy.strategyType == BifrostStrategyType.SALPContribute) {
+            return BifrostCodec.encodeSALPContribute(
+                strategy.currencyIdA, // parachainId stored in currencyIdA for SALP
+                strategy.amount,
+                strategy.beneficiary
+            );
         } else {
             revert UnsupportedStrategy(strategy.strategyType);
         }
@@ -272,9 +221,7 @@ contract BifrostAdapter is AccessControl, ReentrancyGuard {
     // ─────────────────────────────────────────────────────────────────────
 
     /// @inheritdoc AccessControl
-    function supportsInterface(
-        bytes4 interfaceId
-    ) public view override returns (bool) {
+    function supportsInterface(bytes4 interfaceId) public view override returns (bool) {
         return super.supportsInterface(interfaceId);
     }
 }

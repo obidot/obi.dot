@@ -24,6 +24,7 @@ interface IBifrostSLP {
         ForeignAsset, // 6 — Foreign asset
         BLP, // 7 — Bifrost LP token
         StableLPToken // 8 — Stable LP token
+
     }
 
     /// @notice Minting parameters for liquid staking.
@@ -53,19 +54,11 @@ interface IBifrostSLP {
     // ──────────────────────────────────────────────────────────────────────
 
     /// @notice Emitted when vTokens are minted via liquid staking.
-    event VTokenMinted(
-        address indexed user,
-        uint32 indexed currencyId,
-        uint256 stakedAmount,
-        uint256 vTokenReceived
-    );
+    event VTokenMinted(address indexed user, uint32 indexed currencyId, uint256 stakedAmount, uint256 vTokenReceived);
 
     /// @notice Emitted when vTokens are redeemed for underlying.
     event VTokenRedeemed(
-        address indexed user,
-        uint32 indexed vCurrencyId,
-        uint256 vTokenBurned,
-        uint256 underlyingReceived
+        address indexed user, uint32 indexed vCurrencyId, uint256 vTokenBurned, uint256 underlyingReceived
     );
 
     // ──────────────────────────────────────────────────────────────────────
@@ -75,43 +68,31 @@ interface IBifrostSLP {
     /// @notice Mint vTokens by staking native tokens.
     /// @param params The minting parameters.
     /// @return vTokenAmount The amount of vTokens minted.
-    function mint(
-        MintParams calldata params
-    ) external returns (uint256 vTokenAmount);
+    function mint(MintParams calldata params) external returns (uint256 vTokenAmount);
 
     /// @notice Redeem underlying tokens by burning vTokens.
     /// @dev Redemption may have an unbonding period depending on the chain.
     /// @param params The redemption parameters.
     /// @return underlyingAmount The amount of underlying tokens returned.
-    function redeem(
-        RedeemParams calldata params
-    ) external returns (uint256 underlyingAmount);
+    function redeem(RedeemParams calldata params) external returns (uint256 underlyingAmount);
 
     /// @notice Get the current exchange rate between a vToken and its underlying.
     /// @param vCurrencyId The vToken currency ID.
     /// @return rate The exchange rate (scaled by 1e18). E.g., 1.05e18 means 1 vDOT = 1.05 DOT.
-    function getExchangeRate(
-        uint32 vCurrencyId
-    ) external view returns (uint256 rate);
+    function getExchangeRate(uint32 vCurrencyId) external view returns (uint256 rate);
 
     /// @notice Get the total value locked in the staking pool for a given token.
     /// @param currencyId The underlying token currency ID.
     /// @return totalStaked Total amount staked in the smallest denomination.
-    function totalStaked(
-        uint32 currencyId
-    ) external view returns (uint256 totalStaked);
+    function totalStaked(uint32 currencyId) external view returns (uint256 totalStaked);
 
     /// @notice Check if minting is available for a given token.
     /// @param currencyId The underlying token currency ID.
     /// @return available True if minting is currently available.
-    function isMintingAvailable(
-        uint32 currencyId
-    ) external view returns (bool available);
+    function isMintingAvailable(uint32 currencyId) external view returns (bool available);
 
     /// @notice Get the minimum stake amount for a given token.
     /// @param currencyId The underlying token currency ID.
     /// @return minAmount The minimum stake amount.
-    function minimumStake(
-        uint32 currencyId
-    ) external view returns (uint256 minAmount);
+    function minimumStake(uint32 currencyId) external view returns (uint256 minAmount);
 }

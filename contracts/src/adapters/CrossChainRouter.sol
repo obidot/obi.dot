@@ -2,9 +2,7 @@
 pragma solidity ^0.8.28;
 
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import {
-    SafeERC20
-} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {Pausable} from "@openzeppelin/contracts/utils/Pausable.sol";
 
 import {HyperbridgeAdapter} from "./HyperbridgeAdapter.sol";
@@ -49,37 +47,21 @@ contract CrossChainRouter is HyperbridgeAdapter, Pausable {
 
     /// @notice Emitted when a satellite deposit is received and processed.
     event SatelliteDepositReceived(
-        bytes indexed chainId,
-        address indexed depositor,
-        uint256 amount,
-        uint256 sharesMinted,
-        uint256 nonce
+        bytes indexed chainId, address indexed depositor, uint256 amount, uint256 sharesMinted, uint256 nonce
     );
 
     /// @notice Emitted when a satellite withdrawal request is received.
     event SatelliteWithdrawRequested(
-        bytes indexed chainId,
-        address indexed withdrawer,
-        uint256 amount,
-        uint256 sharesToBurn,
-        uint256 nonce
+        bytes indexed chainId, address indexed withdrawer, uint256 amount, uint256 sharesToBurn, uint256 nonce
     );
 
     /// @notice Emitted when an asset sync is broadcast to satellites.
     event AssetSyncBroadcast(
-        uint256 globalTotalAssets,
-        uint256 globalTotalShares,
-        uint256 totalRemoteAssets,
-        uint256 satelliteCount
+        uint256 globalTotalAssets, uint256 globalTotalShares, uint256 totalRemoteAssets, uint256 satelliteCount
     );
 
     /// @notice Emitted when a strategy report is broadcast to satellites.
-    event StrategyReportBroadcast(
-        uint256 strategyId,
-        bool success,
-        uint256 returnedAmount,
-        int256 pnl
-    );
+    event StrategyReportBroadcast(uint256 strategyId, bool success, uint256 returnedAmount, int256 pnl);
 
     /// @notice Emitted when an emergency sync is broadcast to satellites.
     event EmergencySyncBroadcast(bool paused, bool emergencyMode);
@@ -113,8 +95,7 @@ contract CrossChainRouter is HyperbridgeAdapter, Pausable {
     mapping(bytes32 => uint256) public incomingWithdrawNonces;
 
     /// @notice Pending withdrawal requests by nonce.
-    mapping(uint256 => CrossChainCodec.WithdrawRequestMessage)
-        public pendingWithdrawals;
+    mapping(uint256 => CrossChainCodec.WithdrawRequestMessage) public pendingWithdrawals;
 
     /// @notice Global withdrawal nonce.
     uint256 public withdrawNonce;
@@ -127,12 +108,9 @@ contract CrossChainRouter is HyperbridgeAdapter, Pausable {
     /// @param _asset The underlying ERC-20 asset.
     /// @param _masterVault The master ObidotVault address.
     /// @param _admin The admin address.
-    constructor(
-        address _ismpHost,
-        IERC20 _asset,
-        address _masterVault,
-        address _admin
-    ) HyperbridgeAdapter(_ismpHost, _admin) {
+    constructor(address _ismpHost, IERC20 _asset, address _masterVault, address _admin)
+        HyperbridgeAdapter(_ismpHost, _admin)
+    {
         asset = _asset;
         masterVault = _masterVault;
         _grantRole(VAULT_ROLE, _masterVault);
@@ -145,10 +123,10 @@ contract CrossChainRouter is HyperbridgeAdapter, Pausable {
     /// @notice Add a satellite chain to the broadcast list.
     /// @param chainId The satellite chain identifier.
     /// @param moduleAddress The satellite vault module address on that chain.
-    function addSatelliteChain(
-        bytes calldata chainId,
-        bytes calldata moduleAddress
-    ) external onlyRole(DEFAULT_ADMIN_ROLE) {
+    function addSatelliteChain(bytes calldata chainId, bytes calldata moduleAddress)
+        external
+        onlyRole(DEFAULT_ADMIN_ROLE)
+    {
         // Register as peer for bidirectional messaging
         bytes32 chainHash = keccak256(chainId);
         registeredPeers[chainHash] = moduleAddress;
@@ -158,9 +136,7 @@ contract CrossChainRouter is HyperbridgeAdapter, Pausable {
     }
 
     /// @notice Update the master vault address.
-    function setMasterVault(
-        address _masterVault
-    ) external onlyRole(DEFAULT_ADMIN_ROLE) {
+    function setMasterVault(address _masterVault) external onlyRole(DEFAULT_ADMIN_ROLE) {
         _revokeRole(VAULT_ROLE, masterVault);
         masterVault = _masterVault;
         _grantRole(VAULT_ROLE, _masterVault);
@@ -175,18 +151,17 @@ contract CrossChainRouter is HyperbridgeAdapter, Pausable {
     /// @param globalTotalAssets Total assets across the entire vault system.
     /// @param globalTotalShares Total share supply across all vaults.
     /// @param totalRemoteAssets Total assets deployed to DeFi protocols.
-    function broadcastAssetSync(
-        uint256 globalTotalAssets,
-        uint256 globalTotalShares,
-        uint256 totalRemoteAssets
-    ) external onlyRole(VAULT_ROLE) whenNotPaused {
-        CrossChainCodec.AssetSyncMessage memory syncMsg = CrossChainCodec
-            .AssetSyncMessage({
-                globalTotalAssets: globalTotalAssets,
-                globalTotalShares: globalTotalShares,
-                totalRemoteAssets: totalRemoteAssets,
-                timestamp: block.timestamp
-            });
+    function broadcastAssetSync(uint256 globalTotalAssets, uint256 globalTotalShares, uint256 totalRemoteAssets)
+        external
+        onlyRole(VAULT_ROLE)
+        whenNotPaused
+    {
+        CrossChainCodec.AssetSyncMessage memory syncMsg = CrossChainCodec.AssetSyncMessage({
+            globalTotalAssets: globalTotalAssets,
+            globalTotalShares: globalTotalShares,
+            totalRemoteAssets: totalRemoteAssets,
+            timestamp: block.timestamp
+        });
 
         bytes memory encoded = CrossChainCodec.encodeAssetSync(syncMsg);
 
@@ -194,12 +169,7 @@ contract CrossChainRouter is HyperbridgeAdapter, Pausable {
             _dispatchMessage(satelliteChains[i], encoded);
         }
 
-        emit AssetSyncBroadcast(
-            globalTotalAssets,
-            globalTotalShares,
-            totalRemoteAssets,
-            satelliteChains.length
-        );
+        emit AssetSyncBroadcast(globalTotalAssets, globalTotalShares, totalRemoteAssets, satelliteChains.length);
     }
 
     /// @notice Broadcast a strategy execution report to all satellites.
@@ -210,14 +180,13 @@ contract CrossChainRouter is HyperbridgeAdapter, Pausable {
         int256 pnl,
         uint256 newTotalRemoteAssets
     ) external onlyRole(VAULT_ROLE) whenNotPaused {
-        CrossChainCodec.StrategyReportMessage memory reportMsg = CrossChainCodec
-            .StrategyReportMessage({
-                strategyId: strategyId,
-                success: success,
-                returnedAmount: returnedAmount,
-                pnl: pnl,
-                newTotalRemoteAssets: newTotalRemoteAssets
-            });
+        CrossChainCodec.StrategyReportMessage memory reportMsg = CrossChainCodec.StrategyReportMessage({
+            strategyId: strategyId,
+            success: success,
+            returnedAmount: returnedAmount,
+            pnl: pnl,
+            newTotalRemoteAssets: newTotalRemoteAssets
+        });
 
         bytes memory encoded = CrossChainCodec.encodeStrategyReport(reportMsg);
 
@@ -229,21 +198,14 @@ contract CrossChainRouter is HyperbridgeAdapter, Pausable {
     }
 
     /// @notice Broadcast emergency state to all satellite vaults.
-    function broadcastEmergencySync(
-        bool _paused,
-        bool _emergencyMode,
-        bytes calldata reason
-    ) external onlyRole(VAULT_ROLE) {
-        CrossChainCodec.EmergencySyncMessage
-            memory emergencyMsg = CrossChainCodec.EmergencySyncMessage({
-                paused: _paused,
-                emergencyMode: _emergencyMode,
-                reason: reason
-            });
+    function broadcastEmergencySync(bool _paused, bool _emergencyMode, bytes calldata reason)
+        external
+        onlyRole(VAULT_ROLE)
+    {
+        CrossChainCodec.EmergencySyncMessage memory emergencyMsg =
+            CrossChainCodec.EmergencySyncMessage({paused: _paused, emergencyMode: _emergencyMode, reason: reason});
 
-        bytes memory encoded = CrossChainCodec.encodeEmergencySync(
-            emergencyMsg
-        );
+        bytes memory encoded = CrossChainCodec.encodeEmergencySync(emergencyMsg);
 
         for (uint256 i = 0; i < satelliteChains.length; i++) {
             _dispatchMessage(satelliteChains[i], encoded);
@@ -253,18 +215,15 @@ contract CrossChainRouter is HyperbridgeAdapter, Pausable {
     }
 
     /// @notice Send a deposit acknowledgment to a specific satellite.
-    function sendDepositAck(
-        bytes calldata destChainId,
-        uint256 depositNonce,
-        uint256 globalTotalAssets,
-        bool accepted
-    ) external onlyRole(VAULT_ROLE) {
-        CrossChainCodec.DepositAckMessage memory ackMsg = CrossChainCodec
-            .DepositAckMessage({
-                depositNonce: depositNonce,
-                globalTotalAssets: globalTotalAssets,
-                accepted: accepted
-            });
+    function sendDepositAck(bytes calldata destChainId, uint256 depositNonce, uint256 globalTotalAssets, bool accepted)
+        external
+        onlyRole(VAULT_ROLE)
+    {
+        CrossChainCodec.DepositAckMessage memory ackMsg = CrossChainCodec.DepositAckMessage({
+            depositNonce: depositNonce,
+            globalTotalAssets: globalTotalAssets,
+            accepted: accepted
+        });
 
         _dispatchMessage(destChainId, CrossChainCodec.encodeDepositAck(ackMsg));
     }
@@ -276,17 +235,13 @@ contract CrossChainRouter is HyperbridgeAdapter, Pausable {
         uint256 amount,
         bool fullyFulfilled
     ) external onlyRole(VAULT_ROLE) {
-        CrossChainCodec.WithdrawFulfillMessage
-            memory fulfillMsg = CrossChainCodec.WithdrawFulfillMessage({
-                withdrawNonce: _withdrawNonce,
-                amount: amount,
-                fullyFulfilled: fullyFulfilled
-            });
+        CrossChainCodec.WithdrawFulfillMessage memory fulfillMsg = CrossChainCodec.WithdrawFulfillMessage({
+            withdrawNonce: _withdrawNonce,
+            amount: amount,
+            fullyFulfilled: fullyFulfilled
+        });
 
-        _dispatchMessage(
-            destChainId,
-            CrossChainCodec.encodeWithdrawFulfill(fulfillMsg)
-        );
+        _dispatchMessage(destChainId, CrossChainCodec.encodeWithdrawFulfill(fulfillMsg));
     }
 
     // ─────────────────────────────────────────────────────────────────────
@@ -324,10 +279,7 @@ contract CrossChainRouter is HyperbridgeAdapter, Pausable {
     // ─────────────────────────────────────────────────────────────────────
 
     /// @inheritdoc HyperbridgeAdapter
-    function _processMessage(
-        bytes calldata source,
-        bytes calldata body
-    ) internal override {
+    function _processMessage(bytes calldata source, bytes calldata body) internal override {
         uint8 msgType = CrossChainCodec.messageType(body);
 
         if (msgType == CrossChainCodec.MSG_DEPOSIT_SYNC) {
@@ -340,16 +292,12 @@ contract CrossChainRouter is HyperbridgeAdapter, Pausable {
     }
 
     /// @inheritdoc HyperbridgeAdapter
-    function _handleTimeout(
-        bytes calldata /* dest */,
-        bytes calldata body
-    ) internal override {
+    function _handleTimeout(bytes calldata, /* dest */ bytes calldata body) internal override {
         uint8 msgType = CrossChainCodec.messageType(body);
 
         // On timeout of outgoing messages, we may need to rollback state
         if (msgType == CrossChainCodec.MSG_WITHDRAW_FULFILL) {
-            CrossChainCodec.WithdrawFulfillMessage
-                memory fulfillMsg = CrossChainCodec.decodeWithdrawFulfill(body);
+            CrossChainCodec.WithdrawFulfillMessage memory fulfillMsg = CrossChainCodec.decodeWithdrawFulfill(body);
             // The withdrawal assets were not delivered — re-add to pending
             pendingWithdrawalRequests += fulfillMsg.amount;
         }
@@ -358,12 +306,8 @@ contract CrossChainRouter is HyperbridgeAdapter, Pausable {
     }
 
     /// @dev Handle an incoming deposit sync from a satellite.
-    function _handleDepositSync(
-        bytes calldata source,
-        bytes calldata body
-    ) internal {
-        CrossChainCodec.DepositSyncMessage memory depositMsg = CrossChainCodec
-            .decodeDepositSync(body);
+    function _handleDepositSync(bytes calldata source, bytes calldata body) internal {
+        CrossChainCodec.DepositSyncMessage memory depositMsg = CrossChainCodec.decodeDepositSync(body);
 
         bytes32 chainHash = keccak256(source);
 
@@ -380,21 +324,13 @@ contract CrossChainRouter is HyperbridgeAdapter, Pausable {
         pendingSatelliteDeposits += depositMsg.amount;
 
         emit SatelliteDepositReceived(
-            source,
-            depositMsg.depositor,
-            depositMsg.amount,
-            depositMsg.sharesMinted,
-            depositMsg.nonce
+            source, depositMsg.depositor, depositMsg.amount, depositMsg.sharesMinted, depositMsg.nonce
         );
     }
 
     /// @dev Handle an incoming withdrawal request from a satellite.
-    function _handleWithdrawRequest(
-        bytes calldata source,
-        bytes calldata body
-    ) internal {
-        CrossChainCodec.WithdrawRequestMessage
-            memory withdrawMsg = CrossChainCodec.decodeWithdrawRequest(body);
+    function _handleWithdrawRequest(bytes calldata source, bytes calldata body) internal {
+        CrossChainCodec.WithdrawRequestMessage memory withdrawMsg = CrossChainCodec.decodeWithdrawRequest(body);
 
         bytes32 chainHash = keccak256(source);
 
@@ -418,11 +354,7 @@ contract CrossChainRouter is HyperbridgeAdapter, Pausable {
         }
 
         emit SatelliteWithdrawRequested(
-            source,
-            withdrawMsg.withdrawer,
-            withdrawMsg.amount,
-            withdrawMsg.sharesToBurn,
-            withdrawMsg.nonce
+            source, withdrawMsg.withdrawer, withdrawMsg.amount, withdrawMsg.sharesToBurn, withdrawMsg.nonce
         );
     }
 }

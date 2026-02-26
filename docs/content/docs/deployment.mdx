@@ -3,7 +3,26 @@ title: Deployment
 description: Complete deployment guide — environment setup, Foundry configuration, deployment scripts, environment variables, post-deployment verification, and initial policy configuration.
 ---
 
-This guide walks through deploying the ObidotVault contract to the Polkadot Hub EVM using Foundry. Two deployment scripts are provided: a minimal `Deploy` script and an extended `DeployWithSetup` script that also configures initial policy parameters.
+This guide walks through deploying the Obidot system to the Polkadot Hub EVM and other EVM chains using Foundry. Three script files are provided — a testnet quickstart, production hub vault scripts, and cross-chain deployment scripts.
+
+## Oracle & Token Strategy
+
+The vault requires an ERC-20 underlying asset and a price oracle implementing the `IAggregatorV3` interface. On mature EVM chains, these are readily available (Pyth, Chainlink, USDC, etc.), but **Polkadot Hub EVM is new** — no third-party oracle or standard ERC-20 tokens are deployed yet.
+
+Obidot includes a `KeeperOracle` contract (`src/KeeperOracle.sol`) that implements the Chainlink-compatible `IAggregatorV3` interface and accepts price pushes from a trusted keeper:
+
+```
+Off-chain (Pyth Hermes / CoinGecko API)  →  Keeper TX  →  KeeperOracle.updatePrice()  →  Vault reads latestRoundData()
+```
+
+The keeper can be the AI agent, a cron bot, or any trusted address with `KEEPER_ROLE`. The `KeeperOracle` features:
+
+- **Access-controlled updates** — only `KEEPER_ROLE` can push prices
+- **Positive price validation** — rejects `answer <= 0`
+- **Heartbeat tracking** — configurable staleness window
+- **Full `IAggregatorV3` compatibility** — drop-in replacement for Pyth/Chainlink
+
+When Pyth deploys on Polkadot Hub, the vault admin simply calls `vault.setOracle(pythAddress)` — no redeployment needed.
 
 ## Prerequisites
 
@@ -132,15 +151,63 @@ These can be overridden via environment variables. If not set, sensible defaults
 
 ## Deployment Scripts
 
-### `Deploy` — Minimal Deployment
+### `DeployTestnet` — Testnet Quickstart (Recommended)
 
-The `Deploy` script deploys the vault with environment-variable configuration and runs post-deployment verification checks.
+Deploys a test token, `KeeperOracle`, and `ObidotVault` in **one command** — no external dependencies required. Use this for Polkadot Hub Testnet and any chain lacking native ERC-20 tokens or oracle feeds.
+
+```bash
+export PRIVATE_KEY=<deployer-private-key>
+
+forge script script/DeployTestnet.s.sol:DeployTestnet \
+  --rpc-url polkadot_hub_testnet \
+  --broadcast \
+  -vvvv
+```
+
+#### What It Deploys
+
+| Contract | Description |
+|----------|-------------|
+| `TestDOT` (tDOT) | Mintable ERC-20 token (anyone can mint for testing) |
+| `KeeperOracle` | Push oracle implementing `IAggregatorV3`, initial price $7.00 |
+| `ObidotVault` | Fully wired vault, ready for deposits |
+
+#### Environment Variables
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `PRIVATE_KEY` | *required* | Deployer private key |
+| `ADMIN_ADDRESS` | deployer | Admin address (receives all roles) |
+| `INITIAL_PRICE` | `700000000` ($7.00, 8 decimals) | Initial DOT/USD price |
+| `DEPOSIT_CAP` | 1M tokens | Maximum total deposits |
+| `MAX_DAILY_LOSS` | 50K tokens | Circuit breaker threshold |
+| `MINT_AMOUNT` | 100K tokens | tDOT minted to deployer |
+
+#### Post-Deploy Usage
+
+```bash
+# Update oracle price (keeper pushes new price)
+cast send $ORACLE 'updatePrice(int256)' 750000000 \
+  --private-key $ADMIN_PRIVATE_KEY --rpc-url polkadot_hub_testnet
+
+# Mint more test tokens
+cast send $TOKEN 'mint(address,uint256)' $YOUR_ADDRESS 1000000000000000000000 \
+  --private-key $PRIVATE_KEY --rpc-url polkadot_hub_testnet
+
+# Deposit into vault
+cast send $VAULT 'deposit(uint256,address)' 1000000000000000000000 $YOUR_ADDRESS \
+  --private-key $PRIVATE_KEY --rpc-url polkadot_hub_testnet
+```
+
+### `Deploy` — Production Hub Vault
+
+The `Deploy` script deploys the vault with environment-variable configuration and runs post-deployment verification checks. Use when you already have an ERC-20 token and oracle (Pyth, Chainlink, or a deployed `KeeperOracle`).
 
 ```bash
 # 1. Set environment variables
 export PRIVATE_KEY=<deployer-private-key>
 export UNDERLYING_ASSET=<erc20-address>
-export PYTH_ORACLE=<pyth-aggregator-v3-address>
+export PYTH_ORACLE=<oracle-address>              # Pyth, Chainlink, or KeeperOracle
 export ADMIN_ADDRESS=<admin-multisig-or-eoa>
 
 # 2. Optional overrides

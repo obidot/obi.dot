@@ -73,16 +73,9 @@ contract Deploy is Script {
 
         // ── Load optional overrides with defaults ────────────────────────
         uint256 depositCap = vm.envOr("DEPOSIT_CAP", DEFAULT_DEPOSIT_CAP);
-        uint256 maxDailyLoss = vm.envOr(
-            "MAX_DAILY_LOSS",
-            DEFAULT_MAX_DAILY_LOSS
-        );
-        uint64 maxRefTime = uint64(
-            vm.envOr("MAX_XCM_REF_TIME", uint256(DEFAULT_MAX_XCM_REF_TIME))
-        );
-        uint64 maxProofSize = uint64(
-            vm.envOr("MAX_XCM_PROOF_SIZE", uint256(DEFAULT_MAX_XCM_PROOF_SIZE))
-        );
+        uint256 maxDailyLoss = vm.envOr("MAX_DAILY_LOSS", DEFAULT_MAX_DAILY_LOSS);
+        uint64 maxRefTime = uint64(vm.envOr("MAX_XCM_REF_TIME", uint256(DEFAULT_MAX_XCM_REF_TIME)));
+        uint64 maxProofSize = uint64(vm.envOr("MAX_XCM_PROOF_SIZE", uint256(DEFAULT_MAX_XCM_PROOF_SIZE)));
 
         // ── Log deployment parameters ────────────────────────────────────
         address deployer = vm.addr(deployerPrivateKey);
@@ -103,50 +96,26 @@ contract Deploy is Script {
         vm.startBroadcast(deployerPrivateKey);
 
         ObidotVault vault = new ObidotVault(
-            IERC20(underlyingAsset),
-            pythOracle,
-            depositCap,
-            maxDailyLoss,
-            maxRefTime,
-            maxProofSize,
-            admin
+            IERC20(underlyingAsset), pythOracle, depositCap, maxDailyLoss, maxRefTime, maxProofSize, admin
         );
 
         console.log("ObidotVault deployed at:", address(vault));
         console.log("Vault share token name :", vault.name());
         console.log("Vault share symbol     :", vault.symbol());
-        console.log(
-            "Domain separator       :",
-            vm.toString(vault.DOMAIN_SEPARATOR())
-        );
+        console.log("Domain separator       :", vm.toString(vault.DOMAIN_SEPARATOR()));
 
         vm.stopBroadcast();
 
         // ── Post-deploy verification ─────────────────────────────────────
-        _verify(
-            vault,
-            underlyingAsset,
-            pythOracle,
-            admin,
-            depositCap,
-            maxDailyLoss,
-            maxRefTime,
-            maxProofSize
-        );
+        _verify(vault, underlyingAsset, pythOracle, admin, depositCap, maxDailyLoss, maxRefTime, maxProofSize);
 
         console.log("");
         console.log("=== Deployment Complete ===");
         console.log("Next steps:");
         console.log("  1. Grant STRATEGIST_ROLE to AI agent address");
-        console.log(
-            "  2. Configure allowed parachains via setParachainAllowed()"
-        );
-        console.log(
-            "  3. Configure allowed protocols via setProtocolAllowed()"
-        );
-        console.log(
-            "  4. Set protocol exposure caps via setProtocolExposureCap()"
-        );
+        console.log("  2. Configure allowed parachains via setParachainAllowed()");
+        console.log("  3. Configure allowed protocols via setProtocolAllowed()");
+        console.log("  4. Set protocol exposure caps via setProtocolExposureCap()");
     }
 
     // ─────────────────────────────────────────────────────────────────────
@@ -165,24 +134,12 @@ contract Deploy is Script {
     ) internal view {
         require(vault.asset() == underlyingAsset, "Asset mismatch");
         require(address(vault.priceOracle()) == pythOracle, "Oracle mismatch");
-        require(
-            vault.hasRole(vault.DEFAULT_ADMIN_ROLE(), admin),
-            "Admin role not set"
-        );
-        require(
-            vault.hasRole(vault.KEEPER_ROLE(), admin),
-            "Keeper role not set"
-        );
+        require(vault.hasRole(vault.DEFAULT_ADMIN_ROLE(), admin), "Admin role not set");
+        require(vault.hasRole(vault.KEEPER_ROLE(), admin), "Keeper role not set");
         require(vault.depositCap() == depositCap, "Deposit cap mismatch");
-        require(
-            vault.maxDailyLoss() == maxDailyLoss,
-            "Max daily loss mismatch"
-        );
+        require(vault.maxDailyLoss() == maxDailyLoss, "Max daily loss mismatch");
         require(vault.maxXcmRefTime() == maxRefTime, "XCM refTime mismatch");
-        require(
-            vault.maxXcmProofSize() == maxProofSize,
-            "XCM proofSize mismatch"
-        );
+        require(vault.maxXcmProofSize() == maxProofSize, "XCM proofSize mismatch");
         require(vault.totalAssets() == 0, "Total assets should be zero");
         require(vault.totalSupply() == 0, "Total supply should be zero");
         require(!vault.paused(), "Vault should not be paused");
@@ -215,28 +172,15 @@ contract DeployWithSetup is Script {
         address strategist = vm.envAddress("STRATEGIST_ADDRESS");
 
         uint256 depositCap = vm.envOr("DEPOSIT_CAP", uint256(1_000_000 ether));
-        uint256 maxDailyLoss = vm.envOr(
-            "MAX_DAILY_LOSS",
-            uint256(50_000 ether)
-        );
-        uint64 maxRefTime = uint64(
-            vm.envOr("MAX_XCM_REF_TIME", uint256(1_000_000_000_000))
-        );
-        uint64 maxProofSize = uint64(
-            vm.envOr("MAX_XCM_PROOF_SIZE", uint256(1_048_576))
-        );
+        uint256 maxDailyLoss = vm.envOr("MAX_DAILY_LOSS", uint256(50_000 ether));
+        uint64 maxRefTime = uint64(vm.envOr("MAX_XCM_REF_TIME", uint256(1_000_000_000_000)));
+        uint64 maxProofSize = uint64(vm.envOr("MAX_XCM_PROOF_SIZE", uint256(1_048_576)));
 
         vm.startBroadcast(deployerPrivateKey);
 
         // ── 1. Deploy Vault ──────────────────────────────────────────────
         ObidotVault vault = new ObidotVault(
-            IERC20(underlyingAsset),
-            pythOracle,
-            depositCap,
-            maxDailyLoss,
-            maxRefTime,
-            maxProofSize,
-            admin
+            IERC20(underlyingAsset), pythOracle, depositCap, maxDailyLoss, maxRefTime, maxProofSize, admin
         );
 
         console.log("ObidotVault deployed at:", address(vault));
@@ -265,9 +209,7 @@ contract DeployWithSetup is Script {
         console.log("");
         console.log("=== Deployment + Setup Complete ===");
         console.log("Remaining manual steps:");
-        console.log(
-            "  1. Call setProtocolAllowed() for each target DeFi protocol"
-        );
+        console.log("  1. Call setProtocolAllowed() for each target DeFi protocol");
         console.log("  2. Call setProtocolExposureCap() for each protocol");
         console.log("  3. Transfer DEFAULT_ADMIN_ROLE to multisig if needed");
     }

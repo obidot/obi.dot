@@ -26,6 +26,7 @@ cp .env.example .env   # add your PRIVATE_KEY for testnet deploys
 src/
 ├── ObidotVault.sol              # Hub vault — ERC-4626, policy engine, XCM dispatch
 ├── ObidotVaultEVM.sol           # Satellite vault — ERC-4626 on Ethereum/L2s
+├── KeeperOracle.sol             # Keeper-updatable price feed (IAggregatorV3)
 ├── adapters/
 │   ├── HyperbridgeAdapter.sol   # ISMP base — dispatch, receive, timeout
 │   ├── CrossChainRouter.sol     # Hub message router (inherits HyperbridgeAdapter)
@@ -44,6 +45,7 @@ src/
 │   ├── CrossChainCodec.sol      # ISMP message encode/decode (7 types)
 │   └── BifrostCodec.sol         # Bifrost pallet call XCM V4 encoding
 script/
+├── DeployTestnet.s.sol           # Testnet quickstart (token + oracle + vault)
 ├── Deploy.s.sol                 # Hub vault deployment (Deploy, DeployWithSetup)
 └── DeployCrossChain.s.sol       # Cross-chain deployment (3 scripts)
 test/
@@ -87,43 +89,79 @@ FOUNDRY_PROFILE=polkadot forge build
 | Westend Hub | `420420421` | `https://westend-asset-hub-eth-rpc.polkadot.io` | polkadot |
 | Kusama Hub | `420420418` | `https://kusama-asset-hub-eth-rpc.polkadot.io` | polkadot |
 
+## Oracle & Token Strategy
+
+The vault requires an ERC-20 underlying asset and a price oracle (`IAggregatorV3`). On mature EVM chains these exist (Pyth, Chainlink, USDC, etc.), but **Polkadot Hub EVM is new** — no third-party oracle or standard ERC-20 tokens are deployed yet.
+
+Obidot solves this with `KeeperOracle` (`src/KeeperOracle.sol`) — an on-chain oracle that implements the Chainlink `IAggregatorV3` interface and accepts price pushes from a trusted keeper. The AI agent or a bot fetches prices off-chain (from Pyth Hermes, CoinGecko, etc.) and pushes them on-chain:
+
+```
+Off-chain (Pyth Hermes / API)  →  Keeper TX  →  KeeperOracle.updatePrice()  →  Vault reads latestRoundData()
+```
+
+When Pyth eventually deploys on Polkadot Hub, the vault admin simply calls `vault.setOracle(pythAddress)` — no redeployment needed.
+
 ## Deployment Scripts
 
-There are **two** deployment script files because the system spans multiple chains with different roles:
+There are **three** deployment script files:
 
 | Script File | Contains | Purpose |
-|-------------|----------|---------|
-| `Deploy.s.sol` | `Deploy`, `DeployWithSetup` | Deploy the **hub vault** on Polkadot Hub |
+|-------------|----------|--------|
+| `DeployTestnet.s.sol` | `DeployTestnet` | **Quickstart**: deploys token + oracle + vault in one shot |
+| `Deploy.s.sol` | `Deploy`, `DeployWithSetup` | Deploy the **hub vault** (when you already have a token + oracle) |
 | `DeployCrossChain.s.sol` | `DeployCrossChain`, `DeploySatelliteVault`, `RegisterSatellitePeers` | Deploy **cross-chain infrastructure** (router, adapter, satellites) |
 
-`Deploy.s.sol` is the starting point — it deploys the core `ObidotVault` that lives on the Polkadot Hub. `DeployCrossChain.s.sol` is used **after** the hub vault exists, to extend it with Hyperbridge connectivity, Bifrost DeFi support, and satellite vaults on other EVM chains.
+**For testnet**, start with `DeployTestnet.s.sol` — it deploys everything you need with zero external dependencies. **For production** (when real tokens and oracles exist), use `Deploy.s.sol` + `DeployCrossChain.s.sol`.
 
 ### Deployment Order
 
 ```
-Step 1 │ Deploy.s.sol:Deploy              → ObidotVault on Polkadot Hub
-       │   (or Deploy.s.sol:DeployWithSetup for vault + initial policy config)
-       │
-Step 2 │ DeployCrossChain.s.sol:DeployCrossChain
-       │   → CrossChainRouter + BifrostAdapter on Polkadot Hub
-       │   → Wires them into the vault
-       │
-Step 3 │ DeployCrossChain.s.sol:DeploySatelliteVault  (run once per EVM chain)
-       │   → ObidotVaultEVM on Ethereum / Arbitrum / Optimism / Base
-       │
-Step 4 │ DeployCrossChain.s.sol:RegisterSatellitePeers
-       │   → Registers all satellites in the hub router
+Testnet │ DeployTestnet.s.sol:DeployTestnet → TestDOT + KeeperOracle + ObidotVault
+        │   (one command, zero external dependencies)
+        │
+  — OR for production —
+
+Step 1  │ Deploy.s.sol:Deploy              → ObidotVault on Polkadot Hub
+        │   (requires existing ERC-20 token + oracle)
+        │
+Step 2  │ DeployCrossChain.s.sol:DeployCrossChain
+        │   → CrossChainRouter + BifrostAdapter on Polkadot Hub
+        │
+Step 3  │ DeployCrossChain.s.sol:DeploySatelliteVault  (once per EVM chain)
+        │   → ObidotVaultEVM on Ethereum / Arbitrum / Optimism / Base
+        │
+Step 4  │ DeployCrossChain.s.sol:RegisterSatellitePeers
+        │   → Registers all satellites in the hub router
 ```
 
-### Step 1 — Deploy Hub Vault
+### Testnet Quickstart (Recommended)
+
+Deploys a test token (tDOT), KeeperOracle (DOT/USD), and ObidotVault in **one command**:
+
+```bash
+export PRIVATE_KEY=<deployer-private-key>
+
+forge script script/DeployTestnet.s.sol:DeployTestnet \
+  --rpc-url polkadot_hub_testnet --broadcast -vvvv
+```
+
+This gives you:
+- `TestDOT` — mintable ERC-20 (anyone can mint for testing)
+- `KeeperOracle` — push prices via `cast send <oracle> 'updatePrice(int256)' <price>`
+- `ObidotVault` — fully wired, ready to accept deposits
+
+Optional overrides: `ADMIN_ADDRESS`, `INITIAL_PRICE` (default: $7.00 at 8 decimals), `DEPOSIT_CAP`, `MINT_AMOUNT`.
+
+### Step 1 — Deploy Hub Vault (Production)
+
+Use when you have real ERC-20 tokens and an oracle (Pyth, Chainlink, or KeeperOracle):
 
 ```bash
 export PRIVATE_KEY=<deployer-private-key>
 export UNDERLYING_ASSET=<erc20-address>
-export PYTH_ORACLE=<pyth-aggregator-v3-address>
+export PYTH_ORACLE=<oracle-address>           # Pyth, Chainlink, or KeeperOracle
 export ADMIN_ADDRESS=<admin-multisig-or-eoa>
 
-# Minimal deploy
 forge script script/Deploy.s.sol:Deploy \
   --rpc-url polkadot_hub_testnet --broadcast -vvvv
 
@@ -173,13 +211,24 @@ forge script script/DeployCrossChain.s.sol:RegisterSatellitePeers \
 
 ## Environment Variables
 
+### Testnet Quickstart (`DeployTestnet.s.sol`)
+
+| Variable | Required | Default | Description |
+|----------|----------|---------|-------------|
+| `PRIVATE_KEY` | Yes | — | Deployer private key |
+| `ADMIN_ADDRESS` | No | deployer | Admin address |
+| `INITIAL_PRICE` | No | `700000000` ($7.00) | DOT/USD price (8 decimals) |
+| `DEPOSIT_CAP` | No | 1M tokens | Max total deposits |
+| `MAX_DAILY_LOSS` | No | 50K tokens | Circuit breaker threshold |
+| `MINT_AMOUNT` | No | 100K tokens | tDOT minted to deployer |
+
 ### Hub Vault (`Deploy.s.sol`)
 
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
 | `PRIVATE_KEY` | Yes | — | Deployer private key |
 | `UNDERLYING_ASSET` | Yes | — | ERC-20 token address |
-| `PYTH_ORACLE` | Yes | — | Pyth AggregatorV3 price feed |
+| `PYTH_ORACLE` | Yes | — | Oracle address (Pyth, Chainlink, or KeeperOracle) |
 | `ADMIN_ADDRESS` | Yes | — | Admin (receives `DEFAULT_ADMIN_ROLE` + `KEEPER_ROLE`) |
 | `STRATEGIST_ADDRESS` | `DeployWithSetup` only | — | AI agent address |
 | `DEPOSIT_CAP` | No | 1M tokens | Max total deposits |

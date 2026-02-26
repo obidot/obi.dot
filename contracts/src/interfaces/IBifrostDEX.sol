@@ -61,11 +61,7 @@ interface IBifrostDEX {
 
     /// @notice Emitted when a swap is executed.
     event Swapped(
-        address indexed user,
-        uint32 indexed currencyIn,
-        uint32 indexed currencyOut,
-        uint256 amountIn,
-        uint256 amountOut
+        address indexed user, uint32 indexed currencyIn, uint32 indexed currencyOut, uint256 amountIn, uint256 amountOut
     );
 
     // ──────────────────────────────────────────────────────────────────────
@@ -75,34 +71,26 @@ interface IBifrostDEX {
     /// @notice Execute a token swap with exact input amount.
     /// @param params The swap parameters.
     /// @return amountOut The actual output amount received.
-    function swapExactIn(
-        SwapParams calldata params
-    ) external returns (uint256 amountOut);
+    function swapExactIn(SwapParams calldata params) external returns (uint256 amountOut);
 
     /// @notice Execute a multi-hop swap through a specified path.
     /// @param params The swap path parameters.
     /// @return amountOut The actual final output amount.
-    function swapExactInWithPath(
-        SwapPathParams calldata params
-    ) external returns (uint256 amountOut);
+    function swapExactInWithPath(SwapPathParams calldata params) external returns (uint256 amountOut);
 
     /// @notice Get an output quote for a given input amount (without executing).
     /// @param currencyIn The input currency ID.
     /// @param currencyOut The output currency ID.
     /// @param amountIn The input amount.
     /// @return amountOut The estimated output amount.
-    function getAmountOut(
-        uint32 currencyIn,
-        uint32 currencyOut,
-        uint256 amountIn
-    ) external view returns (uint256 amountOut);
+    function getAmountOut(uint32 currencyIn, uint32 currencyOut, uint256 amountIn)
+        external
+        view
+        returns (uint256 amountOut);
 
     /// @notice Get pool information for a trading pair.
     /// @param currencyA First currency ID.
     /// @param currencyB Second currency ID.
     /// @return pool The pool information struct.
-    function getPool(
-        uint32 currencyA,
-        uint32 currencyB
-    ) external view returns (PoolInfo memory pool);
+    function getPool(uint32 currencyA, uint32 currencyB) external view returns (PoolInfo memory pool);
 }

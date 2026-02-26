@@ -66,26 +66,13 @@ interface IBifrostFarming {
     // ──────────────────────────────────────────────────────────────────────
 
     /// @notice Emitted when tokens are deposited into a farming pool.
-    event Deposited(
-        address indexed user,
-        uint256 indexed poolId,
-        uint256 amount,
-        uint256 lockDuration
-    );
+    event Deposited(address indexed user, uint256 indexed poolId, uint256 amount, uint256 lockDuration);
 
     /// @notice Emitted when tokens are withdrawn from a farming pool.
-    event Withdrawn(
-        address indexed user,
-        uint256 indexed poolId,
-        uint256 amount
-    );
+    event Withdrawn(address indexed user, uint256 indexed poolId, uint256 amount);
 
     /// @notice Emitted when rewards are claimed.
-    event RewardsClaimed(
-        address indexed user,
-        uint256 indexed poolId,
-        uint256 rewardAmount
-    );
+    event RewardsClaimed(address indexed user, uint256 indexed poolId, uint256 rewardAmount);
 
     // ──────────────────────────────────────────────────────────────────────
     //  Core Functions
@@ -103,25 +90,18 @@ interface IBifrostFarming {
     /// @notice Claim accumulated farming rewards.
     /// @param poolId The farming pool ID.
     /// @return rewardAmount The amount of reward tokens claimed.
-    function claimRewards(
-        uint256 poolId
-    ) external returns (uint256 rewardAmount);
+    function claimRewards(uint256 poolId) external returns (uint256 rewardAmount);
 
     /// @notice Get information about a farming pool.
     /// @param poolId The farming pool ID.
     /// @return pool The pool information.
-    function getPoolInfo(
-        uint256 poolId
-    ) external view returns (FarmingPool memory pool);
+    function getPoolInfo(uint256 poolId) external view returns (FarmingPool memory pool);
 
     /// @notice Get a user's position in a farming pool.
     /// @param poolId The farming pool ID.
     /// @param user The user address.
     /// @return position The user's position.
-    function getUserPosition(
-        uint256 poolId,
-        address user
-    ) external view returns (UserPosition memory position);
+    function getUserPosition(uint256 poolId, address user) external view returns (UserPosition memory position);
 
     /// @notice Get all active farming pool IDs.
     /// @return poolIds Array of active pool IDs.
@@ -131,8 +111,5 @@ interface IBifrostFarming {
     /// @param poolId The farming pool ID.
     /// @param user The user address.
     /// @return pending The pending reward amount.
-    function pendingRewards(
-        uint256 poolId,
-        address user
-    ) external view returns (uint256 pending);
+    function pendingRewards(uint256 poolId, address user) external view returns (uint256 pending);
 }

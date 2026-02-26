@@ -69,6 +69,46 @@ const envSchema = z.object({
     .pipe(z.number().int().positive())
     .default("600"), // 10 minutes
 
+  // ── Oracle Configuration (optional) ────────────────────────────────────
+
+  /** KeeperOracle contract address on Polkadot Hub. */
+  KEEPER_ORACLE_ADDRESS: z
+    .string()
+    .regex(/^0x[0-9a-fA-F]{40}$/)
+    .optional(),
+
+  /** OracleRegistry contract address on Polkadot Hub. */
+  ORACLE_REGISTRY_ADDRESS: z
+    .string()
+    .regex(/^0x[0-9a-fA-F]{40}$/)
+    .optional(),
+
+  /** Heartbeat monitor interval in milliseconds (default: 30 min). */
+  ORACLE_HEARTBEAT_MS: z
+    .string()
+    .transform(Number)
+    .pipe(z.number().int().positive())
+    .optional(),
+
+  /** Deviation threshold in basis points for price updates (default: 100 = 1%). */
+  ORACLE_DEVIATION_BPS: z
+    .string()
+    .transform(Number)
+    .pipe(z.number().int().min(1).max(5000))
+    .optional(),
+
+  /** Pyth Hermes API URL. */
+  PYTH_HERMES_URL: z.string().url().optional(),
+
+  /** CoinGecko API key (optional, for higher rate limits). */
+  COINGECKO_API_KEY: z.string().min(1).optional(),
+
+  /** Binance API URL. */
+  BINANCE_API_URL: z.string().url().optional(),
+
+  /** Pyth DOT/USD feed ID (hex). */
+  PYTH_DOT_USD_FEED_ID: z.string().optional(),
+
   // ── Cross-Chain Configuration (optional) ─────────────────────────────
 
   /** CrossChainRouter contract address on Polkadot Hub. */

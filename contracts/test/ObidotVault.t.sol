@@ -21,11 +21,7 @@ import {MultiLocation} from "../src/libraries/MultiLocation.sol";
 contract MockERC20 is ERC20 {
     uint8 private _decimals;
 
-    constructor(
-        string memory name_,
-        string memory symbol_,
-        uint8 decimals_
-    ) ERC20(name_, symbol_) {
+    constructor(string memory name_, string memory symbol_, uint8 decimals_) ERC20(name_, symbol_) {
         _decimals = decimals_;
     }
 
@@ -89,19 +85,11 @@ contract MockOracle is IAggregatorV3 {
         return 3;
     }
 
-    function getRoundData(
-        uint80 _roundId
-    )
+    function getRoundData(uint80 _roundId)
         external
         view
         override
-        returns (
-            uint80,
-            int256 answer,
-            uint256 startedAt,
-            uint256 updatedAt,
-            uint80 answeredInRound
-        )
+        returns (uint80, int256 answer, uint256 startedAt, uint256 updatedAt, uint80 answeredInRound)
     {
         return (_roundId, price, lastUpdated, lastUpdated, _roundId);
     }
@@ -110,13 +98,7 @@ contract MockOracle is IAggregatorV3 {
         external
         view
         override
-        returns (
-            uint80,
-            int256 answer,
-            uint256 startedAt,
-            uint256 updatedAt,
-            uint80 answeredInRound
-        )
+        returns (uint80, int256 answer, uint256 startedAt, uint256 updatedAt, uint80 answeredInRound)
     {
         require(!shouldRevert, "MockOracle: forced revert");
         return (roundId, price, lastUpdated, lastUpdated, roundId);
@@ -153,10 +135,7 @@ contract MockXcmPrecompile is IXcm {
         shouldRevertOnWeigh = _shouldRevert;
     }
 
-    function send(
-        bytes calldata dest,
-        bytes calldata message
-    ) external override {
+    function send(bytes calldata dest, bytes calldata message) external override {
         if (shouldRevertOnSend) revert SendFailure();
         sendCallCount++;
         lastDest = dest;
@@ -164,9 +143,12 @@ contract MockXcmPrecompile is IXcm {
         emit XcmSent(msg.sender, dest, message);
     }
 
-    function weighMessage(
-        bytes calldata /*message*/
-    ) external view override returns (uint64 refTime, uint64 proofSize) {
+    function weighMessage(bytes calldata /*message*/ )
+        external
+        view
+        override
+        returns (uint64 refTime, uint64 proofSize)
+    {
         if (shouldRevertOnWeigh) revert InvalidMessage();
         return (uint64(mockRefTime), uint64(mockProofSize));
     }
@@ -231,13 +213,7 @@ contract ObidotVaultTestBase is Test {
 
         // Deploy vault
         vault = new ObidotVault(
-            IERC20(address(token)),
-            address(oracle),
-            DEPOSIT_CAP,
-            MAX_DAILY_LOSS,
-            MAX_REF_TIME,
-            MAX_PROOF_SIZE,
-            admin
+            IERC20(address(token)), address(oracle), DEPOSIT_CAP, MAX_DAILY_LOSS, MAX_REF_TIME, MAX_PROOF_SIZE, admin
         );
 
         // Setup roles and policy
@@ -270,49 +246,37 @@ contract ObidotVaultTestBase is Test {
     ///        slot 2 = shouldRevertOnSend
     ///        slot 3 = shouldRevertOnWeigh
     function _resetXcmMockStorage() internal {
-        vm.store(
-            XCM_PRECOMPILE_ADDR,
-            bytes32(uint256(0)),
-            bytes32(uint256(500_000_000_000))
-        );
-        vm.store(
-            XCM_PRECOMPILE_ADDR,
-            bytes32(uint256(1)),
-            bytes32(uint256(524_288))
-        );
+        vm.store(XCM_PRECOMPILE_ADDR, bytes32(uint256(0)), bytes32(uint256(500_000_000_000)));
+        vm.store(XCM_PRECOMPILE_ADDR, bytes32(uint256(1)), bytes32(uint256(524_288)));
     }
 
     /// @dev Construct a default valid StrategyIntent.
-    function _defaultIntent(
-        uint256 amount
-    ) internal view returns (ObidotVault.StrategyIntent memory) {
-        return
-            ObidotVault.StrategyIntent({
-                asset: address(token),
-                amount: amount,
-                minReturn: amount, // 1:1 at oracle price
-                maxSlippageBps: 100, // 1%
-                deadline: block.timestamp + 1 hours,
-                nonce: vault.nonces(strategist),
-                xcmCall: _dummyXcmCall(),
-                targetParachain: PARA_ASTAR,
-                targetProtocol: targetProtocol
-            });
+    function _defaultIntent(uint256 amount) internal view returns (ObidotVault.StrategyIntent memory) {
+        return ObidotVault.StrategyIntent({
+            asset: address(token),
+            amount: amount,
+            minReturn: amount, // 1:1 at oracle price
+            maxSlippageBps: 100, // 1%
+            deadline: block.timestamp + 1 hours,
+            nonce: vault.nonces(strategist),
+            xcmCall: _dummyXcmCall(),
+            targetParachain: PARA_ASTAR,
+            targetProtocol: targetProtocol
+        });
     }
 
     /// @dev Sign an intent with the strategist's private key.
-    function _signIntent(
-        ObidotVault.StrategyIntent memory intent
-    ) internal view returns (bytes memory) {
+    function _signIntent(ObidotVault.StrategyIntent memory intent) internal view returns (bytes memory) {
         return _signIntentWithKey(intent, strategistPk);
     }
 
     /// @dev Sign an intent with an arbitrary private key.
     ///      Computes the EIP-712 digest inline to avoid calldata/memory conversion issues.
-    function _signIntentWithKey(
-        ObidotVault.StrategyIntent memory intent,
-        uint256 pk
-    ) internal view returns (bytes memory) {
+    function _signIntentWithKey(ObidotVault.StrategyIntent memory intent, uint256 pk)
+        internal
+        view
+        returns (bytes memory)
+    {
         bytes32 structHash = keccak256(
             abi.encode(
                 vault.STRATEGY_INTENT_TYPEHASH(),
@@ -327,24 +291,18 @@ contract ObidotVaultTestBase is Test {
                 intent.targetProtocol
             )
         );
-        bytes32 digest = keccak256(
-            abi.encodePacked("\x19\x01", vault.DOMAIN_SEPARATOR(), structHash)
-        );
+        bytes32 digest = keccak256(abi.encodePacked("\x19\x01", vault.DOMAIN_SEPARATOR(), structHash));
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(pk, digest);
         return abi.encodePacked(r, s, v);
     }
 
     /// @dev Dummy XCM call bytes.
     function _dummyXcmCall() internal pure returns (bytes memory) {
-        return
-            hex"0400010100a10f0410040001000007e8d4a510000a130001000007e8d4a51000000d01020400010300";
+        return hex"0400010100a10f0410040001000007e8d4a510000a130001000007e8d4a51000000d01020400010300";
     }
 
     /// @dev Deposit assets into vault on behalf of a user.
-    function _depositAs(
-        address user,
-        uint256 amount
-    ) internal returns (uint256 shares) {
+    function _depositAs(address user, uint256 amount) internal returns (uint256 shares) {
         vm.prank(user);
         shares = vault.deposit(amount, user);
     }
@@ -352,9 +310,7 @@ contract ObidotVaultTestBase is Test {
     /// @dev Execute a strategy with default parameters.
     ///      Also burns tokens from the vault to simulate the real XCM precompile
     ///      transferring tokens out during cross-chain dispatch.
-    function _executeDefaultStrategy(
-        uint256 amount
-    ) internal returns (uint256 strategyId) {
+    function _executeDefaultStrategy(uint256 amount) internal returns (uint256 strategyId) {
         ObidotVault.StrategyIntent memory intent = _defaultIntent(amount);
         bytes memory sig = _signIntent(intent);
         vm.prank(relayer);
@@ -507,10 +463,7 @@ contract ObidotVault_Fuzz_Test is ObidotVaultTestBase {
         }
     }
 
-    function testFuzz_deposit_multiple_users(
-        uint256 aliceAmt,
-        uint256 bobAmt
-    ) public {
+    function testFuzz_deposit_multiple_users(uint256 aliceAmt, uint256 bobAmt) public {
         aliceAmt = bound(aliceAmt, 1 ether, DEPOSIT_CAP / 2);
         bobAmt = bound(bobAmt, 1 ether, DEPOSIT_CAP / 2);
 
@@ -552,10 +505,7 @@ contract ObidotVault_Fuzz_Test is ObidotVaultTestBase {
         assertEq(maxDep, DEPOSIT_CAP - existingDeposit);
     }
 
-    function testFuzz_share_inflation_invariant(
-        uint256 donation,
-        uint256 deposit
-    ) public {
+    function testFuzz_share_inflation_invariant(uint256 donation, uint256 deposit) public {
         donation = bound(donation, 1, DEPOSIT_CAP / 2);
         deposit = bound(deposit, 1, DEPOSIT_CAP / 2);
 
@@ -579,11 +529,7 @@ contract ObidotVault_Fuzz_Test is ObidotVaultTestBase {
         // With _decimalsOffset = 3, virtual shares = 1000. Victim gets non-zero shares
         // when deposit * 1000 > donation (integer division: deposit * 1000 / (donation + 1) > 0)
         if (deposit * 1000 > donation + 1) {
-            assertGt(
-                shares,
-                0,
-                "Inflation attack should be mitigated by virtual shares"
-            );
+            assertGt(shares, 0, "Inflation attack should be mitigated by virtual shares");
         }
 
         // If victim got shares, redeeming should return close to deposit
@@ -594,14 +540,8 @@ contract ObidotVault_Fuzz_Test is ObidotVaultTestBase {
             // With 1e3 virtual shares, loss is bounded by donation / 1e3
             uint256 depositFloor = (deposit * 999) / 1000;
             uint256 donationPenalty = donation / 1000;
-            uint256 expectedMin = depositFloor > donationPenalty
-                ? depositFloor - donationPenalty
-                : 0;
-            assertGe(
-                returned,
-                expectedMin,
-                "Loss from inflation should be bounded"
-            );
+            uint256 expectedMin = depositFloor > donationPenalty ? depositFloor - donationPenalty : 0;
+            assertGe(returned, expectedMin, "Loss from inflation should be bounded");
         }
     }
 }
@@ -618,14 +558,7 @@ contract ObidotVault_Strategy_Test is ObidotVaultTestBase {
         bytes memory sig = _signIntent(intent);
 
         vm.expectEmit(true, true, true, true);
-        emit ObidotVault.StrategyExecuted(
-            0,
-            strategist,
-            PARA_ASTAR,
-            targetProtocol,
-            10_000 ether,
-            10_000 ether
-        );
+        emit ObidotVault.StrategyExecuted(0, strategist, PARA_ASTAR, targetProtocol, 10_000 ether, 10_000 ether);
 
         vm.prank(relayer);
         uint256 id = vault.executeStrategy(intent, sig);
@@ -636,15 +569,8 @@ contract ObidotVault_Strategy_Test is ObidotVaultTestBase {
         assertEq(vault.nonces(strategist), 1);
         assertEq(vault.strategyCounter(), 1);
 
-        (
-            ObidotVault.StrategyStatus status,
-            address strat,
-            uint256 amt,
-            ,
-            uint32 para,
-            address proto,
-            uint256 execAt
-        ) = vault.strategies(id);
+        (ObidotVault.StrategyStatus status, address strat, uint256 amt,, uint32 para, address proto, uint256 execAt) =
+            vault.strategies(id);
         assertEq(uint8(status), uint8(ObidotVault.StrategyStatus.Sent));
         assertEq(strat, strategist);
         assertEq(amt, 10_000 ether);
@@ -670,9 +596,7 @@ contract ObidotVault_Strategy_Test is ObidotVaultTestBase {
         _depositAs(alice, 50_000 ether);
 
         for (uint256 i = 0; i < 5; i++) {
-            ObidotVault.StrategyIntent memory intent = _defaultIntent(
-                5_000 ether
-            );
+            ObidotVault.StrategyIntent memory intent = _defaultIntent(5_000 ether);
             bytes memory sig = _signIntent(intent);
             vm.prank(relayer);
             uint256 id = vault.executeStrategy(intent, sig);
@@ -695,7 +619,7 @@ contract ObidotVault_Strategy_Test is ObidotVaultTestBase {
         vm.prank(admin);
         vault.reportStrategyOutcome(id, true, returned);
 
-        (ObidotVault.StrategyStatus status, , , , , , ) = vault.strategies(id);
+        (ObidotVault.StrategyStatus status,,,,,,) = vault.strategies(id);
         assertEq(uint8(status), uint8(ObidotVault.StrategyStatus.Executed));
         assertEq(vault.totalRemoteAssets(), 0);
         assertEq(vault.protocolExposure(targetProtocol), 0);
@@ -712,7 +636,7 @@ contract ObidotVault_Strategy_Test is ObidotVaultTestBase {
         vm.prank(admin);
         vault.reportStrategyOutcome(id, false, returned);
 
-        (ObidotVault.StrategyStatus status, , , , , , ) = vault.strategies(id);
+        (ObidotVault.StrategyStatus status,,,,,,) = vault.strategies(id);
         assertEq(uint8(status), uint8(ObidotVault.StrategyStatus.Failed));
         assertEq(vault.dailyLossAccumulator(), 1_000 ether);
     }
@@ -745,13 +669,7 @@ contract ObidotVault_Security_Test is ObidotVaultTestBase {
 
         bytes memory sig = _signIntent(intent);
 
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                ObidotVault.DeadlineExpired.selector,
-                intent.deadline,
-                block.timestamp
-            )
-        );
+        vm.expectRevert(abi.encodeWithSelector(ObidotVault.DeadlineExpired.selector, intent.deadline, block.timestamp));
         vm.prank(relayer);
         vault.executeStrategy(intent, sig);
     }
@@ -764,9 +682,7 @@ contract ObidotVault_Security_Test is ObidotVaultTestBase {
 
         bytes memory sig = _signIntent(intent);
 
-        vm.expectRevert(
-            abi.encodeWithSelector(ObidotVault.InvalidNonce.selector, 0, 999)
-        );
+        vm.expectRevert(abi.encodeWithSelector(ObidotVault.InvalidNonce.selector, 0, 999));
         vm.prank(relayer);
         vault.executeStrategy(intent, sig);
     }
@@ -782,9 +698,7 @@ contract ObidotVault_Security_Test is ObidotVaultTestBase {
         vault.executeStrategy(intent, sig);
 
         // Replay should fail (nonce already incremented)
-        vm.expectRevert(
-            abi.encodeWithSelector(ObidotVault.InvalidNonce.selector, 1, 0)
-        );
+        vm.expectRevert(abi.encodeWithSelector(ObidotVault.InvalidNonce.selector, 1, 0));
         vm.prank(relayer);
         vault.executeStrategy(intent, sig);
     }
@@ -800,12 +714,7 @@ contract ObidotVault_Security_Test is ObidotVaultTestBase {
         intent.nonce = vault.nonces(randomAddr);
         bytes memory sig = _signIntentWithKey(intent, randomPk);
 
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                ObidotVault.UnauthorizedStrategist.selector,
-                randomAddr
-            )
-        );
+        vm.expectRevert(abi.encodeWithSelector(ObidotVault.UnauthorizedStrategist.selector, randomAddr));
         vm.prank(relayer);
         vault.executeStrategy(intent, sig);
     }
@@ -850,13 +759,7 @@ contract ObidotVault_Security_Test is ObidotVaultTestBase {
         intent.asset = address(0xBEEF); // Wrong asset
         bytes memory sig = _signIntent(intent);
 
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                ObidotVault.AssetMismatch.selector,
-                address(token),
-                address(0xBEEF)
-            )
-        );
+        vm.expectRevert(abi.encodeWithSelector(ObidotVault.AssetMismatch.selector, address(token), address(0xBEEF)));
         vm.prank(relayer);
         vault.executeStrategy(intent, sig);
     }
@@ -879,9 +782,7 @@ contract ObidotVault_Security_Test is ObidotVaultTestBase {
         intent.maxSlippageBps = 5_001; // > 50%
         bytes memory sig = _signIntent(intent);
 
-        vm.expectRevert(
-            abi.encodeWithSelector(ObidotVault.SlippageTooHigh.selector, 5_001)
-        );
+        vm.expectRevert(abi.encodeWithSelector(ObidotVault.SlippageTooHigh.selector, 5_001));
         vm.prank(relayer);
         vault.executeStrategy(intent, sig);
     }
@@ -893,11 +794,7 @@ contract ObidotVault_Security_Test is ObidotVaultTestBase {
         bytes memory sig = _signIntent(intent);
 
         vm.expectRevert(
-            abi.encodeWithSelector(
-                ObidotVault.InsufficientIdleBalance.selector,
-                10_000 ether,
-                20_000 ether
-            )
+            abi.encodeWithSelector(ObidotVault.InsufficientIdleBalance.selector, 10_000 ether, 20_000 ether)
         );
         vm.prank(relayer);
         vault.executeStrategy(intent, sig);
@@ -967,22 +864,14 @@ contract ObidotVault_Security_Test is ObidotVaultTestBase {
     function test_cross_chain_domain_separator() public view {
         // Verify the domain separator is unique to this chain/contract
         bytes32 expected = keccak256(
-            abi.encode(
-                vault.DOMAIN_TYPEHASH(),
-                keccak256("ObidotVault"),
-                keccak256("1"),
-                block.chainid,
-                address(vault)
-            )
+            abi.encode(vault.DOMAIN_TYPEHASH(), keccak256("ObidotVault"), keccak256("1"), block.chainid, address(vault))
         );
         assertEq(vault.DOMAIN_SEPARATOR(), expected);
     }
 
     function test_revert_report_nonexistent_strategy() public {
         vm.prank(admin);
-        vm.expectRevert(
-            abi.encodeWithSelector(ObidotVault.StrategyNotFound.selector, 999)
-        );
+        vm.expectRevert(abi.encodeWithSelector(ObidotVault.StrategyNotFound.selector, 999));
         vault.reportStrategyOutcome(999, true, 1_000 ether);
     }
 
@@ -1018,12 +907,7 @@ contract ObidotVault_PolicyEngine_Test is ObidotVaultTestBase {
         intent.targetParachain = 9999; // Not whitelisted
         bytes memory sig = _signIntent(intent);
 
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                ObidotVault.ParachainNotAllowed.selector,
-                9999
-            )
-        );
+        vm.expectRevert(abi.encodeWithSelector(ObidotVault.ParachainNotAllowed.selector, 9999));
         vm.prank(relayer);
         vault.executeStrategy(intent, sig);
     }
@@ -1036,12 +920,7 @@ contract ObidotVault_PolicyEngine_Test is ObidotVaultTestBase {
         intent.targetProtocol = unknownProtocol;
         bytes memory sig = _signIntent(intent);
 
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                ObidotVault.ProtocolNotAllowed.selector,
-                unknownProtocol
-            )
-        );
+        vm.expectRevert(abi.encodeWithSelector(ObidotVault.ProtocolNotAllowed.selector, unknownProtocol));
         vm.prank(relayer);
         vault.executeStrategy(intent, sig);
     }
@@ -1058,18 +937,12 @@ contract ObidotVault_PolicyEngine_Test is ObidotVaultTestBase {
         _executeDefaultStrategy(400_000 ether);
 
         // Deploy another 200k — exceeds 500k cap
-        ObidotVault.StrategyIntent memory intent = _defaultIntent(
-            200_000 ether
-        );
+        ObidotVault.StrategyIntent memory intent = _defaultIntent(200_000 ether);
         bytes memory sig = _signIntent(intent);
 
         vm.expectRevert(
             abi.encodeWithSelector(
-                ObidotVault.ExposureCapExceeded.selector,
-                targetProtocol,
-                400_000 ether,
-                200_000 ether,
-                500_000 ether
+                ObidotVault.ExposureCapExceeded.selector, targetProtocol, 400_000 ether, 200_000 ether, 500_000 ether
             )
         );
         vm.prank(relayer);
@@ -1128,12 +1001,7 @@ contract ObidotVault_PolicyEngine_Test is ObidotVaultTestBase {
         ObidotVault.StrategyIntent memory intent = _defaultIntent(1_000 ether);
         bytes memory sig = _signIntent(intent);
 
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                ObidotVault.ParachainNotAllowed.selector,
-                PARA_ASTAR
-            )
-        );
+        vm.expectRevert(abi.encodeWithSelector(ObidotVault.ParachainNotAllowed.selector, PARA_ASTAR));
         vm.prank(relayer);
         vault.executeStrategy(intent, sig);
 
@@ -1178,11 +1046,7 @@ contract ObidotVault_Oracle_Test is ObidotVaultTestBase {
         bytes memory sig = _signIntent(intent);
 
         vm.expectRevert(
-            abi.encodeWithSelector(
-                ObidotVault.OracleSlippageCheckFailed.selector,
-                9_800 ether,
-                9_900 ether
-            )
+            abi.encodeWithSelector(ObidotVault.OracleSlippageCheckFailed.selector, 9_800 ether, 9_900 ether)
         );
         vm.prank(relayer);
         vault.executeStrategy(intent, sig);
@@ -1244,10 +1108,7 @@ contract ObidotVault_Oracle_Test is ObidotVaultTestBase {
         vault.setOracle(address(0));
     }
 
-    function testFuzz_oracle_price_slippage_boundary(
-        uint256 amount,
-        uint256 slippageBps
-    ) public {
+    function testFuzz_oracle_price_slippage_boundary(uint256 amount, uint256 slippageBps) public {
         amount = bound(amount, 1 ether, 100_000 ether);
         slippageBps = bound(slippageBps, 1, 5000);
 
@@ -1258,12 +1119,7 @@ contract ObidotVault_Oracle_Test is ObidotVaultTestBase {
 
         // Oracle price = 1e8, so oracleMinimum = amount * (10000 - slippageBps) / 10000
         // rounded up (Ceil)
-        uint256 oracleMinimum = Math.mulDiv(
-            amount,
-            1e8 * (10_000 - slippageBps),
-            10_000 * 1e8,
-            Math.Rounding.Ceil
-        );
+        uint256 oracleMinimum = Math.mulDiv(amount, 1e8 * (10_000 - slippageBps), 10_000 * 1e8, Math.Rounding.Ceil);
 
         // Intent with minReturn exactly at oracleMinimum should pass
         ObidotVault.StrategyIntent memory intent = _defaultIntent(amount);
@@ -1342,33 +1198,19 @@ contract ObidotVault_XCM_Test is ObidotVaultTestBase {
         assertEq(vault.maxXcmProofSize(), 2_097_152);
     }
 
-    function testFuzz_xcm_weight_safety_margin(
-        uint64 refTime,
-        uint64 proofSize
-    ) public {
+    function testFuzz_xcm_weight_safety_margin(uint64 refTime, uint64 proofSize) public {
         // Ensure values don't overflow uint64 after multiplying by 110
         refTime = uint64(bound(uint256(refTime), 1, type(uint64).max / 110));
-        proofSize = uint64(
-            bound(uint256(proofSize), 1, type(uint64).max / 110)
-        );
+        proofSize = uint64(bound(uint256(proofSize), 1, type(uint64).max / 110));
 
         uint64 adjustedRefTime = (refTime * 110) / 100;
         uint64 adjustedProofSize = (proofSize * 110) / 100;
 
         // If adjusted fits within limits, execution should succeed
-        bool shouldFit = adjustedRefTime <= MAX_REF_TIME &&
-            adjustedProofSize <= MAX_PROOF_SIZE;
+        bool shouldFit = adjustedRefTime <= MAX_REF_TIME && adjustedProofSize <= MAX_PROOF_SIZE;
 
-        vm.store(
-            XCM_PRECOMPILE_ADDR,
-            bytes32(uint256(0)),
-            bytes32(uint256(refTime))
-        );
-        vm.store(
-            XCM_PRECOMPILE_ADDR,
-            bytes32(uint256(1)),
-            bytes32(uint256(proofSize))
-        );
+        vm.store(XCM_PRECOMPILE_ADDR, bytes32(uint256(0)), bytes32(uint256(refTime)));
+        vm.store(XCM_PRECOMPILE_ADDR, bytes32(uint256(1)), bytes32(uint256(proofSize)));
 
         _depositAs(alice, 50_000 ether);
 
@@ -1462,8 +1304,7 @@ contract ObidotVault_Admin_Test is ObidotVaultTestBase {
     }
 
     function test_dailyLossStatus_view() public {
-        (uint256 accumulated, uint256 maxAllowed, uint256 windowResetAt) = vault
-            .dailyLossStatus();
+        (uint256 accumulated, uint256 maxAllowed, uint256 windowResetAt) = vault.dailyLossStatus();
         assertEq(accumulated, 0);
         assertEq(maxAllowed, MAX_DAILY_LOSS);
         assertGt(windowResetAt, block.timestamp);
@@ -1537,45 +1378,23 @@ contract MultiLocation_Test is Test {
 
     function test_siblingParachainAccountKey20() public pure {
         address account = 0x1234567890AbcdEF1234567890aBcdef12345678;
-        bytes memory encoded = MultiLocation.siblingParachainAccountKey20(
-            0x04,
-            2006,
-            account
-        );
+        bytes memory encoded = MultiLocation.siblingParachainAccountKey20(0x04, 2006, account);
 
         // V4 + parents(1) + X2 + Parachain(2006) + AccountKey20(None, account)
         // Parachain: 0x00 + compact(2006) = 0x00 591f
         // AccountKey20: 0x03 + 0x00 (None) + 20-byte address
         bytes memory expected = abi.encodePacked(
-            uint8(0x04),
-            uint8(0x01),
-            uint8(0x02),
-            uint8(0x00),
-            hex"591f",
-            uint8(0x03),
-            uint8(0x00),
-            account
+            uint8(0x04), uint8(0x01), uint8(0x02), uint8(0x00), hex"591f", uint8(0x03), uint8(0x00), account
         );
         assertEq(encoded, expected);
     }
 
     function test_siblingParachainAccountId32() public pure {
         bytes32 accountId = bytes32(uint256(0xDEADBEEF));
-        bytes memory encoded = MultiLocation.siblingParachainAccountId32(
-            0x03,
-            2006,
-            accountId
-        );
+        bytes memory encoded = MultiLocation.siblingParachainAccountId32(0x03, 2006, accountId);
 
         bytes memory expected = abi.encodePacked(
-            uint8(0x03),
-            uint8(0x01),
-            uint8(0x02),
-            uint8(0x00),
-            hex"591f",
-            uint8(0x01),
-            uint8(0x00),
-            accountId
+            uint8(0x03), uint8(0x01), uint8(0x02), uint8(0x00), hex"591f", uint8(0x01), uint8(0x00), accountId
         );
         assertEq(encoded, expected);
     }
@@ -1627,22 +1446,12 @@ contract MultiLocation_Test is Test {
         // Library calls are inlined, so vm.expectRevert won't catch them.
         // Use a wrapper contract to make an external call instead.
         MultiLocationWrapper wrapper = new MultiLocationWrapper();
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                MultiLocation.UnsupportedVersion.selector,
-                0x02
-            )
-        );
+        vm.expectRevert(abi.encodeWithSelector(MultiLocation.UnsupportedVersion.selector, 0x02));
         wrapper.relayChain(0x02);
     }
 
     function test_siblingParachainPalletAsset() public pure {
-        bytes memory encoded = MultiLocation.siblingParachainPalletAsset(
-            0x04,
-            2006,
-            50,
-            100
-        );
+        bytes memory encoded = MultiLocation.siblingParachainPalletAsset(0x04, 2006, 50, 100);
         // V4 + parents(1) + X3 + Parachain(2006) + PalletInstance(50) + GeneralIndex(compact(100))
         bytes memory expected = abi.encodePacked(
             uint8(0x04),
@@ -1674,45 +1483,21 @@ contract ObidotVault_Constructor_Test is Test {
     function test_revert_zero_oracle() public {
         MockERC20 tok = new MockERC20("T", "T", 18);
         vm.expectRevert(ObidotVault.ZeroAddress.selector);
-        new ObidotVault(
-            IERC20(address(tok)),
-            address(0),
-            1e18,
-            1e18,
-            1e12,
-            1e6,
-            makeAddr("admin")
-        );
+        new ObidotVault(IERC20(address(tok)), address(0), 1e18, 1e18, 1e12, 1e6, makeAddr("admin"));
     }
 
     function test_revert_zero_admin() public {
         MockERC20 tok = new MockERC20("T", "T", 18);
         MockOracle orc = new MockOracle(1e8, 8);
         vm.expectRevert(ObidotVault.ZeroAddress.selector);
-        new ObidotVault(
-            IERC20(address(tok)),
-            address(orc),
-            1e18,
-            1e18,
-            1e12,
-            1e6,
-            address(0)
-        );
+        new ObidotVault(IERC20(address(tok)), address(orc), 1e18, 1e18, 1e12, 1e6, address(0));
     }
 
     function test_revert_zero_deposit_cap() public {
         MockERC20 tok = new MockERC20("T", "T", 18);
         MockOracle orc = new MockOracle(1e8, 8);
         vm.expectRevert(ObidotVault.InvalidCap.selector);
-        new ObidotVault(
-            IERC20(address(tok)),
-            address(orc),
-            0,
-            1e18,
-            1e12,
-            1e6,
-            makeAddr("admin")
-        );
+        new ObidotVault(IERC20(address(tok)), address(orc), 0, 1e18, 1e12, 1e6, makeAddr("admin"));
     }
 }
 
@@ -1733,9 +1518,7 @@ contract VaultHandler is Test {
         token = _token;
 
         for (uint256 i = 0; i < 5; i++) {
-            address actor = makeAddr(
-                string(abi.encodePacked("actor", vm.toString(i)))
-            );
+            address actor = makeAddr(string(abi.encodePacked("actor", vm.toString(i))));
             actors.push(actor);
             token.mint(actor, 1_000_000 ether);
             vm.prank(actor);
@@ -1793,20 +1576,9 @@ contract ObidotVault_Invariant_Test is Test {
 
         // Deploy mock XCM precompile
         MockXcmPrecompile xcmMock = new MockXcmPrecompile();
-        vm.etch(
-            0x00000000000000000000000000000000000a0000,
-            address(xcmMock).code
-        );
-        vm.store(
-            0x00000000000000000000000000000000000a0000,
-            bytes32(uint256(0)),
-            bytes32(uint256(500_000_000_000))
-        );
-        vm.store(
-            0x00000000000000000000000000000000000a0000,
-            bytes32(uint256(1)),
-            bytes32(uint256(524_288))
-        );
+        vm.etch(0x00000000000000000000000000000000000a0000, address(xcmMock).code);
+        vm.store(0x00000000000000000000000000000000000a0000, bytes32(uint256(0)), bytes32(uint256(500_000_000_000)));
+        vm.store(0x00000000000000000000000000000000000a0000, bytes32(uint256(1)), bytes32(uint256(524_288)));
 
         address admin = makeAddr("admin");
 
@@ -1829,11 +1601,7 @@ contract ObidotVault_Invariant_Test is Test {
     ///      If totalSupply > 0, then totalAssets > 0 (no zombie shares)
     function invariant_no_zombie_shares() public view {
         if (vault.totalSupply() > 0) {
-            assertGt(
-                vault.totalAssets(),
-                0,
-                "Zombie shares: supply > 0 but assets = 0"
-            );
+            assertGt(vault.totalAssets(), 0, "Zombie shares: supply > 0 but assets = 0");
         }
     }
 
@@ -1860,11 +1628,7 @@ contract ObidotVault_Invariant_Test is Test {
 
     /// @dev Invariant: total deposited >= total withdrawn (vault can't give more than received)
     function invariant_deposits_ge_withdrawals() public view {
-        assertGe(
-            handler.totalDeposited(),
-            handler.totalWithdrawn(),
-            "More withdrawn than deposited"
-        );
+        assertGe(handler.totalDeposited(), handler.totalWithdrawn(), "More withdrawn than deposited");
     }
 }
 
@@ -1925,7 +1689,7 @@ contract ObidotVault_EdgeCase_Test is ObidotVaultTestBase {
         vm.prank(relayer);
         uint256 id = vault.executeStrategy(intent, sig);
 
-        (, , , , uint32 para, , ) = vault.strategies(id);
+        (,,,, uint32 para,,) = vault.strategies(id);
         assertEq(para, PARA_MOONBEAM);
     }
 
@@ -1940,12 +1704,7 @@ contract ObidotVault_EdgeCase_Test is ObidotVaultTestBase {
         ObidotVault.StrategyIntent memory intent = _defaultIntent(1_000 ether);
         bytes memory sig = _signIntent(intent);
 
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                ObidotVault.UnauthorizedStrategist.selector,
-                strategist
-            )
-        );
+        vm.expectRevert(abi.encodeWithSelector(ObidotVault.UnauthorizedStrategist.selector, strategist));
         vm.prank(relayer);
         vault.executeStrategy(intent, sig);
     }
@@ -2022,5 +1781,489 @@ contract ObidotVault_EdgeCase_Test is ObidotVaultTestBase {
         assertEq(vault.idleAssets(), 50_000 ether);
         assertEq(vault.totalRemoteAssets(), 30_000 ether);
         assertEq(vault.totalAssets(), 80_000 ether);
+    }
+}
+
+// ═════════════════════════════════════════════════════════════════════════
+//  Phase 1 Tests — Dynamic DOMAIN_SEPARATOR & Daily Loss Reset
+// ═════════════════════════════════════════════════════════════════════════
+
+contract ObidotVault_DomainSeparator_Test is ObidotVaultTestBase {
+    function test_domain_separator_matches_chain_id() public view {
+        bytes32 expected = keccak256(
+            abi.encode(vault.DOMAIN_TYPEHASH(), keccak256("ObidotVault"), keccak256("1"), block.chainid, address(vault))
+        );
+        assertEq(vault.DOMAIN_SEPARATOR(), expected);
+    }
+
+    function test_domain_separator_changes_on_fork() public {
+        bytes32 originalDS = vault.DOMAIN_SEPARATOR();
+
+        // Simulate a chain fork by changing the chain ID
+        vm.chainId(999);
+
+        bytes32 forkedDS = vault.DOMAIN_SEPARATOR();
+
+        // The domain separator should be different on the fork
+        assertTrue(originalDS != forkedDS, "DS should differ on fork");
+
+        // Verify it matches the new chain's expected value
+        bytes32 expectedForked = keccak256(
+            abi.encode(vault.DOMAIN_TYPEHASH(), keccak256("ObidotVault"), keccak256("1"), uint256(999), address(vault))
+        );
+        assertEq(forkedDS, expectedForked);
+    }
+
+    function test_domain_separator_returns_cached_on_same_chain() public view {
+        // On the deployment chain, should return the cached value
+        bytes32 ds1 = vault.DOMAIN_SEPARATOR();
+        bytes32 ds2 = vault.DOMAIN_SEPARATOR();
+        assertEq(ds1, ds2);
+    }
+
+    function test_signatures_invalid_on_forked_chain() public {
+        // Execute a strategy on the original chain (works)
+        _depositAs(alice, 50_000 ether);
+        ObidotVault.StrategyIntent memory intent = _defaultIntent(10_000 ether);
+        bytes memory sig = _signIntent(intent);
+
+        // Fork the chain
+        vm.chainId(999);
+
+        // The same signature should fail because DOMAIN_SEPARATOR changed
+        // Recovery yields a different address (not the strategist)
+        vm.prank(relayer);
+        vm.expectRevert(); // UnauthorizedStrategist with wrong recovered address
+        vault.executeStrategy(intent, sig);
+    }
+}
+
+contract ObidotVault_DailyLossReset_Test is ObidotVaultTestBase {
+    function test_policy_engine_resets_stale_loss_accumulator() public {
+        _depositAs(alice, 100_000 ether);
+
+        // Execute a strategy and report a loss
+        uint256 sid = _executeDefaultStrategy(40_000 ether);
+        vm.prank(admin);
+        vault.reportStrategyOutcome(sid, false, 0); // Total loss
+
+        assertEq(vault.dailyLossAccumulator(), 40_000 ether);
+
+        // Try another strategy — daily loss accumulator is at 40k, max is 50k
+        // This should work because we haven't breached the threshold
+        _executeDefaultStrategy(5_000 ether);
+
+        // Now warp past the daily window (24 hours)
+        vm.warp(block.timestamp + 1 days + 1);
+        oracle.setPrice(1e8); // Refresh oracle to avoid staleness
+
+        // Execute another strategy — the policy engine should reset the accumulator
+        _executeDefaultStrategy(5_000 ether);
+
+        // The accumulator should have been reset by _enforcePolicyEngine
+        assertEq(vault.dailyLossAccumulator(), 0);
+    }
+
+    function test_policy_engine_blocks_when_loss_exceeds_threshold() public {
+        _depositAs(alice, 100_000 ether);
+
+        // Execute and report a massive loss that triggers circuit breaker
+        uint256 sid = _executeDefaultStrategy(60_000 ether);
+        vm.prank(admin);
+        vault.reportStrategyOutcome(sid, false, 0); // 60k loss > 50k threshold
+
+        // Vault should be paused and in emergency mode
+        assertTrue(vault.paused());
+        assertTrue(vault.emergencyMode());
+    }
+}
+
+// ═════════════════════════════════════════════════════════════════════════
+//  Phase 2 Tests — Withdrawal Queue
+// ═════════════════════════════════════════════════════════════════════════
+
+contract ObidotVault_WithdrawalQueue_Test is ObidotVaultTestBase {
+    uint256 constant TIMELOCK = 1 hours;
+
+    function setUp() public override {
+        super.setUp();
+        vm.prank(admin);
+        vault.setWithdrawalTimelock(TIMELOCK);
+    }
+
+    function test_request_withdrawal_queues_correctly() public {
+        uint256 shares = _depositAs(alice, 10_000 ether);
+
+        vm.prank(alice);
+        uint256 requestId = vault.requestWithdrawal(shares);
+
+        (address owner, uint256 reqShares, uint256 reqAssets, uint256 claimableAt) =
+            vault.getWithdrawalRequest(requestId);
+
+        assertEq(owner, alice);
+        assertEq(reqShares, shares);
+        assertEq(reqAssets, 10_000 ether); // 1:1 since virtual offset
+        assertEq(claimableAt, block.timestamp + TIMELOCK);
+
+        // Shares should be burned
+        assertEq(vault.balanceOf(alice), 0);
+    }
+
+    function test_fulfill_withdrawal_after_timelock() public {
+        uint256 shares = _depositAs(alice, 10_000 ether);
+
+        vm.prank(alice);
+        uint256 requestId = vault.requestWithdrawal(shares);
+
+        // Warp past timelock
+        vm.warp(block.timestamp + TIMELOCK + 1);
+
+        uint256 aliceBalBefore = token.balanceOf(alice);
+        vault.fulfillWithdrawal(requestId);
+        uint256 aliceBalAfter = token.balanceOf(alice);
+
+        // Alice should have received her assets
+        assertTrue(aliceBalAfter > aliceBalBefore);
+
+        // Request should be cleared
+        (address owner,,,) = vault.getWithdrawalRequest(requestId);
+        assertEq(owner, address(0));
+    }
+
+    function test_fulfill_withdrawal_reverts_before_timelock() public {
+        uint256 shares = _depositAs(alice, 10_000 ether);
+
+        vm.prank(alice);
+        uint256 requestId = vault.requestWithdrawal(shares);
+
+        vm.expectRevert(
+            abi.encodeWithSelector(ObidotVault.WithdrawalNotClaimable.selector, requestId, block.timestamp + TIMELOCK)
+        );
+        vault.fulfillWithdrawal(requestId);
+    }
+
+    function test_cancel_withdrawal_returns_shares() public {
+        uint256 shares = _depositAs(alice, 10_000 ether);
+
+        vm.prank(alice);
+        uint256 requestId = vault.requestWithdrawal(shares);
+        assertEq(vault.balanceOf(alice), 0);
+
+        // Cancel
+        vm.prank(alice);
+        vault.cancelWithdrawal(requestId);
+
+        // Shares should be returned
+        assertEq(vault.balanceOf(alice), shares);
+
+        // Request should be cleared
+        (address owner,,,) = vault.getWithdrawalRequest(requestId);
+        assertEq(owner, address(0));
+    }
+
+    function test_cancel_withdrawal_reverts_for_non_owner() public {
+        uint256 shares = _depositAs(alice, 10_000 ether);
+
+        vm.prank(alice);
+        uint256 requestId = vault.requestWithdrawal(shares);
+
+        vm.prank(bob);
+        vm.expectRevert(abi.encodeWithSelector(ObidotVault.NotWithdrawalOwner.selector, requestId, bob));
+        vault.cancelWithdrawal(requestId);
+    }
+
+    function test_fulfill_reverts_insufficient_idle() public {
+        _depositAs(alice, 50_000 ether);
+        uint256 shares = vault.balanceOf(alice);
+
+        // Deploy most assets remotely
+        _executeDefaultStrategy(45_000 ether);
+
+        // Request withdrawal for all shares
+        vm.prank(alice);
+        uint256 requestId = vault.requestWithdrawal(shares);
+
+        vm.warp(block.timestamp + TIMELOCK + 1);
+
+        // Fulfill should fail — idle is only 5k but request wants more
+        vm.expectRevert();
+        vault.fulfillWithdrawal(requestId);
+    }
+
+    function test_request_zero_shares_reverts() public {
+        _depositAs(alice, 10_000 ether);
+
+        vm.prank(alice);
+        vm.expectRevert(ObidotVault.ZeroAmount.selector);
+        vault.requestWithdrawal(0);
+    }
+
+    function test_fulfill_nonexistent_request_reverts() public {
+        vm.expectRevert(abi.encodeWithSelector(ObidotVault.WithdrawalNotFound.selector, 999));
+        vault.fulfillWithdrawal(999);
+    }
+
+    function test_instant_withdrawal_when_timelock_zero() public {
+        // Set timelock to 0
+        vm.prank(admin);
+        vault.setWithdrawalTimelock(0);
+
+        uint256 shares = _depositAs(alice, 10_000 ether);
+
+        vm.prank(alice);
+        uint256 requestId = vault.requestWithdrawal(shares);
+
+        // Should be immediately fulfillable
+        uint256 balBefore = token.balanceOf(alice);
+        vault.fulfillWithdrawal(requestId);
+        assertTrue(token.balanceOf(alice) > balBefore);
+    }
+}
+
+// ═════════════════════════════════════════════════════════════════════════
+//  Phase 3 Tests — Batch Execution & Protocol Performance
+// ═════════════════════════════════════════════════════════════════════════
+
+contract ObidotVault_BatchExecution_Test is ObidotVaultTestBase {
+    function test_batch_execute_two_strategies() public {
+        _depositAs(alice, 100_000 ether);
+
+        ObidotVault.StrategyIntent memory intent1 = _defaultIntent(10_000 ether);
+        bytes memory sig1 = _signIntent(intent1);
+
+        ObidotVault.StrategyIntent memory intent2 = _defaultIntent(5_000 ether);
+        intent2.nonce = 1; // Second nonce
+        bytes memory sig2 = _signIntent(intent2);
+
+        ObidotVault.StrategyIntent[] memory intents = new ObidotVault.StrategyIntent[](2);
+        intents[0] = intent1;
+        intents[1] = intent2;
+
+        bytes[] memory sigs = new bytes[](2);
+        sigs[0] = sig1;
+        sigs[1] = sig2;
+
+        vm.prank(relayer);
+        uint256[] memory ids = vault.executeStrategies(intents, sigs);
+
+        assertEq(ids.length, 2);
+        assertEq(ids[0], 0);
+        assertEq(ids[1], 1);
+        assertEq(vault.totalRemoteAssets(), 15_000 ether);
+    }
+
+    function test_batch_reverts_on_length_mismatch() public {
+        ObidotVault.StrategyIntent[] memory intents = new ObidotVault.StrategyIntent[](2);
+        bytes[] memory sigs = new bytes[](1);
+
+        vm.prank(relayer);
+        vm.expectRevert(ObidotVault.ArrayLengthMismatch.selector);
+        vault.executeStrategies(intents, sigs);
+    }
+
+    function test_batch_reverts_if_one_strategy_invalid() public {
+        _depositAs(alice, 100_000 ether);
+
+        ObidotVault.StrategyIntent memory intent1 = _defaultIntent(10_000 ether);
+        bytes memory sig1 = _signIntent(intent1);
+
+        // Second intent with wrong nonce
+        ObidotVault.StrategyIntent memory intent2 = _defaultIntent(5_000 ether);
+        intent2.nonce = 999; // Wrong nonce
+        bytes memory sig2 = _signIntent(intent2);
+
+        ObidotVault.StrategyIntent[] memory intents = new ObidotVault.StrategyIntent[](2);
+        intents[0] = intent1;
+        intents[1] = intent2;
+
+        bytes[] memory sigs = new bytes[](2);
+        sigs[0] = sig1;
+        sigs[1] = sig2;
+
+        vm.prank(relayer);
+        vm.expectRevert(); // Should revert on second intent
+        vault.executeStrategies(intents, sigs);
+    }
+}
+
+contract ObidotVault_ProtocolPerformance_Test is ObidotVaultTestBase {
+    function test_performance_tracked_on_outcome() public {
+        _depositAs(alice, 100_000 ether);
+
+        uint256 sid = _executeDefaultStrategy(10_000 ether);
+
+        // Report successful outcome with profit
+        token.mint(address(vault), 11_000 ether); // Return 11k (1k profit)
+        vm.prank(admin);
+        vault.reportStrategyOutcome(sid, true, 11_000 ether);
+
+        (
+            uint256 totalDeployed,
+            uint256 totalReturned,
+            uint256 executionCount,
+            uint256 successCount,
+            uint256 lastExecutedAt
+        ) = vault.getProtocolPerformance(targetProtocol);
+
+        assertEq(totalDeployed, 10_000 ether);
+        assertEq(totalReturned, 11_000 ether);
+        assertEq(executionCount, 1);
+        assertEq(successCount, 1);
+        assertGt(lastExecutedAt, 0);
+    }
+
+    function test_performance_tracks_failures() public {
+        _depositAs(alice, 100_000 ether);
+
+        uint256 sid = _executeDefaultStrategy(10_000 ether);
+
+        // Report failed outcome with partial return
+        token.mint(address(vault), 5_000 ether);
+        vm.prank(admin);
+        vault.reportStrategyOutcome(sid, false, 5_000 ether);
+
+        (, uint256 totalReturned, uint256 executionCount, uint256 successCount,) =
+            vault.getProtocolPerformance(targetProtocol);
+
+        assertEq(totalReturned, 5_000 ether);
+        assertEq(executionCount, 1);
+        assertEq(successCount, 0); // Failed
+    }
+
+    function test_cumulative_pnl_tracking() public {
+        _depositAs(alice, 100_000 ether);
+
+        // Strategy 1: profit
+        uint256 sid1 = _executeDefaultStrategy(10_000 ether);
+        token.mint(address(vault), 12_000 ether);
+        vm.prank(admin);
+        vault.reportStrategyOutcome(sid1, true, 12_000 ether);
+
+        assertEq(vault.cumulativePnL(), 2_000 ether);
+
+        // Strategy 2: loss
+        uint256 sid2 = _executeDefaultStrategy(10_000 ether);
+        token.mint(address(vault), 7_000 ether);
+        vm.prank(admin);
+        vault.reportStrategyOutcome(sid2, false, 7_000 ether);
+
+        assertEq(vault.cumulativePnL(), -1_000 ether);
+    }
+}
+
+// ═════════════════════════════════════════════════════════════════════════
+//  Phase 4 Tests — Performance Fee Module
+// ═════════════════════════════════════════════════════════════════════════
+
+contract ObidotVault_PerformanceFee_Test is ObidotVaultTestBase {
+    address internal treasury = makeAddr("treasury");
+
+    function setUp() public override {
+        super.setUp();
+        vm.startPrank(admin);
+        vault.setPerformanceFee(1000, treasury); // 10% fee
+        vm.stopPrank();
+    }
+
+    function test_performance_fee_set_correctly() public view {
+        (,, uint256 feeBps, address feeAddr) = vault.performanceSummary();
+        assertEq(feeBps, 1000);
+        assertEq(feeAddr, treasury);
+    }
+
+    function test_fee_reverts_when_too_high() public {
+        vm.prank(admin);
+        vm.expectRevert(abi.encodeWithSelector(ObidotVault.FeeTooHigh.selector, 3001));
+        vault.setPerformanceFee(3001, treasury);
+    }
+
+    function test_fee_reverts_zero_treasury_with_nonzero_fee() public {
+        vm.prank(admin);
+        vm.expectRevert(ObidotVault.ZeroAddress.selector);
+        vault.setPerformanceFee(500, address(0));
+    }
+
+    function test_fee_minted_on_profit() public {
+        _depositAs(alice, 100_000 ether);
+
+        // Set high water mark
+        vm.prank(admin);
+        vault.resetHighWaterMark();
+
+        uint256 sid = _executeDefaultStrategy(10_000 ether);
+
+        // Return with profit
+        token.mint(address(vault), 15_000 ether); // 5k profit
+        vm.prank(admin);
+        vault.reportStrategyOutcome(sid, true, 15_000 ether);
+
+        // Treasury should have received fee shares
+        uint256 treasuryShares = vault.balanceOf(treasury);
+        assertGt(treasuryShares, 0, "Treasury should have fee shares");
+    }
+
+    function test_no_fee_on_loss() public {
+        _depositAs(alice, 100_000 ether);
+
+        vm.prank(admin);
+        vault.resetHighWaterMark();
+
+        uint256 sid = _executeDefaultStrategy(10_000 ether);
+
+        // Return with loss
+        token.mint(address(vault), 5_000 ether);
+        vm.prank(admin);
+        vault.reportStrategyOutcome(sid, false, 5_000 ether);
+
+        assertEq(vault.balanceOf(treasury), 0, "No fee on loss");
+    }
+
+    function test_no_fee_below_high_water_mark() public {
+        _depositAs(alice, 100_000 ether);
+
+        // Set HWM artificially high
+        vm.prank(admin);
+        vault.resetHighWaterMark();
+
+        // Strategy returns at par (no new profit above HWM)
+        uint256 sid = _executeDefaultStrategy(10_000 ether);
+        token.mint(address(vault), 10_000 ether);
+        vm.prank(admin);
+        vault.reportStrategyOutcome(sid, true, 10_000 ether);
+
+        assertEq(vault.balanceOf(treasury), 0, "No fee when at HWM");
+    }
+
+    function test_zero_fee_config_disables_fees() public {
+        vm.prank(admin);
+        vault.setPerformanceFee(0, address(0)); // Disable fees
+
+        _depositAs(alice, 100_000 ether);
+
+        uint256 sid = _executeDefaultStrategy(10_000 ether);
+        token.mint(address(vault), 15_000 ether);
+        vm.prank(admin);
+        vault.reportStrategyOutcome(sid, true, 15_000 ether);
+
+        assertEq(vault.balanceOf(treasury), 0);
+    }
+}
+
+// ═════════════════════════════════════════════════════════════════════════
+//  Phase 7 — getPriceStrict Tests
+// ═════════════════════════════════════════════════════════════════════════
+
+contract ObidotVault_AdminConfig_Test is ObidotVaultTestBase {
+    function test_set_withdrawal_timelock() public {
+        vm.prank(admin);
+        vault.setWithdrawalTimelock(2 hours);
+        assertEq(vault.withdrawalTimelock(), 2 hours);
+    }
+
+    function test_reset_high_water_mark() public {
+        _depositAs(alice, 50_000 ether);
+        vm.prank(admin);
+        vault.resetHighWaterMark();
+        assertEq(vault.highWaterMark(), vault.totalAssets());
     }
 }

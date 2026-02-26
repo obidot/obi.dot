@@ -4,9 +4,7 @@ pragma solidity ^0.8.28;
 import {Test} from "forge-std/Test.sol";
 import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import {
-    IAccessControl
-} from "@openzeppelin/contracts/access/IAccessControl.sol";
+import {IAccessControl} from "@openzeppelin/contracts/access/IAccessControl.sol";
 
 import {CrossChainRouter} from "../src/adapters/CrossChainRouter.sol";
 import {BifrostAdapter} from "../src/adapters/BifrostAdapter.sol";
@@ -53,29 +51,21 @@ contract MockIsmpHost is IIsmpHost {
         nextCommitment = _commitment;
     }
 
-    function dispatch(
-        DispatchPost memory post
-    ) external payable override returns (bytes32 commitment) {
+    function dispatch(DispatchPost memory post) external payable override returns (bytes32 commitment) {
         dispatchCount++;
         lastDest = post.dest;
         lastTo = post.to;
         lastBody = post.body;
         commitment = nextCommitment;
         // Update commitment for next call to be unique
-        nextCommitment = keccak256(
-            abi.encodePacked(nextCommitment, dispatchCount)
-        );
+        nextCommitment = keccak256(abi.encodePacked(nextCommitment, dispatchCount));
     }
 
-    function dispatch(
-        DispatchGet memory
-    ) external payable override returns (bytes32) {
+    function dispatch(DispatchGet memory) external payable override returns (bytes32) {
         revert("GET not implemented in mock");
     }
 
-    function dispatchFee(
-        DispatchPost memory
-    ) external view override returns (uint256) {
+    function dispatchFee(DispatchPost memory) external view override returns (uint256) {
         return feePerDispatch;
     }
 
@@ -101,10 +91,7 @@ contract MockXcm is IXcm {
     bytes public lastMessage;
     bool public shouldRevertOnSend;
 
-    function send(
-        bytes calldata dest,
-        bytes calldata message
-    ) external override {
+    function send(bytes calldata dest, bytes calldata message) external override {
         if (shouldRevertOnSend) revert SendFailure();
         sendCallCount++;
         lastDest = dest;
@@ -112,9 +99,7 @@ contract MockXcm is IXcm {
         emit XcmSent(msg.sender, dest, message);
     }
 
-    function weighMessage(
-        bytes calldata
-    ) external pure override returns (uint64, uint64) {
+    function weighMessage(bytes calldata) external pure override returns (uint64, uint64) {
         return (500_000_000_000, 524_288);
     }
 
@@ -144,12 +129,7 @@ contract CrossChainRouter_Base_Test is Test {
     function setUp() public virtual {
         token = new MockToken();
         ismpHost = new MockIsmpHost();
-        router = new CrossChainRouter(
-            address(ismpHost),
-            IERC20(address(token)),
-            masterVault,
-            admin
-        );
+        router = new CrossChainRouter(address(ismpHost), IERC20(address(token)), masterVault, admin);
 
         ethModuleAddress = abi.encode(makeAddr("ethSatellite"));
         arbModuleAddress = abi.encode(makeAddr("arbSatellite"));
@@ -221,12 +201,7 @@ contract CrossChainRouter_Broadcast_Test is CrossChainRouter_Base_Test {
     function test_broadcastAssetSync_emitsEvent() public {
         vm.prank(masterVault);
         vm.expectEmit();
-        emit CrossChainRouter.AssetSyncBroadcast(
-            10_000 ether,
-            9_500 ether,
-            5_000 ether,
-            2
-        );
+        emit CrossChainRouter.AssetSyncBroadcast(10_000 ether, 9_500 ether, 5_000 ether, 2);
         router.broadcastAssetSync(10_000 ether, 9_500 ether, 5_000 ether);
     }
 
@@ -247,13 +222,7 @@ contract CrossChainRouter_Broadcast_Test is CrossChainRouter_Base_Test {
 
     function test_broadcastStrategyReport_dispatches() public {
         vm.prank(masterVault);
-        router.broadcastStrategyReport(
-            1,
-            true,
-            105 ether,
-            5 ether,
-            4_500 ether
-        );
+        router.broadcastStrategyReport(1, true, 105 ether, 5 ether, 4_500 ether);
 
         assertEq(ismpHost.dispatchCount(), 2);
     }
@@ -261,19 +230,8 @@ contract CrossChainRouter_Broadcast_Test is CrossChainRouter_Base_Test {
     function test_broadcastStrategyReport_emitsEvent() public {
         vm.prank(masterVault);
         vm.expectEmit();
-        emit CrossChainRouter.StrategyReportBroadcast(
-            1,
-            true,
-            105 ether,
-            5 ether
-        );
-        router.broadcastStrategyReport(
-            1,
-            true,
-            105 ether,
-            5 ether,
-            4_500 ether
-        );
+        emit CrossChainRouter.StrategyReportBroadcast(1, true, 105 ether, 5 ether);
+        router.broadcastStrategyReport(1, true, 105 ether, 5 ether, 4_500 ether);
     }
 
     function test_broadcastEmergencySync_dispatches() public {
@@ -314,14 +272,13 @@ contract CrossChainRouter_IncomingMessages_Test is CrossChainRouter_Base_Test {
         uint256 sharesMinted,
         uint256 nonce
     ) internal {
-        CrossChainCodec.DepositSyncMessage memory syncMsg = CrossChainCodec
-            .DepositSyncMessage({
-                chainId: sourceChain,
-                depositor: depositor,
-                amount: amount,
-                sharesMinted: sharesMinted,
-                nonce: nonce
-            });
+        CrossChainCodec.DepositSyncMessage memory syncMsg = CrossChainCodec.DepositSyncMessage({
+            chainId: sourceChain,
+            depositor: depositor,
+            amount: amount,
+            sharesMinted: sharesMinted,
+            nonce: nonce
+        });
 
         bytes memory body = CrossChainCodec.encodeDepositSync(syncMsg);
 
@@ -339,8 +296,8 @@ contract CrossChainRouter_IncomingMessages_Test is CrossChainRouter_Base_Test {
             body: body
         });
 
-        IIsmpModule.IncomingPostRequest memory incoming = IIsmpModule
-            .IncomingPostRequest({request: request, relayer: address(0)});
+        IIsmpModule.IncomingPostRequest memory incoming =
+            IIsmpModule.IncomingPostRequest({request: request, relayer: address(0)});
 
         vm.prank(address(ismpHost));
         router.onAccept(incoming);
@@ -354,14 +311,13 @@ contract CrossChainRouter_IncomingMessages_Test is CrossChainRouter_Base_Test {
         uint256 sharesToBurn,
         uint256 nonce
     ) internal {
-        CrossChainCodec.WithdrawRequestMessage
-            memory withdrawMsg = CrossChainCodec.WithdrawRequestMessage({
-                chainId: sourceChain,
-                withdrawer: withdrawer,
-                amount: amount,
-                sharesToBurn: sharesToBurn,
-                nonce: nonce
-            });
+        CrossChainCodec.WithdrawRequestMessage memory withdrawMsg = CrossChainCodec.WithdrawRequestMessage({
+            chainId: sourceChain,
+            withdrawer: withdrawer,
+            amount: amount,
+            sharesToBurn: sharesToBurn,
+            nonce: nonce
+        });
 
         bytes memory body = CrossChainCodec.encodeWithdrawRequest(withdrawMsg);
 
@@ -378,8 +334,8 @@ contract CrossChainRouter_IncomingMessages_Test is CrossChainRouter_Base_Test {
             body: body
         });
 
-        IIsmpModule.IncomingPostRequest memory incoming = IIsmpModule
-            .IncomingPostRequest({request: request, relayer: address(0)});
+        IIsmpModule.IncomingPostRequest memory incoming =
+            IIsmpModule.IncomingPostRequest({request: request, relayer: address(0)});
 
         vm.prank(address(ismpHost));
         router.onAccept(incoming);
@@ -404,14 +360,13 @@ contract CrossChainRouter_IncomingMessages_Test is CrossChainRouter_Base_Test {
     }
 
     function test_handleDepositSync_emitsEvent() public {
-        CrossChainCodec.DepositSyncMessage memory syncMsg = CrossChainCodec
-            .DepositSyncMessage({
-                chainId: CHAIN_ETH,
-                depositor: alice,
-                amount: 100 ether,
-                sharesMinted: 95 ether,
-                nonce: 0
-            });
+        CrossChainCodec.DepositSyncMessage memory syncMsg = CrossChainCodec.DepositSyncMessage({
+            chainId: CHAIN_ETH,
+            depositor: alice,
+            amount: 100 ether,
+            sharesMinted: 95 ether,
+            nonce: 0
+        });
 
         bytes memory body = CrossChainCodec.encodeDepositSync(syncMsg);
         bytes32 chainHash = keccak256(CHAIN_ETH);
@@ -429,19 +384,8 @@ contract CrossChainRouter_IncomingMessages_Test is CrossChainRouter_Base_Test {
 
         vm.prank(address(ismpHost));
         vm.expectEmit();
-        emit CrossChainRouter.SatelliteDepositReceived(
-            CHAIN_ETH,
-            alice,
-            100 ether,
-            95 ether,
-            0
-        );
-        router.onAccept(
-            IIsmpModule.IncomingPostRequest({
-                request: request,
-                relayer: address(0)
-            })
-        );
+        emit CrossChainRouter.SatelliteDepositReceived(CHAIN_ETH, alice, 100 ether, 95 ether, 0);
+        router.onAccept(IIsmpModule.IncomingPostRequest({request: request, relayer: address(0)}));
     }
 
     function test_handleWithdrawRequest_updatesPendingState() public {
@@ -459,13 +403,8 @@ contract CrossChainRouter_IncomingMessages_Test is CrossChainRouter_Base_Test {
         _simulateDepositSync(CHAIN_ETH, alice, 100 ether, 95 ether, 0);
         _simulateWithdrawRequest(CHAIN_ETH, alice, 50 ether, 48 ether, 0);
 
-        (
-            bytes memory chainId,
-            address withdrawer,
-            uint256 amount,
-            uint256 sharesToBurn,
-            uint256 nonce
-        ) = router.pendingWithdrawals(0);
+        (bytes memory chainId, address withdrawer, uint256 amount, uint256 sharesToBurn, uint256 nonce) =
+            router.pendingWithdrawals(0);
 
         assertEq(chainId, CHAIN_ETH);
         assertEq(withdrawer, alice);
@@ -492,17 +431,11 @@ contract CrossChainRouter_IncomingMessages_Test is CrossChainRouter_Base_Test {
             body: bytes("")
         });
 
-        IIsmpModule.IncomingPostRequest memory incoming = IIsmpModule
-            .IncomingPostRequest({request: request, relayer: address(0)});
+        IIsmpModule.IncomingPostRequest memory incoming =
+            IIsmpModule.IncomingPostRequest({request: request, relayer: address(0)});
 
         vm.prank(alice); // unauthorized
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                HyperbridgeAdapter.UnauthorizedHost.selector,
-                alice,
-                address(ismpHost)
-            )
-        );
+        vm.expectRevert(abi.encodeWithSelector(HyperbridgeAdapter.UnauthorizedHost.selector, alice, address(ismpHost)));
         router.onAccept(incoming);
     }
 
@@ -529,18 +462,8 @@ contract CrossChainRouter_IncomingMessages_Test is CrossChainRouter_Base_Test {
         });
 
         vm.prank(address(ismpHost));
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                HyperbridgeAdapter.UnknownSourceChain.selector,
-                unknownChain
-            )
-        );
-        router.onAccept(
-            IIsmpModule.IncomingPostRequest({
-                request: request,
-                relayer: address(0)
-            })
-        );
+        vm.expectRevert(abi.encodeWithSelector(HyperbridgeAdapter.UnknownSourceChain.selector, unknownChain));
+        router.onAccept(IIsmpModule.IncomingPostRequest({request: request, relayer: address(0)}));
     }
 
     function testRevert_onAccept_unauthorizedSourceModule() public {
@@ -566,25 +489,14 @@ contract CrossChainRouter_IncomingMessages_Test is CrossChainRouter_Base_Test {
 
         vm.prank(address(ismpHost));
         vm.expectRevert(
-            abi.encodeWithSelector(
-                HyperbridgeAdapter.UnauthorizedSourceModule.selector,
-                abi.encode(address(0xdead))
-            )
+            abi.encodeWithSelector(HyperbridgeAdapter.UnauthorizedSourceModule.selector, abi.encode(address(0xdead)))
         );
-        router.onAccept(
-            IIsmpModule.IncomingPostRequest({
-                request: request,
-                relayer: address(0)
-            })
-        );
+        router.onAccept(IIsmpModule.IncomingPostRequest({request: request, relayer: address(0)}));
     }
 
     function testRevert_onAccept_unknownMessageType() public {
         // Create a body with an unknown message type (0xFF)
-        bytes memory body = abi.encodePacked(
-            uint8(0xFF),
-            abi.encode(uint256(1))
-        );
+        bytes memory body = abi.encodePacked(uint8(0xFF), abi.encode(uint256(1)));
 
         bytes32 chainHash = keccak256(CHAIN_ETH);
         bytes memory fromModule = router.registeredPeers(chainHash);
@@ -600,30 +512,16 @@ contract CrossChainRouter_IncomingMessages_Test is CrossChainRouter_Base_Test {
         });
 
         vm.prank(address(ismpHost));
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                CrossChainRouter.UnknownCrossChainMessage.selector,
-                uint8(0xFF)
-            )
-        );
-        router.onAccept(
-            IIsmpModule.IncomingPostRequest({
-                request: request,
-                relayer: address(0)
-            })
-        );
+        vm.expectRevert(abi.encodeWithSelector(CrossChainRouter.UnknownCrossChainMessage.selector, uint8(0xFF)));
+        router.onAccept(IIsmpModule.IncomingPostRequest({request: request, relayer: address(0)}));
     }
 }
 
 contract CrossChainRouter_Timeout_Test is CrossChainRouter_Base_Test {
     function test_handleTimeout_withdrawFulfill_readdsPending() public {
         // Simulate that 50 ether was in pending withdrawals and a fulfillment timed out
-        CrossChainCodec.WithdrawFulfillMessage
-            memory fulfillMsg = CrossChainCodec.WithdrawFulfillMessage({
-                withdrawNonce: 0,
-                amount: 50 ether,
-                fullyFulfilled: true
-            });
+        CrossChainCodec.WithdrawFulfillMessage memory fulfillMsg =
+            CrossChainCodec.WithdrawFulfillMessage({withdrawNonce: 0, amount: 50 ether, fullyFulfilled: true});
 
         bytes memory body = CrossChainCodec.encodeWithdrawFulfill(fulfillMsg);
 
@@ -642,10 +540,7 @@ contract CrossChainRouter_Timeout_Test is CrossChainRouter_Base_Test {
         vm.prank(address(ismpHost));
         router.onPostRequestTimeout(request);
 
-        assertEq(
-            router.pendingWithdrawalRequests(),
-            previousPending + 50 ether
-        );
+        assertEq(router.pendingWithdrawalRequests(), previousPending + 50 ether);
     }
 }
 
@@ -704,7 +599,7 @@ contract HyperbridgeAdapter_Test is CrossChainRouter_Base_Test {
     function test_receiveEther() public {
         vm.deal(alice, 1 ether);
         vm.prank(alice);
-        (bool ok, ) = address(router).call{value: 1 ether}("");
+        (bool ok,) = address(router).call{value: 1 ether}("");
         assertTrue(ok);
         assertEq(address(router).balance, 1 ether);
     }
@@ -722,8 +617,7 @@ contract BifrostAdapter_Base_Test is Test {
     address internal vault = makeAddr("vault");
     address internal alice = makeAddr("alice");
 
-    address internal constant XCM_PRECOMPILE_ADDR =
-        0x00000000000000000000000000000000000a0000;
+    address internal constant XCM_PRECOMPILE_ADDR = 0x00000000000000000000000000000000000a0000;
 
     function setUp() public virtual {
         // Deploy and etch mock XCM precompile
@@ -741,16 +635,15 @@ contract BifrostAdapter_Admin_Test is BifrostAdapter_Base_Test {
     }
 
     function testRevert_executeBifrostStrategy_unauthorized() public {
-        BifrostAdapter.BifrostStrategy memory strategy = BifrostAdapter
-            .BifrostStrategy({
-                strategyType: BifrostAdapter.BifrostStrategyType.MintVToken,
-                currencyIdA: BifrostCodec.CURRENCY_DOT,
-                currencyIdB: 0,
-                amount: 100 ether,
-                minOutput: 0,
-                poolId: 0,
-                beneficiary: keccak256("alice")
-            });
+        BifrostAdapter.BifrostStrategy memory strategy = BifrostAdapter.BifrostStrategy({
+            strategyType: BifrostAdapter.BifrostStrategyType.MintVToken,
+            currencyIdA: BifrostCodec.CURRENCY_DOT,
+            currencyIdB: 0,
+            amount: 100 ether,
+            minOutput: 0,
+            poolId: 0,
+            beneficiary: keccak256("alice")
+        });
 
         vm.prank(alice);
         vm.expectRevert();
@@ -762,20 +655,18 @@ contract BifrostAdapter_Execution_Test is BifrostAdapter_Base_Test {
     bytes32 internal beneficiary = keccak256("bifrost_account");
 
     function test_executeMintVToken() public {
-        BifrostAdapter.BifrostStrategy memory strategy = BifrostAdapter
-            .BifrostStrategy({
-                strategyType: BifrostAdapter.BifrostStrategyType.MintVToken,
-                currencyIdA: BifrostCodec.CURRENCY_DOT,
-                currencyIdB: 0,
-                amount: 100 ether,
-                minOutput: 0,
-                poolId: 0,
-                beneficiary: beneficiary
-            });
+        BifrostAdapter.BifrostStrategy memory strategy = BifrostAdapter.BifrostStrategy({
+            strategyType: BifrostAdapter.BifrostStrategyType.MintVToken,
+            currencyIdA: BifrostCodec.CURRENCY_DOT,
+            currencyIdB: 0,
+            amount: 100 ether,
+            minOutput: 0,
+            poolId: 0,
+            beneficiary: beneficiary
+        });
 
         vm.prank(vault);
-        (uint256 strategyId, bytes memory xcmMessage) = adapter
-            .executeBifrostStrategy(strategy);
+        (uint256 strategyId, bytes memory xcmMessage) = adapter.executeBifrostStrategy(strategy);
 
         assertEq(strategyId, 0);
         assertTrue(xcmMessage.length > 0);
@@ -783,129 +674,122 @@ contract BifrostAdapter_Execution_Test is BifrostAdapter_Base_Test {
     }
 
     function test_executeRedeemVToken() public {
-        BifrostAdapter.BifrostStrategy memory strategy = BifrostAdapter
-            .BifrostStrategy({
-                strategyType: BifrostAdapter.BifrostStrategyType.RedeemVToken,
-                currencyIdA: BifrostCodec.CURRENCY_VDOT,
-                currencyIdB: 0,
-                amount: 50 ether,
-                minOutput: 0,
-                poolId: 0,
-                beneficiary: beneficiary
-            });
+        BifrostAdapter.BifrostStrategy memory strategy = BifrostAdapter.BifrostStrategy({
+            strategyType: BifrostAdapter.BifrostStrategyType.RedeemVToken,
+            currencyIdA: BifrostCodec.CURRENCY_VDOT,
+            currencyIdB: 0,
+            amount: 50 ether,
+            minOutput: 0,
+            poolId: 0,
+            beneficiary: beneficiary
+        });
 
         vm.prank(vault);
-        (uint256 strategyId, ) = adapter.executeBifrostStrategy(strategy);
+        (uint256 strategyId,) = adapter.executeBifrostStrategy(strategy);
 
         assertEq(strategyId, 0);
     }
 
     function test_executeDEXSwap() public {
-        BifrostAdapter.BifrostStrategy memory strategy = BifrostAdapter
-            .BifrostStrategy({
-                strategyType: BifrostAdapter.BifrostStrategyType.DEXSwap,
-                currencyIdA: BifrostCodec.CURRENCY_DOT,
-                currencyIdB: BifrostCodec.CURRENCY_BNC,
-                amount: 10 ether,
-                minOutput: 9 ether,
-                poolId: 0,
-                beneficiary: beneficiary
-            });
+        BifrostAdapter.BifrostStrategy memory strategy = BifrostAdapter.BifrostStrategy({
+            strategyType: BifrostAdapter.BifrostStrategyType.DEXSwap,
+            currencyIdA: BifrostCodec.CURRENCY_DOT,
+            currencyIdB: BifrostCodec.CURRENCY_BNC,
+            amount: 10 ether,
+            minOutput: 9 ether,
+            poolId: 0,
+            beneficiary: beneficiary
+        });
 
         vm.prank(vault);
-        (uint256 strategyId, ) = adapter.executeBifrostStrategy(strategy);
+        (uint256 strategyId,) = adapter.executeBifrostStrategy(strategy);
 
         assertEq(strategyId, 0);
     }
 
     function test_executeFarmDeposit() public {
-        BifrostAdapter.BifrostStrategy memory strategy = BifrostAdapter
-            .BifrostStrategy({
-                strategyType: BifrostAdapter.BifrostStrategyType.FarmDeposit,
-                currencyIdA: 0,
-                currencyIdB: 0,
-                amount: 100 ether,
-                minOutput: 0,
-                poolId: 1,
-                beneficiary: beneficiary
-            });
+        BifrostAdapter.BifrostStrategy memory strategy = BifrostAdapter.BifrostStrategy({
+            strategyType: BifrostAdapter.BifrostStrategyType.FarmDeposit,
+            currencyIdA: 0,
+            currencyIdB: 0,
+            amount: 100 ether,
+            minOutput: 0,
+            poolId: 1,
+            beneficiary: beneficiary
+        });
 
         vm.prank(vault);
-        (uint256 strategyId, ) = adapter.executeBifrostStrategy(strategy);
+        (uint256 strategyId,) = adapter.executeBifrostStrategy(strategy);
 
         assertEq(strategyId, 0);
     }
 
     function test_executeFarmWithdraw() public {
-        BifrostAdapter.BifrostStrategy memory strategy = BifrostAdapter
-            .BifrostStrategy({
-                strategyType: BifrostAdapter.BifrostStrategyType.FarmWithdraw,
-                currencyIdA: 0,
-                currencyIdB: 0,
-                amount: 50 ether,
-                minOutput: 0,
-                poolId: 1,
-                beneficiary: beneficiary
-            });
+        BifrostAdapter.BifrostStrategy memory strategy = BifrostAdapter.BifrostStrategy({
+            strategyType: BifrostAdapter.BifrostStrategyType.FarmWithdraw,
+            currencyIdA: 0,
+            currencyIdB: 0,
+            amount: 50 ether,
+            minOutput: 0,
+            poolId: 1,
+            beneficiary: beneficiary
+        });
 
         vm.prank(vault);
-        (uint256 strategyId, ) = adapter.executeBifrostStrategy(strategy);
+        (uint256 strategyId,) = adapter.executeBifrostStrategy(strategy);
 
         assertEq(strategyId, 0);
     }
 
     function test_executeFarmClaim() public {
-        BifrostAdapter.BifrostStrategy memory strategy = BifrostAdapter
-            .BifrostStrategy({
-                strategyType: BifrostAdapter.BifrostStrategyType.FarmClaim,
-                currencyIdA: 0,
-                currencyIdB: 0,
-                amount: 0, // FarmClaim allows zero amount
-                minOutput: 0,
-                poolId: 1,
-                beneficiary: beneficiary
-            });
+        BifrostAdapter.BifrostStrategy memory strategy = BifrostAdapter.BifrostStrategy({
+            strategyType: BifrostAdapter.BifrostStrategyType.FarmClaim,
+            currencyIdA: 0,
+            currencyIdB: 0,
+            amount: 0, // FarmClaim allows zero amount
+            minOutput: 0,
+            poolId: 1,
+            beneficiary: beneficiary
+        });
 
         vm.prank(vault);
-        (uint256 strategyId, ) = adapter.executeBifrostStrategy(strategy);
+        (uint256 strategyId,) = adapter.executeBifrostStrategy(strategy);
 
         assertEq(strategyId, 0);
     }
 
     function test_executeSALPContribute() public {
-        BifrostAdapter.BifrostStrategy memory strategy = BifrostAdapter
-            .BifrostStrategy({
-                strategyType: BifrostAdapter.BifrostStrategyType.SALPContribute,
-                currencyIdA: 2030, // parachainId stored in currencyIdA
-                currencyIdB: 0,
-                amount: 500 ether,
-                minOutput: 0,
-                poolId: 0,
-                beneficiary: beneficiary
-            });
+        BifrostAdapter.BifrostStrategy memory strategy = BifrostAdapter.BifrostStrategy({
+            strategyType: BifrostAdapter.BifrostStrategyType.SALPContribute,
+            currencyIdA: 2030, // parachainId stored in currencyIdA
+            currencyIdB: 0,
+            amount: 500 ether,
+            minOutput: 0,
+            poolId: 0,
+            beneficiary: beneficiary
+        });
 
         vm.prank(vault);
-        (uint256 strategyId, ) = adapter.executeBifrostStrategy(strategy);
+        (uint256 strategyId,) = adapter.executeBifrostStrategy(strategy);
 
         assertEq(strategyId, 0);
     }
 
     function test_executeBifrostStrategy_sequentialIds() public {
-        BifrostAdapter.BifrostStrategy memory strategy = BifrostAdapter
-            .BifrostStrategy({
-                strategyType: BifrostAdapter.BifrostStrategyType.MintVToken,
-                currencyIdA: BifrostCodec.CURRENCY_DOT,
-                currencyIdB: 0,
-                amount: 10 ether,
-                minOutput: 0,
-                poolId: 0,
-                beneficiary: beneficiary
-            });
+        BifrostAdapter.BifrostStrategy memory strategy = BifrostAdapter.BifrostStrategy({
+            strategyType: BifrostAdapter.BifrostStrategyType.MintVToken,
+            currencyIdA: BifrostCodec.CURRENCY_DOT,
+            currencyIdB: 0,
+            amount: 10 ether,
+            minOutput: 0,
+            poolId: 0,
+            beneficiary: beneficiary
+        });
 
         vm.startPrank(vault);
-        (uint256 id1, ) = adapter.executeBifrostStrategy(strategy);
-        (uint256 id2, ) = adapter.executeBifrostStrategy(strategy);
-        (uint256 id3, ) = adapter.executeBifrostStrategy(strategy);
+        (uint256 id1,) = adapter.executeBifrostStrategy(strategy);
+        (uint256 id2,) = adapter.executeBifrostStrategy(strategy);
+        (uint256 id3,) = adapter.executeBifrostStrategy(strategy);
         vm.stopPrank();
 
         assertEq(id1, 0);
@@ -914,19 +798,18 @@ contract BifrostAdapter_Execution_Test is BifrostAdapter_Base_Test {
     }
 
     function test_executeBifrostStrategy_recordsStrategy() public {
-        BifrostAdapter.BifrostStrategy memory strategy = BifrostAdapter
-            .BifrostStrategy({
-                strategyType: BifrostAdapter.BifrostStrategyType.MintVToken,
-                currencyIdA: BifrostCodec.CURRENCY_DOT,
-                currencyIdB: 0,
-                amount: 100 ether,
-                minOutput: 0,
-                poolId: 0,
-                beneficiary: beneficiary
-            });
+        BifrostAdapter.BifrostStrategy memory strategy = BifrostAdapter.BifrostStrategy({
+            strategyType: BifrostAdapter.BifrostStrategyType.MintVToken,
+            currencyIdA: BifrostCodec.CURRENCY_DOT,
+            currencyIdB: 0,
+            amount: 100 ether,
+            minOutput: 0,
+            poolId: 0,
+            beneficiary: beneficiary
+        });
 
         vm.prank(vault);
-        (uint256 strategyId, ) = adapter.executeBifrostStrategy(strategy);
+        (uint256 strategyId,) = adapter.executeBifrostStrategy(strategy);
 
         (
             BifrostAdapter.BifrostStrategyType recordedType,
@@ -936,10 +819,7 @@ contract BifrostAdapter_Execution_Test is BifrostAdapter_Base_Test {
             bool dispatched
         ) = adapter.bifrostStrategies(strategyId);
 
-        assertEq(
-            uint8(recordedType),
-            uint8(BifrostAdapter.BifrostStrategyType.MintVToken)
-        );
+        assertEq(uint8(recordedType), uint8(BifrostAdapter.BifrostStrategyType.MintVToken));
         assertEq(recordedAmount, 100 ether);
         assertEq(executedAt, block.timestamp);
         assertTrue(xcmMessageHash != bytes32(0));
@@ -947,39 +827,34 @@ contract BifrostAdapter_Execution_Test is BifrostAdapter_Base_Test {
     }
 
     function test_executeBifrostStrategy_emitsEvent() public {
-        BifrostAdapter.BifrostStrategy memory strategy = BifrostAdapter
-            .BifrostStrategy({
-                strategyType: BifrostAdapter.BifrostStrategyType.MintVToken,
-                currencyIdA: BifrostCodec.CURRENCY_DOT,
-                currencyIdB: 0,
-                amount: 100 ether,
-                minOutput: 0,
-                poolId: 0,
-                beneficiary: beneficiary
-            });
+        BifrostAdapter.BifrostStrategy memory strategy = BifrostAdapter.BifrostStrategy({
+            strategyType: BifrostAdapter.BifrostStrategyType.MintVToken,
+            currencyIdA: BifrostCodec.CURRENCY_DOT,
+            currencyIdB: 0,
+            amount: 100 ether,
+            minOutput: 0,
+            poolId: 0,
+            beneficiary: beneficiary
+        });
 
         vm.prank(vault);
         vm.expectEmit();
         emit BifrostAdapter.BifrostStrategyDispatched(
-            0,
-            BifrostAdapter.BifrostStrategyType.MintVToken,
-            100 ether,
-            beneficiary
+            0, BifrostAdapter.BifrostStrategyType.MintVToken, 100 ether, beneficiary
         );
         adapter.executeBifrostStrategy(strategy);
     }
 
     function testRevert_executeBifrostStrategy_zeroAmount() public {
-        BifrostAdapter.BifrostStrategy memory strategy = BifrostAdapter
-            .BifrostStrategy({
-                strategyType: BifrostAdapter.BifrostStrategyType.MintVToken,
-                currencyIdA: BifrostCodec.CURRENCY_DOT,
-                currencyIdB: 0,
-                amount: 0,
-                minOutput: 0,
-                poolId: 0,
-                beneficiary: beneficiary
-            });
+        BifrostAdapter.BifrostStrategy memory strategy = BifrostAdapter.BifrostStrategy({
+            strategyType: BifrostAdapter.BifrostStrategyType.MintVToken,
+            currencyIdA: BifrostCodec.CURRENCY_DOT,
+            currencyIdB: 0,
+            amount: 0,
+            minOutput: 0,
+            poolId: 0,
+            beneficiary: beneficiary
+        });
 
         vm.prank(vault);
         vm.expectRevert(BifrostAdapter.ZeroStrategyAmount.selector);
@@ -987,16 +862,15 @@ contract BifrostAdapter_Execution_Test is BifrostAdapter_Base_Test {
     }
 
     function testRevert_executeBifrostStrategy_zeroBeneficiary() public {
-        BifrostAdapter.BifrostStrategy memory strategy = BifrostAdapter
-            .BifrostStrategy({
-                strategyType: BifrostAdapter.BifrostStrategyType.MintVToken,
-                currencyIdA: BifrostCodec.CURRENCY_DOT,
-                currencyIdB: 0,
-                amount: 100 ether,
-                minOutput: 0,
-                poolId: 0,
-                beneficiary: bytes32(0)
-            });
+        BifrostAdapter.BifrostStrategy memory strategy = BifrostAdapter.BifrostStrategy({
+            strategyType: BifrostAdapter.BifrostStrategyType.MintVToken,
+            currencyIdA: BifrostCodec.CURRENCY_DOT,
+            currencyIdB: 0,
+            amount: 100 ether,
+            minOutput: 0,
+            poolId: 0,
+            beneficiary: bytes32(0)
+        });
 
         vm.prank(vault);
         vm.expectRevert(BifrostAdapter.ZeroBeneficiary.selector);
@@ -1007,27 +881,22 @@ contract BifrostAdapter_Execution_Test is BifrostAdapter_Base_Test {
 contract BifrostAdapter_Preview_Test is BifrostAdapter_Base_Test {
     function test_previewStrategy_sameAsExecution() public {
         bytes32 bene = keccak256("alice");
-        BifrostAdapter.BifrostStrategy memory strategy = BifrostAdapter
-            .BifrostStrategy({
-                strategyType: BifrostAdapter.BifrostStrategyType.MintVToken,
-                currencyIdA: BifrostCodec.CURRENCY_DOT,
-                currencyIdB: 0,
-                amount: 100 ether,
-                minOutput: 0,
-                poolId: 0,
-                beneficiary: bene
-            });
+        BifrostAdapter.BifrostStrategy memory strategy = BifrostAdapter.BifrostStrategy({
+            strategyType: BifrostAdapter.BifrostStrategyType.MintVToken,
+            currencyIdA: BifrostCodec.CURRENCY_DOT,
+            currencyIdB: 0,
+            amount: 100 ether,
+            minOutput: 0,
+            poolId: 0,
+            beneficiary: bene
+        });
 
         bytes memory preview = adapter.previewStrategy(strategy);
 
         vm.prank(vault);
         (, bytes memory actual) = adapter.executeBifrostStrategy(strategy);
 
-        assertEq(
-            keccak256(preview),
-            keccak256(actual),
-            "Preview and execution should produce same XCM"
-        );
+        assertEq(keccak256(preview), keccak256(actual), "Preview and execution should produce same XCM");
     }
 
     function test_getBifrostDestination_nonEmpty() public view {
@@ -1096,8 +965,8 @@ contract ObidotVaultEVM_Base_Test is Test {
             body: body
         });
 
-        IIsmpModule.IncomingPostRequest memory incoming = IIsmpModule
-            .IncomingPostRequest({request: request, relayer: address(0)});
+        IIsmpModule.IncomingPostRequest memory incoming =
+            IIsmpModule.IncomingPostRequest({request: request, relayer: address(0)});
 
         vm.prank(address(ismpHost));
         satellite.onAccept(incoming);
@@ -1147,14 +1016,7 @@ contract ObidotVaultEVM_Constructor_Test is ObidotVaultEVM_Base_Test {
     function testRevert_constructor_zeroCap() public {
         vm.expectRevert(ObidotVaultEVM.InvalidCap.selector);
         new ObidotVaultEVM(
-            IERC20(address(token)),
-            address(ismpHost),
-            HUB_CHAIN_ID,
-            hubRouterModule,
-            CHAIN_ID,
-            0,
-            MAX_SYNC_AGE,
-            admin
+            IERC20(address(token)), address(ismpHost), HUB_CHAIN_ID, hubRouterModule, CHAIN_ID, 0, MAX_SYNC_AGE, admin
         );
     }
 }
@@ -1296,13 +1158,12 @@ contract ObidotVaultEVM_Withdraw_Test is ObidotVaultEVM_Base_Test {
 
 contract ObidotVaultEVM_ISMPCallbacks_Test is ObidotVaultEVM_Base_Test {
     function test_handleAssetSync_updatesGlobalState() public {
-        CrossChainCodec.AssetSyncMessage memory syncMsg = CrossChainCodec
-            .AssetSyncMessage({
-                globalTotalAssets: 10_000_000 ether,
-                globalTotalShares: 9_500_000 ether,
-                totalRemoteAssets: 5_000_000 ether,
-                timestamp: block.timestamp
-            });
+        CrossChainCodec.AssetSyncMessage memory syncMsg = CrossChainCodec.AssetSyncMessage({
+            globalTotalAssets: 10_000_000 ether,
+            globalTotalShares: 9_500_000 ether,
+            totalRemoteAssets: 5_000_000 ether,
+            timestamp: block.timestamp
+        });
 
         _simulateHubMessage(CrossChainCodec.encodeAssetSync(syncMsg));
 
@@ -1313,32 +1174,26 @@ contract ObidotVaultEVM_ISMPCallbacks_Test is ObidotVaultEVM_Base_Test {
     }
 
     function test_handleAssetSync_emitsEvent() public {
-        CrossChainCodec.AssetSyncMessage memory syncMsg = CrossChainCodec
-            .AssetSyncMessage({
-                globalTotalAssets: 1_000 ether,
-                globalTotalShares: 1_000 ether,
-                totalRemoteAssets: 0,
-                timestamp: block.timestamp
-            });
+        CrossChainCodec.AssetSyncMessage memory syncMsg = CrossChainCodec.AssetSyncMessage({
+            globalTotalAssets: 1_000 ether,
+            globalTotalShares: 1_000 ether,
+            totalRemoteAssets: 0,
+            timestamp: block.timestamp
+        });
 
         vm.expectEmit();
-        emit ObidotVaultEVM.AssetSyncReceived(
-            1_000 ether,
-            1_000 ether,
-            block.timestamp
-        );
+        emit ObidotVaultEVM.AssetSyncReceived(1_000 ether, 1_000 ether, block.timestamp);
         _simulateHubMessage(CrossChainCodec.encodeAssetSync(syncMsg));
     }
 
     function test_handleStrategyReport_updatesRemoteAssets() public {
-        CrossChainCodec.StrategyReportMessage memory reportMsg = CrossChainCodec
-            .StrategyReportMessage({
-                strategyId: 1,
-                success: true,
-                returnedAmount: 105 ether,
-                pnl: 5 ether,
-                newTotalRemoteAssets: 4_500 ether
-            });
+        CrossChainCodec.StrategyReportMessage memory reportMsg = CrossChainCodec.StrategyReportMessage({
+            strategyId: 1,
+            success: true,
+            returnedAmount: 105 ether,
+            pnl: 5 ether,
+            newTotalRemoteAssets: 4_500 ether
+        });
 
         _simulateHubMessage(CrossChainCodec.encodeStrategyReport(reportMsg));
 
@@ -1346,14 +1201,13 @@ contract ObidotVaultEVM_ISMPCallbacks_Test is ObidotVaultEVM_Base_Test {
     }
 
     function test_handleStrategyReport_emitsEvent() public {
-        CrossChainCodec.StrategyReportMessage memory reportMsg = CrossChainCodec
-            .StrategyReportMessage({
-                strategyId: 42,
-                success: false,
-                returnedAmount: 90 ether,
-                pnl: -10 ether,
-                newTotalRemoteAssets: 4_910 ether
-            });
+        CrossChainCodec.StrategyReportMessage memory reportMsg = CrossChainCodec.StrategyReportMessage({
+            strategyId: 42,
+            success: false,
+            returnedAmount: 90 ether,
+            pnl: -10 ether,
+            newTotalRemoteAssets: 4_910 ether
+        });
 
         vm.expectEmit();
         emit ObidotVaultEVM.StrategyReportReceived(42, false, -10 ether);
@@ -1361,12 +1215,8 @@ contract ObidotVaultEVM_ISMPCallbacks_Test is ObidotVaultEVM_Base_Test {
     }
 
     function test_handleEmergencySync_pausesVault() public {
-        CrossChainCodec.EmergencySyncMessage
-            memory emergencyMsg = CrossChainCodec.EmergencySyncMessage({
-                paused: true,
-                emergencyMode: true,
-                reason: bytes("circuit breaker")
-            });
+        CrossChainCodec.EmergencySyncMessage memory emergencyMsg =
+            CrossChainCodec.EmergencySyncMessage({paused: true, emergencyMode: true, reason: bytes("circuit breaker")});
 
         _simulateHubMessage(CrossChainCodec.encodeEmergencySync(emergencyMsg));
 
@@ -1376,22 +1226,14 @@ contract ObidotVaultEVM_ISMPCallbacks_Test is ObidotVaultEVM_Base_Test {
 
     function test_handleEmergencySync_unpausesVault() public {
         // First pause
-        CrossChainCodec.EmergencySyncMessage memory pauseMsg = CrossChainCodec
-            .EmergencySyncMessage({
-                paused: true,
-                emergencyMode: false,
-                reason: bytes("pause")
-            });
+        CrossChainCodec.EmergencySyncMessage memory pauseMsg =
+            CrossChainCodec.EmergencySyncMessage({paused: true, emergencyMode: false, reason: bytes("pause")});
         _simulateHubMessage(CrossChainCodec.encodeEmergencySync(pauseMsg));
         assertTrue(satellite.paused());
 
         // Then unpause
-        CrossChainCodec.EmergencySyncMessage memory unpauseMsg = CrossChainCodec
-            .EmergencySyncMessage({
-                paused: false,
-                emergencyMode: false,
-                reason: bytes("resume")
-            });
+        CrossChainCodec.EmergencySyncMessage memory unpauseMsg =
+            CrossChainCodec.EmergencySyncMessage({paused: false, emergencyMode: false, reason: bytes("resume")});
         _simulateHubMessage(CrossChainCodec.encodeEmergencySync(unpauseMsg));
         assertFalse(satellite.paused());
     }
@@ -1401,12 +1243,8 @@ contract ObidotVaultEVM_ISMPCallbacks_Test is ObidotVaultEVM_Base_Test {
         vm.prank(alice);
         satellite.deposit(100 ether, alice);
 
-        CrossChainCodec.DepositAckMessage memory ackMsg = CrossChainCodec
-            .DepositAckMessage({
-                depositNonce: 0,
-                globalTotalAssets: 10_000_100 ether,
-                accepted: true
-            });
+        CrossChainCodec.DepositAckMessage memory ackMsg =
+            CrossChainCodec.DepositAckMessage({depositNonce: 0, globalTotalAssets: 10_000_100 ether, accepted: true});
 
         _simulateHubMessage(CrossChainCodec.encodeDepositAck(ackMsg));
 
@@ -1417,12 +1255,8 @@ contract ObidotVaultEVM_ISMPCallbacks_Test is ObidotVaultEVM_Base_Test {
     function test_handleWithdrawFulfill_updatesPending() public {
         // Simulate pending withdrawal state
         // We can't easily trigger _requestWithdrawFromHub directly, so test the handler
-        CrossChainCodec.WithdrawFulfillMessage
-            memory fulfillMsg = CrossChainCodec.WithdrawFulfillMessage({
-                withdrawNonce: 0,
-                amount: 50 ether,
-                fullyFulfilled: true
-            });
+        CrossChainCodec.WithdrawFulfillMessage memory fulfillMsg =
+            CrossChainCodec.WithdrawFulfillMessage({withdrawNonce: 0, amount: 50 ether, fullyFulfilled: true});
 
         _simulateHubMessage(CrossChainCodec.encodeWithdrawFulfill(fulfillMsg));
 
@@ -1449,19 +1283,8 @@ contract ObidotVaultEVM_ISMPCallbacks_Test is ObidotVaultEVM_Base_Test {
         });
 
         vm.prank(alice); // unauthorized
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                ObidotVaultEVM.UnauthorizedHost.selector,
-                alice,
-                address(ismpHost)
-            )
-        );
-        satellite.onAccept(
-            IIsmpModule.IncomingPostRequest({
-                request: request,
-                relayer: address(0)
-            })
-        );
+        vm.expectRevert(abi.encodeWithSelector(ObidotVaultEVM.UnauthorizedHost.selector, alice, address(ismpHost)));
+        satellite.onAccept(IIsmpModule.IncomingPostRequest({request: request, relayer: address(0)}));
     }
 
     function testRevert_onAccept_unauthorizedSource() public {
@@ -1485,18 +1308,8 @@ contract ObidotVaultEVM_ISMPCallbacks_Test is ObidotVaultEVM_Base_Test {
         });
 
         vm.prank(address(ismpHost));
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                ObidotVaultEVM.UnauthorizedSource.selector,
-                wrongSource
-            )
-        );
-        satellite.onAccept(
-            IIsmpModule.IncomingPostRequest({
-                request: request,
-                relayer: address(0)
-            })
-        );
+        vm.expectRevert(abi.encodeWithSelector(ObidotVaultEVM.UnauthorizedSource.selector, wrongSource));
+        satellite.onAccept(IIsmpModule.IncomingPostRequest({request: request, relayer: address(0)}));
     }
 
     function testRevert_onAccept_unauthorizedSender() public {
@@ -1520,25 +1333,12 @@ contract ObidotVaultEVM_ISMPCallbacks_Test is ObidotVaultEVM_Base_Test {
         });
 
         vm.prank(address(ismpHost));
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                ObidotVaultEVM.UnauthorizedSender.selector,
-                wrongModule
-            )
-        );
-        satellite.onAccept(
-            IIsmpModule.IncomingPostRequest({
-                request: request,
-                relayer: address(0)
-            })
-        );
+        vm.expectRevert(abi.encodeWithSelector(ObidotVaultEVM.UnauthorizedSender.selector, wrongModule));
+        satellite.onAccept(IIsmpModule.IncomingPostRequest({request: request, relayer: address(0)}));
     }
 
     function testRevert_onAccept_unknownMessageType() public {
-        bytes memory body = abi.encodePacked(
-            uint8(0xFF),
-            abi.encode(uint256(1))
-        );
+        bytes memory body = abi.encodePacked(uint8(0xFF), abi.encode(uint256(1)));
 
         IIsmpModule.PostRequest memory request = IIsmpModule.PostRequest({
             source: HUB_CHAIN_ID,
@@ -1551,18 +1351,8 @@ contract ObidotVaultEVM_ISMPCallbacks_Test is ObidotVaultEVM_Base_Test {
         });
 
         vm.prank(address(ismpHost));
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                ObidotVaultEVM.UnknownMessageType.selector,
-                uint8(0xFF)
-            )
-        );
-        satellite.onAccept(
-            IIsmpModule.IncomingPostRequest({
-                request: request,
-                relayer: address(0)
-            })
-        );
+        vm.expectRevert(abi.encodeWithSelector(ObidotVaultEVM.UnknownMessageType.selector, uint8(0xFF)));
+        satellite.onAccept(IIsmpModule.IncomingPostRequest({request: request, relayer: address(0)}));
     }
 }
 
@@ -1647,26 +1437,24 @@ contract ObidotVaultEVM_Views_Test is ObidotVaultEVM_Base_Test {
     }
 
     function test_isSyncFresh_true_afterSync() public {
-        CrossChainCodec.AssetSyncMessage memory syncMsg = CrossChainCodec
-            .AssetSyncMessage({
-                globalTotalAssets: 1_000 ether,
-                globalTotalShares: 1_000 ether,
-                totalRemoteAssets: 0,
-                timestamp: block.timestamp
-            });
+        CrossChainCodec.AssetSyncMessage memory syncMsg = CrossChainCodec.AssetSyncMessage({
+            globalTotalAssets: 1_000 ether,
+            globalTotalShares: 1_000 ether,
+            totalRemoteAssets: 0,
+            timestamp: block.timestamp
+        });
         _simulateHubMessage(CrossChainCodec.encodeAssetSync(syncMsg));
 
         assertTrue(satellite.isSyncFresh());
     }
 
     function test_isSyncFresh_false_stale() public {
-        CrossChainCodec.AssetSyncMessage memory syncMsg = CrossChainCodec
-            .AssetSyncMessage({
-                globalTotalAssets: 1_000 ether,
-                globalTotalShares: 1_000 ether,
-                totalRemoteAssets: 0,
-                timestamp: block.timestamp
-            });
+        CrossChainCodec.AssetSyncMessage memory syncMsg = CrossChainCodec.AssetSyncMessage({
+            globalTotalAssets: 1_000 ether,
+            globalTotalShares: 1_000 ether,
+            totalRemoteAssets: 0,
+            timestamp: block.timestamp
+        });
         _simulateHubMessage(CrossChainCodec.encodeAssetSync(syncMsg));
 
         // Warp past max sync age
@@ -1695,28 +1483,25 @@ contract ObidotVaultEVM_Views_Test is ObidotVaultEVM_Base_Test {
     function test_receiveEther() public {
         vm.deal(alice, 1 ether);
         vm.prank(alice);
-        (bool ok, ) = address(satellite).call{value: 1 ether}("");
+        (bool ok,) = address(satellite).call{value: 1 ether}("");
         assertTrue(ok);
     }
 
     function test_supportsInterface() public view {
-        assertTrue(
-            satellite.supportsInterface(type(IAccessControl).interfaceId)
-        );
+        assertTrue(satellite.supportsInterface(type(IAccessControl).interfaceId));
     }
 }
 
 contract ObidotVaultEVM_Timeout_Test is ObidotVaultEVM_Base_Test {
     function test_onPostRequestTimeout_withdrawCancels() public {
         // Build a withdrawal request body
-        CrossChainCodec.WithdrawRequestMessage
-            memory withdrawMsg = CrossChainCodec.WithdrawRequestMessage({
-                chainId: CHAIN_ID,
-                withdrawer: alice,
-                amount: 50 ether,
-                sharesToBurn: 48 ether,
-                nonce: 0
-            });
+        CrossChainCodec.WithdrawRequestMessage memory withdrawMsg = CrossChainCodec.WithdrawRequestMessage({
+            chainId: CHAIN_ID,
+            withdrawer: alice,
+            amount: 50 ether,
+            sharesToBurn: 48 ether,
+            nonce: 0
+        });
 
         bytes memory body = CrossChainCodec.encodeWithdrawRequest(withdrawMsg);
 
@@ -1773,25 +1558,16 @@ contract CrossChain_Fuzz_Test is ObidotVaultEVM_Base_Test {
         uint256 shares = satellite.deposit(amount, alice);
 
         assertTrue(shares > 0, "Should mint nonzero shares");
-        assertEq(
-            ismpHost.dispatchCount(),
-            1,
-            "Should dispatch exactly one sync"
-        );
+        assertEq(ismpHost.dispatchCount(), 1, "Should dispatch exactly one sync");
     }
 
-    function testFuzz_assetSync_updatesState(
-        uint256 globalAssets,
-        uint256 globalShares,
-        uint256 remoteAssets
-    ) public {
-        CrossChainCodec.AssetSyncMessage memory syncMsg = CrossChainCodec
-            .AssetSyncMessage({
-                globalTotalAssets: globalAssets,
-                globalTotalShares: globalShares,
-                totalRemoteAssets: remoteAssets,
-                timestamp: block.timestamp
-            });
+    function testFuzz_assetSync_updatesState(uint256 globalAssets, uint256 globalShares, uint256 remoteAssets) public {
+        CrossChainCodec.AssetSyncMessage memory syncMsg = CrossChainCodec.AssetSyncMessage({
+            globalTotalAssets: globalAssets,
+            globalTotalShares: globalShares,
+            totalRemoteAssets: remoteAssets,
+            timestamp: block.timestamp
+        });
 
         _simulateHubMessage(CrossChainCodec.encodeAssetSync(syncMsg));
 
