@@ -1,0 +1,24 @@
+{
+  "network": "Polkadot Hub Testnet (Paseo)",
+  "chainId": 420420417,
+  "rpc": "https://services.polkadothub-rpc.com/testnet",
+  "deployer": "0x5984A519fFfE5aFc5e8bBA233DCc01AC774f4301",
+  "deployedAt": "2026-02-27",
+  "contracts": {
+    "TestDOT": "0x2402C804aD8a6217BF73D8483dA7564065c56083",
+    "KeeperOracle": "0xf64d93DC125AC1B366532BBbA165615f6D566C7F",
+    "OracleRegistry": "0x8b7C7345d6cF9de45f4aacC61F56F0241d47e88B",
+    "ObidotVault": "0x37D7959f5f97D37799E0d04b7684c41CB2Ff878d",
+    "CrossChainRouter": "0xE65D7B65a1972A82bCF65f6711a43355Faa3f490",
+    "BifrostAdapter": "0x265Cb785De0fF2e5BcebDEb53095aDCAE9175527"
+  },
+  "configuration": {
+    "ismpHost": "0xbb26e04A71e7c12093e82b83BA310163Eac186fa",
+    "oracleInitialPrice": "700000000 (DOT/USD = $7.00, 8 decimals)",
+    "depositCap": "1000000 tDOT (1e24 wei)",
+    "maxDailyLoss": "50000 tDOT (5e22 wei)",
+    "mintedToDeployer": "100000 tDOT (1e23 wei)",
+    "bifrostParachainId": 2030,
+    "bifrostWhitelisted": true
+  }
+}
