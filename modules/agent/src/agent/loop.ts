@@ -116,6 +116,29 @@ export class AutonomousLoop {
   // ─────────────────────────────────────────────────────────────────────
 
   /**
+   * Returns the combined tool set (ObiKit built-ins + custom Obidot tools).
+   * Used by the Telegram bot and API server to share the same tools.
+   */
+  getTools(): StructuredToolInterface[] {
+    return this.tools;
+  }
+
+  /**
+   * Returns the service instances for use by the API server.
+   */
+  getServices(): {
+    signerService: SignerService;
+    yieldService: YieldService;
+    crossChainService: CrossChainService;
+  } {
+    return {
+      signerService: this.signerService,
+      yieldService: this.yieldService,
+      crossChainService: this.crossChainService,
+    };
+  }
+
+  /**
    * Start the autonomous decision loop.
    * Runs indefinitely until `stop()` is called.
    */

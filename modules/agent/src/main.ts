@@ -1,5 +1,8 @@
+import { env } from "./config/env.js";
 import { logger } from "./utils/logger.js";
 import { AutonomousLoop } from "./agent/loop.js";
+import { startTelegramBot } from "./telegram/bot.js";
+import { startApiServer } from "./api/server.js";
 
 // ─────────────────────────────────────────────────────────────────────────────
 //  Main Entrypoint — Obidot Autonomous CFO
@@ -9,10 +12,12 @@ import { AutonomousLoop } from "./agent/loop.js";
  * Bootstrap and run the Obidot AI agent.
  *
  * Lifecycle:
- *   1. Import `env.ts` (validates environment variables via Zod — fails fast)
- *   2. Initialize the AutonomousLoop (SignerService, YieldService, ObiKit, LLM)
- *   3. Register graceful shutdown handlers (SIGINT, SIGTERM)
- *   4. Start the infinite perception → reasoning → execution loop
+ *   1. Validate environment variables (Zod — fails fast)
+ *   2. Initialize AutonomousLoop (SignerService, YieldService, ObiKit, LLM)
+ *   3. Start the API server (Fastify HTTP + WebSocket)
+ *   4. Optionally start the Telegram bot (when TELEGRAM_BOT_TOKEN is set)
+ *   5. Register graceful shutdown handlers (SIGINT, SIGTERM)
+ *   6. Start the infinite perception → reasoning → execution loop
  */
 async function main(): Promise<void> {
   logger.info("════════════════════════════════════════════════════════════");
@@ -20,6 +25,33 @@ async function main(): Promise<void> {
   logger.info("════════════════════════════════════════════════════════════");
 
   const loop = new AutonomousLoop();
+  const tools = loop.getTools();
+  const services = loop.getServices();
+
+  // ── API Server ─────────────────────────────────────────────────────────
+  try {
+    await startApiServer({
+      signerService: services.signerService,
+      yieldService: services.yieldService,
+      crossChainService: services.crossChainService,
+      tools,
+    });
+  } catch (error) {
+    logger.error({ err: error }, "Failed to start API server — continuing without it");
+  }
+
+  // ── Telegram Bot (optional) ────────────────────────────────────────────
+  if (env.TELEGRAM_BOT_TOKEN) {
+    logger.info("Telegram bot token detected — starting bot...");
+    try {
+      await startTelegramBot(tools);
+      logger.info("Telegram bot started successfully");
+    } catch (error) {
+      logger.error({ err: error }, "Failed to start Telegram bot — continuing without it");
+    }
+  } else {
+    logger.info("No TELEGRAM_BOT_TOKEN — Telegram bot disabled");
+  }
 
   // ── Graceful Shutdown ──────────────────────────────────────────────────
   const shutdown = () => {

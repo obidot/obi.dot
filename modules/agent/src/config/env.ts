@@ -156,6 +156,11 @@ const envSchema = z.object({
     .string()
     .regex(/^0x[0-9a-fA-F]{40}$/)
     .optional(),
+
+  // ── Telegram Configuration (optional) ──────────────────────────────────
+
+  /** Telegram bot token from @BotFather. When set, enables the Telegram bot. */
+  TELEGRAM_BOT_TOKEN: z.string().min(1).optional(),
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
