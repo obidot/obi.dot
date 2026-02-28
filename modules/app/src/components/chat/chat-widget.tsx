@@ -70,26 +70,26 @@ export function ChatWidget() {
     <>
       {/* Chat window */}
       {open && (
-        <div className="fixed bottom-20 right-6 z-50 flex h-[500px] w-[380px] flex-col overflow-hidden rounded-xl border border-border bg-surface shadow-2xl">
+        <div className="fixed bottom-20 right-6 z-50 flex h-[500px] w-[380px] flex-col overflow-hidden rounded-lg border border-border bg-surface shadow-2xl">
           {/* Header */}
           <div className="flex items-center justify-between border-b border-border px-4 py-3">
-            <div className="flex items-center gap-2">
-              <div className="rounded-lg bg-primary/10 p-1.5">
-                <Bot className="h-4 w-4 text-primary" />
+            <div className="flex items-center gap-2.5">
+              <div className="flex h-7 w-7 items-center justify-center rounded-md bg-primary/10">
+                <Bot className="h-3.5 w-3.5 text-primary" />
               </div>
               <div>
-                <p className="text-sm font-semibold text-text-primary">
+                <p className="text-xs font-semibold text-text-primary">
                   Obidot AI
                 </p>
-                <p className="text-[10px] text-text-muted">
-                  Powered by GPT-4o
+                <p className="font-mono text-[9px] text-text-muted">
+                  GPT-4o
                 </p>
               </div>
             </div>
             <button
               type="button"
               onClick={() => setOpen(false)}
-              className="rounded-lg p-1 text-text-muted hover:bg-surface-hover hover:text-text-secondary"
+              className="rounded-md p-1 text-text-muted transition-colors hover:bg-surface-hover hover:text-text-secondary"
             >
               <X className="h-4 w-4" />
             </button>
@@ -100,8 +100,8 @@ export function ChatWidget() {
             {messages.length === 0 && (
               <div className="flex h-full items-center justify-center">
                 <div className="text-center">
-                  <Bot className="mx-auto h-8 w-8 text-text-muted" />
-                  <p className="mt-2 text-sm text-text-muted">
+                  <Bot className="mx-auto h-6 w-6 text-text-muted" />
+                  <p className="mt-2 font-mono text-xs text-text-muted">
                     Ask about vault state, yields, or strategies
                   </p>
                 </div>
@@ -116,16 +116,16 @@ export function ChatWidget() {
                 )}
               >
                 {msg.role === "assistant" && (
-                  <div className="shrink-0 rounded-full bg-primary/10 p-1.5 self-end">
+                  <div className="flex h-5 w-5 shrink-0 items-center justify-center self-end rounded bg-primary/10">
                     <Bot className="h-3 w-3 text-primary" />
                   </div>
                 )}
                 <div
                   className={cn(
-                    "max-w-[80%] rounded-xl px-3 py-2 text-sm",
+                    "max-w-[80%] rounded-md px-3 py-2 font-mono text-xs",
                     msg.role === "user"
-                      ? "bg-secondary/20 text-text-primary"
-                      : "bg-surface-hover text-text-primary",
+                      ? "bg-secondary/15 text-text-primary"
+                      : "border border-border-subtle bg-background text-text-primary",
                   )}
                 >
                   <p className="whitespace-pre-wrap leading-relaxed">
@@ -133,7 +133,7 @@ export function ChatWidget() {
                   </p>
                 </div>
                 {msg.role === "user" && (
-                  <div className="shrink-0 rounded-full bg-secondary/10 p-1.5 self-end">
+                  <div className="flex h-5 w-5 shrink-0 items-center justify-center self-end rounded bg-secondary/10">
                     <User className="h-3 w-3 text-secondary" />
                   </div>
                 )}
@@ -141,11 +141,11 @@ export function ChatWidget() {
             ))}
             {loading && (
               <div className="flex items-center gap-2">
-                <div className="shrink-0 rounded-full bg-primary/10 p-1.5">
+                <div className="flex h-5 w-5 shrink-0 items-center justify-center rounded bg-primary/10">
                   <Bot className="h-3 w-3 text-primary" />
                 </div>
-                <div className="rounded-xl bg-surface-hover px-3 py-2">
-                  <Loader2 className="h-4 w-4 animate-spin text-text-muted" />
+                <div className="rounded-md border border-border-subtle bg-background px-3 py-2">
+                  <Loader2 className="h-3.5 w-3.5 animate-spin text-text-muted" />
                 </div>
               </div>
             )}
@@ -154,7 +154,7 @@ export function ChatWidget() {
 
           {/* Input */}
           <div className="border-t border-border p-3">
-            <div className="flex items-center gap-2 rounded-lg border border-border bg-background px-3 py-2 focus-within:border-primary/50">
+            <div className="flex items-center gap-2">
               <input
                 ref={inputRef}
                 type="text"
@@ -162,16 +162,16 @@ export function ChatWidget() {
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && handleSend()}
                 placeholder="Ask about vault, yields, strategies..."
-                className="flex-1 bg-transparent text-sm text-text-primary outline-none placeholder:text-text-muted"
+                className="input-trading flex-1 py-2 text-xs"
                 disabled={loading}
               />
               <button
                 type="button"
                 onClick={handleSend}
                 disabled={!input.trim() || loading}
-                className="rounded-md p-1 text-primary transition-colors hover:bg-primary/10 disabled:text-text-muted"
+                className="flex h-8 w-8 items-center justify-center rounded-md bg-primary text-background transition-colors hover:bg-primary/90 disabled:bg-surface-hover disabled:text-text-muted"
               >
-                <Send className="h-4 w-4" />
+                <Send className="h-3.5 w-3.5" />
               </button>
             </div>
           </div>
@@ -183,16 +183,16 @@ export function ChatWidget() {
         type="button"
         onClick={() => setOpen(!open)}
         className={cn(
-          "fixed bottom-6 right-6 z-50 rounded-full p-3.5 shadow-lg transition-all duration-200",
+          "fixed bottom-6 right-6 z-50 flex h-11 w-11 items-center justify-center rounded-full shadow-lg transition-all duration-200",
           open
-            ? "bg-surface-hover text-text-muted"
-            : "bg-primary text-background hover:shadow-[0_0_25px_rgba(0,255,136,0.3)]",
+            ? "bg-surface-hover text-text-muted border border-border"
+            : "bg-primary text-background glow-green",
         )}
       >
         {open ? (
-          <X className="h-5 w-5" />
+          <X className="h-4 w-4" />
         ) : (
-          <MessageSquare className="h-5 w-5" />
+          <MessageSquare className="h-4 w-4" />
         )}
       </button>
     </>

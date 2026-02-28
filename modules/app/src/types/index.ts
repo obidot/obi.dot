@@ -30,13 +30,15 @@ export interface ProtocolYield {
   fetchedAt: string;
 }
 
-/** Bifrost-specific yield */
-export interface BifrostYield extends ProtocolYield {
+/** Bifrost-specific yield (subset serialized by agent) */
+export interface BifrostYield {
+  name: string;
+  protocol: string;
   category: "SLP" | "DEX" | "Farming" | "SALP";
-  currencyIn: number;
-  currencyOut?: number;
-  poolId?: number;
+  apyPercent: number;
+  tvlUsd: number;
   isActive: boolean;
+  fetchedAt: string;
 }
 
 /** Satellite chain state */
@@ -50,31 +52,42 @@ export interface SatelliteChainState {
 
 /** Cross-chain vault state */
 export interface CrossChainVaultState {
-  totalSatelliteAssets: string;
-  globalTotalAssets: string;
-  satelliteAssets: SatelliteChainState[];
+  hasSatellites: boolean;
+  totalSatelliteAssets?: string;
+  globalTotalAssets?: string;
+  /** Keyed as `satellites` in the API response */
+  satellites: SatelliteChainState[];
+  hub?: { chain: string };
 }
 
-/** Strategy execution record */
+/** Strategy execution record (matches agent strategy-store shape) */
 export interface StrategyRecord {
   id: string;
   action: string;
-  targetProtocol: string;
-  targetParachain: number;
+  /** Protocol address or name */
+  target: string;
   amount: string;
   reasoning: string;
-  status: "pending" | "executed" | "failed";
-  timestamp: string;
+  status: "pending" | "executed" | "failed" | "timeout";
+  /** Unix ms timestamp */
+  timestamp: number;
+  outcomeTimestamp?: number;
   txHash?: string;
 }
 
-/** Agent decision log entry */
+/** Agent decision log entry (matches agent strategy-store AgentDecisionRecord) */
 export interface AgentDecision {
-  id: string;
+  cycle: number;
   action: string;
   reasoning: string;
-  timestamp: string;
-  cycleNumber: number;
+  /** Unix ms timestamp */
+  timestamp: number;
+  snapshot?: {
+    totalAssets: string;
+    idleBalance: string;
+    topYieldApy: string;
+    topYieldProtocol: string;
+  };
 }
 
 /** Chat message */

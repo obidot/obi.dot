@@ -21,4 +21,4 @@ export const API_BASE = "/api";
 
 /** WebSocket URL for real-time events */
 export const WS_URL =
-  process.env.NEXT_PUBLIC_WS_URL ?? "ws://localhost:3100/ws";
+  process.env.NEXT_PUBLIC_WS_URL ?? "ws://localhost:3001/ws";

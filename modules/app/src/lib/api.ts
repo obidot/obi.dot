@@ -12,6 +12,13 @@ import type {
 
 // ── Generic Fetch Wrapper ─────────────────────────────────────────────────
 
+/** All agent API routes return { success: boolean; data?: T; error?: string } */
+interface ApiEnvelope<T> {
+  success: boolean;
+  data?: T;
+  error?: string;
+}
+
 async function fetchJson<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`${API_BASE}${path}`, {
     ...init,
@@ -23,7 +30,11 @@ async function fetchJson<T>(path: string, init?: RequestInit): Promise<T> {
   if (!res.ok) {
     throw new Error(`API error ${res.status}: ${res.statusText}`);
   }
-  return res.json() as Promise<T>;
+  const envelope = (await res.json()) as ApiEnvelope<T>;
+  if (!envelope.success) {
+    throw new Error(envelope.error ?? "Unknown API error");
+  }
+  return envelope.data as T;
 }
 
 // ── Vault ─────────────────────────────────────────────────────────────────
@@ -64,11 +75,15 @@ export async function getAgentLog(): Promise<AgentDecision[]> {
   return fetchJson<AgentDecision[]>("/agent/log");
 }
 
-export async function sendChatMessage(
-  message: string,
-): Promise<ChatMessage> {
-  return fetchJson<ChatMessage>("/chat", {
+export async function sendChatMessage(message: string): Promise<ChatMessage> {
+  const data = await fetchJson<{ response: string }>("/chat", {
     method: "POST",
     body: JSON.stringify({ message }),
   });
+  return {
+    id: crypto.randomUUID(),
+    role: "assistant",
+    content: data.response,
+    timestamp: new Date().toISOString(),
+  };
 }

@@ -1,111 +1,149 @@
 "use client";
 
+import { useEffect, useRef } from "react";
 import type { StrategyRecord } from "@/types";
 import { formatUsd, truncateAddress, formatTimestamp, cn } from "@/lib/format";
-import { X, Copy, ExternalLink, CheckCircle2, Clock, XCircle } from "lucide-react";
-
-const STATUS_CONFIG = {
-  executed: { label: "Executed", icon: CheckCircle2, className: "bg-primary/10 text-primary" },
-  pending: { label: "Pending", icon: Clock, className: "bg-warning/10 text-warning" },
-  failed: { label: "Failed", icon: XCircle, className: "bg-danger/10 text-danger" },
-} as const;
+import { STATUS_CONFIG } from "@/lib/strategy-config";
+import { X, Copy, ExternalLink } from "lucide-react";
 
 interface StrategyDetailProps {
   strategy: StrategyRecord;
   onClose: () => void;
 }
 
+const TITLE_ID = "strategy-detail-title";
+
 export function StrategyDetail({ strategy, onClose }: StrategyDetailProps) {
+  const panelRef = useRef<HTMLDivElement>(null);
   const status = STATUS_CONFIG[strategy.status];
   const StatusIcon = status.icon;
+
+  // Focus trap: on mount focus the panel; on Escape close
+  useEffect(() => {
+    const panel = panelRef.current;
+    if (!panel) return;
+
+    // Focus first focusable element inside the panel
+    const focusable = panel.querySelectorAll<HTMLElement>(
+      'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])',
+    );
+    const first = focusable[0];
+    first?.focus();
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        onClose();
+        return;
+      }
+      // Trap focus within the panel
+      if (e.key === "Tab") {
+        if (focusable.length === 0) { e.preventDefault(); return; }
+        const last = focusable[focusable.length - 1];
+        if (e.shiftKey) {
+          if (document.activeElement === first) {
+            e.preventDefault();
+            last.focus();
+          }
+        } else {
+          if (document.activeElement === last) {
+            e.preventDefault();
+            first.focus();
+          }
+        }
+      }
+    };
+
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [onClose]);
 
   return (
     <>
       {/* Backdrop */}
       <div
-        className="fixed inset-0 z-40 bg-black/50 backdrop-blur-sm"
+        className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm"
         onClick={onClose}
-        onKeyDown={(e) => e.key === "Escape" && onClose()}
-        role="button"
-        tabIndex={0}
-        aria-label="Close detail panel"
+        aria-hidden="true"
       />
 
       {/* Panel */}
-      <div className="fixed right-0 top-0 z-50 h-full w-full max-w-md overflow-y-auto border-l border-border bg-surface p-6 shadow-xl">
+      <div
+        ref={panelRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={TITLE_ID}
+        className="fixed right-0 top-0 z-50 flex h-full w-full max-w-md flex-col border-l border-border bg-surface shadow-2xl"
+      >
         {/* Header */}
-        <div className="flex items-center justify-between">
-          <h2 className="text-lg font-bold text-text-primary">
+        <div className="flex items-center justify-between border-b border-border px-5 py-4">
+          <h2 id={TITLE_ID} className="stat-number text-base text-text-primary">
             Strategy Detail
           </h2>
           <button
             type="button"
             onClick={onClose}
-            className="rounded-lg p-1 text-text-muted hover:bg-surface-hover hover:text-text-secondary"
+            aria-label="Close detail panel"
+            className="rounded-md p-1.5 text-text-muted transition-colors hover:bg-surface-hover hover:text-text-secondary"
           >
-            <X className="h-5 w-5" />
+            <X className="h-4 w-4" />
           </button>
         </div>
 
-        {/* Status badge */}
-        <div className="mt-4">
+        {/* Body */}
+        <div className="flex-1 overflow-y-auto px-5 py-5">
+          {/* Status badge */}
           <span
             className={cn(
-              "inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-sm font-medium",
+              "pill text-xs",
               status.className,
             )}
           >
-            <StatusIcon className="h-4 w-4" />
+            <StatusIcon className="h-3.5 w-3.5" />
             {status.label}
           </span>
-        </div>
 
-        {/* Fields */}
-        <div className="mt-6 space-y-4">
-          <DetailField label="Action" value={strategy.action} />
-          <DetailField label="Amount" value={formatUsd(strategy.amount)} mono />
-          <DetailField label="Time" value={formatTimestamp(strategy.timestamp)} />
-          <DetailField
-            label="Target Protocol"
-            value={truncateAddress(strategy.targetProtocol)}
-            mono
-            copyable={strategy.targetProtocol}
-          />
-          <DetailField
-            label="Parachain ID"
-            value={String(strategy.targetParachain)}
-            mono
-          />
+          {/* Fields */}
+          <div className="mt-5 space-y-4">
+            <DetailField label="Action" value={strategy.action} />
+            <DetailField label="Amount" value={formatUsd(strategy.amount)} mono />
+            <DetailField label="Time" value={formatTimestamp(strategy.timestamp)} />
+            <DetailField
+              label="Target"
+              value={truncateAddress(strategy.target)}
+              mono
+              copyable={strategy.target}
+            />
 
-          {/* Reasoning */}
-          <div>
-            <p className="text-xs font-medium uppercase tracking-wider text-text-muted">
-              AI Reasoning
-            </p>
-            <div className="mt-1.5 rounded-lg bg-background p-3">
-              <p className="text-sm leading-relaxed text-text-secondary">
-                {strategy.reasoning}
-              </p>
-            </div>
-          </div>
-
-          {/* Transaction */}
-          {strategy.txHash && (
+            {/* Reasoning */}
             <div>
-              <p className="text-xs font-medium uppercase tracking-wider text-text-muted">
-                Transaction
+              <p className="text-[10px] font-medium uppercase tracking-wider text-text-muted">
+                AI Reasoning
               </p>
-              <a
-                href={`https://blockscout-paseo.parity-chains.parity.io/tx/${strategy.txHash}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="mt-1.5 flex items-center gap-2 font-mono text-sm text-accent hover:text-accent/80"
-              >
-                {truncateAddress(strategy.txHash, 8)}
-                <ExternalLink className="h-3.5 w-3.5" />
-              </a>
+              <div className="mt-1.5 rounded-md border border-border-subtle bg-background p-3">
+                <p className="font-mono text-xs leading-relaxed text-text-secondary">
+                  {strategy.reasoning}
+                </p>
+              </div>
             </div>
-          )}
+
+            {/* Transaction */}
+            {strategy.txHash && (
+              <div>
+                <p className="text-[10px] font-medium uppercase tracking-wider text-text-muted">
+                  Transaction
+                </p>
+                <a
+                  href={`https://blockscout-paseo.parity-chains.parity.io/tx/${strategy.txHash}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="mt-1.5 inline-flex items-center gap-2 font-mono text-xs text-accent hover:text-accent/80"
+                >
+                  {truncateAddress(strategy.txHash, 8)}
+                  <ExternalLink className="h-3 w-3" />
+                </a>
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </>
@@ -129,23 +167,19 @@ function DetailField({
 
   return (
     <div>
-      <p className="text-xs font-medium uppercase tracking-wider text-text-muted">
+      <p className="text-[10px] font-medium uppercase tracking-wider text-text-muted">
         {label}
       </p>
       <div className="mt-1 flex items-center gap-2">
-        <p
-          className={cn(
-            "text-sm text-text-primary",
-            mono && "font-mono",
-          )}
-        >
+        <p className={cn("text-sm text-text-primary", mono && "font-mono")}>
           {value}
         </p>
         {copyable && (
           <button
             type="button"
             onClick={handleCopy}
-            className="text-text-muted hover:text-text-secondary"
+            aria-label={`Copy ${label}`}
+            className="rounded p-0.5 text-text-muted transition-colors hover:bg-surface-hover hover:text-text-secondary"
           >
             <Copy className="h-3 w-3" />
           </button>

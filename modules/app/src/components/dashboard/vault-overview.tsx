@@ -1,109 +1,103 @@
 "use client";
 
 import { useVaultState } from "@/hooks/use-vault-state";
-import { formatUsd } from "@/lib/format";
-import { Wallet, Landmark, ArrowUpRight, Loader2 } from "lucide-react";
-
-interface StatCardProps {
-  label: string;
-  value: string;
-  icon: React.ReactNode;
-  accent?: "green" | "purple" | "cyan";
-  subtext?: string;
-}
-
-function StatCard({ label, value, icon, accent = "green", subtext }: StatCardProps) {
-  const glowClass =
-    accent === "green"
-      ? "glow-green"
-      : accent === "purple"
-        ? "glow-purple"
-        : "glow-cyan";
-
-  const iconBg =
-    accent === "green"
-      ? "bg-primary/10 text-primary"
-      : accent === "purple"
-        ? "bg-secondary/10 text-secondary"
-        : "bg-accent/10 text-accent";
-
-  return (
-    <div className={`card card-hover p-5 ${glowClass}`}>
-      <div className="flex items-start justify-between">
-        <div>
-          <p className="text-xs font-medium uppercase tracking-wider text-text-muted">
-            {label}
-          </p>
-          <p className="mt-2 font-mono text-2xl font-bold text-text-primary">
-            {value}
-          </p>
-          {subtext && (
-            <p className="mt-1 font-mono text-xs text-text-secondary">
-              {subtext}
-            </p>
-          )}
-        </div>
-        <div className={`rounded-lg p-2 ${iconBg}`}>{icon}</div>
-      </div>
-    </div>
-  );
-}
+import { formatTokenAmount } from "@/lib/format";
+import { Loader2, Eye } from "lucide-react";
 
 export function VaultOverview() {
   const { data: vault, isLoading, error } = useVaultState();
 
   if (isLoading) {
     return (
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-        {[1, 2, 3].map((i) => (
-          <div key={i} className="card flex h-[120px] items-center justify-center p-5">
-            <Loader2 className="h-5 w-5 animate-spin text-text-muted" />
-          </div>
-        ))}
+      <div className="hero-banner flex h-[100px] items-center justify-center">
+        <Loader2 className="h-5 w-5 animate-spin text-text-muted" />
       </div>
     );
   }
 
   if (error || !vault) {
     return (
-      <div className="card p-5 text-center">
+      <div className="hero-banner p-6 text-center">
         <p className="text-sm text-danger">Failed to load vault state</p>
       </div>
     );
   }
 
-  const totalAssets = formatUsd(vault.totalAssets);
-  const idleBalance = formatUsd(vault.idleBalance);
-  const remoteAssets = formatUsd(vault.totalRemoteAssets);
-
-  // Calculate utilization
   const total = BigInt(vault.totalAssets || "0");
   const remote = BigInt(vault.totalRemoteAssets || "0");
+  const idle = BigInt(vault.idleBalance || "0");
   const utilization = total > 0n ? Number((remote * 100n) / total) : 0;
 
   return (
-    <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-      <StatCard
-        label="Total Assets"
-        value={totalAssets}
-        icon={<Wallet className="h-5 w-5" />}
-        accent="green"
-        subtext={`${vault.strategyCounter} strategies executed`}
-      />
-      <StatCard
-        label="Idle Balance"
-        value={idleBalance}
-        icon={<Landmark className="h-5 w-5" />}
-        accent="cyan"
-        subtext="Available for deployment"
-      />
-      <StatCard
-        label="Remote Assets"
-        value={remoteAssets}
-        icon={<ArrowUpRight className="h-5 w-5" />}
-        accent="purple"
-        subtext={`${utilization}% utilization`}
-      />
+    <div className="hero-banner relative px-6 py-5">
+      <div className="relative z-10 flex items-center justify-between">
+        {/* TVL */}
+        <div className="flex items-center gap-4">
+          <div>
+            <div className="flex items-center gap-2">
+              <h2 className="stat-number text-3xl text-text-primary">
+                ${formatTokenAmount(vault.totalAssets, 18, 2)}
+              </h2>
+              <Eye className="h-4 w-4 text-text-muted" />
+            </div>
+            <p className="mt-1 text-[13px] text-text-secondary">
+              Total Value Locked.{" "}
+              <span className="text-primary cursor-pointer hover:underline">
+                Polkadot Hub EVM
+              </span>
+            </p>
+          </div>
+        </div>
+
+        {/* Metrics row */}
+        <div className="flex items-center gap-8">
+          <MetricItem
+            label="Idle"
+            value={formatTokenAmount(idle.toString())}
+            suffix="DOT"
+          />
+          <MetricItem
+            label="Deployed"
+            value={formatTokenAmount(remote.toString())}
+            suffix="DOT"
+          />
+          <MetricItem
+            label="Utilization"
+            value={`${utilization}%`}
+            highlight={utilization > 50}
+          />
+          <MetricItem
+            label="Strategies"
+            value={vault.strategyCounter}
+          />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function MetricItem({
+  label,
+  value,
+  suffix,
+  highlight,
+}: {
+  label: string;
+  value: string;
+  suffix?: string;
+  highlight?: boolean;
+}) {
+  return (
+    <div className="text-right">
+      <p className="text-[10px] font-medium uppercase tracking-widest text-text-muted">
+        {label}
+      </p>
+      <p className="mt-0.5 font-mono text-[15px] font-semibold text-text-primary">
+        {highlight ? <span className="text-primary">{value}</span> : value}
+        {suffix && (
+          <span className="ml-1 text-[11px] text-text-muted">{suffix}</span>
+        )}
+      </p>
     </div>
   );
 }

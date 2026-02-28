@@ -1,48 +1,74 @@
 "use client";
 
 import { ConnectButton } from "@rainbow-me/rainbowkit";
-import { useWebSocket } from "@/hooks/use-websocket";
+import { useYields } from "@/hooks/use-yields";
 import { cn } from "@/lib/format";
-import { Wifi, WifiOff } from "lucide-react";
 
 export function Header() {
-  const { connected } = useWebSocket();
+  const { data: yields } = useYields();
+
+  // Build ticker items from live yield data
+  const tickerItems = (yields ?? []).slice(0, 12).map((y) => ({
+    name: y.name,
+    apy: y.apyPercent,
+    protocol: y.protocol,
+  }));
 
   return (
-    <header className="sticky top-0 z-30 flex h-16 items-center justify-between border-b border-border bg-surface/80 px-6 backdrop-blur-md">
-      {/* Left: Page context (filled by pages) */}
-      <div />
+    <header className="sticky top-14 z-40 flex flex-col border-b border-border bg-surface/80 backdrop-blur-md">
+      {/* Ticker bar */}
+      <div
+        className="h-7 overflow-hidden border-b border-border-subtle bg-background/50"
+        aria-label="Live yield ticker"
+        role="region"
+      >
+        {tickerItems.length > 0 ? (
+          <div className="ticker-track h-full items-center">
+            {/* Duplicate items for seamless loop */}
+            {[...tickerItems, ...tickerItems].map((item, i) => (
+              <div
+                key={`${i < tickerItems.length ? "a" : "b"}-${item.name}`}
+                className="flex items-center gap-2 px-4 h-full shrink-0"
+              >
+                <span className="text-[11px] text-text-secondary">{item.name}</span>
+                <span className={cn(
+                  "font-mono text-[11px] font-semibold",
+                  item.apy >= 10 ? "text-primary" : "text-text-primary",
+                )}>
+                  {item.apy.toFixed(2)}%
+                </span>
+                <span className="text-[10px] text-text-muted">APY</span>
+                <span className="text-border mx-1">|</span>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="h-full" aria-hidden="true" />
+        )}
+      </div>
 
-      {/* Right: Status + Wallet */}
-      <div className="flex items-center gap-4">
-        {/* WebSocket status */}
-        <div
-          className={cn(
-            "flex items-center gap-1.5 rounded-full px-3 py-1 font-mono text-xs",
-            connected
-              ? "bg-primary/10 text-primary"
-              : "bg-danger/10 text-danger",
-          )}
-        >
-          {connected ? (
-            <Wifi className="h-3 w-3" />
-          ) : (
-            <WifiOff className="h-3 w-3" />
-          )}
-          {connected ? "Live" : "Offline"}
+      {/* Main header row */}
+      <div className="flex h-11 items-center justify-between px-5">
+        <div className="flex items-center gap-3">
+          <span className="font-mono text-[11px] text-text-muted">
+            Obidot Autonomous CFO
+          </span>
+          <span className="text-border">·</span>
+          <span className="font-mono text-[11px] text-text-muted">
+            ERC-4626 Vault
+          </span>
+          <span className="text-border">·</span>
+          <span className="font-mono text-[11px] text-text-secondary">
+            {yields?.length ?? 0} yield sources
+          </span>
         </div>
-
-        {/* Network badge */}
-        <div className="rounded-full border border-border bg-surface px-3 py-1 font-mono text-xs text-text-secondary">
-          Paseo Testnet
+        <div className="flex items-center gap-3">
+          <ConnectButton
+            chainStatus="icon"
+            accountStatus="address"
+            showBalance={false}
+          />
         </div>
-
-        {/* Wallet connect */}
-        <ConnectButton
-          chainStatus="icon"
-          accountStatus="address"
-          showBalance={false}
-        />
       </div>
     </header>
   );

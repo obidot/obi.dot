@@ -1,30 +1,34 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import type { StrategyRecord } from "@/types";
 import { formatUsd, truncateAddress, formatRelativeTime, cn } from "@/lib/format";
+import { STATUS_CONFIG } from "@/lib/strategy-config";
 import { StrategyDetail } from "@/components/strategies/strategy-detail";
 import {
   ArrowUpDown,
-  CheckCircle2,
-  Clock,
-  XCircle,
   ExternalLink,
+  Search,
 } from "lucide-react";
 
 type SortKey = "timestamp" | "amount" | "status";
 type SortDir = "asc" | "desc";
+type StatusFilter = "all" | "executed" | "pending" | "failed" | "timeout";
 
-const STATUS_CONFIG = {
-  executed: { label: "Executed", icon: CheckCircle2, className: "bg-primary/10 text-primary" },
-  pending: { label: "Pending", icon: Clock, className: "bg-warning/10 text-warning" },
-  failed: { label: "Failed", icon: XCircle, className: "bg-danger/10 text-danger" },
-} as const;
+const FILTER_TABS: { key: StatusFilter; label: string }[] = [
+  { key: "all", label: "All" },
+  { key: "executed", label: "Executed" },
+  { key: "pending", label: "Pending" },
+  { key: "failed", label: "Failed" },
+  { key: "timeout", label: "Timeout" },
+];
 
 export function StrategyTable({ strategies }: { strategies: StrategyRecord[] }) {
   const [sortKey, setSortKey] = useState<SortKey>("timestamp");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
   const [selected, setSelected] = useState<StrategyRecord | null>(null);
+  const [filter, setFilter] = useState<StatusFilter>("all");
+  const [search, setSearch] = useState("");
 
   const toggleSort = (key: SortKey) => {
     if (sortKey === key) {
@@ -35,98 +39,198 @@ export function StrategyTable({ strategies }: { strategies: StrategyRecord[] }) 
     }
   };
 
-  const sorted = [...strategies].sort((a, b) => {
-    const dir = sortDir === "asc" ? 1 : -1;
-    switch (sortKey) {
-      case "timestamp":
-        return dir * (new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
-      case "amount":
-        return dir * (Number(BigInt(a.amount) - BigInt(b.amount)));
-      case "status": {
-        const order = { executed: 0, pending: 1, failed: 2 };
-        return dir * (order[a.status] - order[b.status]);
-      }
-      default:
-        return 0;
+  const filtered = useMemo(() => {
+    let result = strategies;
+    if (filter !== "all") {
+      result = result.filter((s) => s.status === filter);
     }
-  });
+    if (search.trim()) {
+      const q = search.toLowerCase();
+      result = result.filter(
+        (s) =>
+          s.action.toLowerCase().includes(q) ||
+          s.target.toLowerCase().includes(q) ||
+          s.reasoning.toLowerCase().includes(q),
+      );
+    }
+    return result;
+  }, [strategies, filter, search]);
+
+  const sorted = useMemo(() => {
+    return [...filtered].sort((a, b) => {
+      const dir = sortDir === "asc" ? 1 : -1;
+      switch (sortKey) {
+        case "timestamp":
+          return dir * (a.timestamp - b.timestamp);
+        case "amount":
+          return dir * Number(BigInt(a.amount) - BigInt(b.amount));
+        case "status": {
+          const order = { executed: 0, pending: 1, failed: 2, timeout: 3 };
+          return dir * (order[a.status] - order[b.status]);
+        }
+        default:
+          return 0;
+      }
+    });
+  }, [filtered, sortKey, sortDir]);
 
   if (strategies.length === 0) {
     return (
-      <div className="card flex min-h-[400px] items-center justify-center p-8">
+      <div className="panel flex min-h-[400px] items-center justify-center rounded-lg p-8">
         <div className="text-center">
-          <p className="font-mono text-lg text-text-muted">No strategies yet</p>
-          <p className="mt-2 text-sm text-text-muted">
+          <p className="font-mono text-sm text-text-muted">No strategies yet</p>
+          <p className="mt-1 text-xs text-text-muted">
             The AI agent will begin executing strategies once conditions are met
           </p>
         </div>
       </div>
     );
   }
-
   return (
     <>
-      <div className="card overflow-hidden">
-        <table className="w-full">
-          <thead>
-            <tr className="border-b border-border text-left">
-              <SortableHeader label="Time" sortKey="timestamp" currentKey={sortKey} dir={sortDir} onSort={toggleSort} />
-              <th className="px-4 py-3 text-xs font-medium uppercase tracking-wider text-text-muted">Action</th>
-              <th className="px-4 py-3 text-xs font-medium uppercase tracking-wider text-text-muted">Protocol</th>
-              <SortableHeader label="Amount" sortKey="amount" currentKey={sortKey} dir={sortDir} onSort={toggleSort} />
-              <SortableHeader label="Status" sortKey="status" currentKey={sortKey} dir={sortDir} onSort={toggleSort} />
-              <th className="px-4 py-3 text-xs font-medium uppercase tracking-wider text-text-muted">Tx</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-border">
-            {sorted.map((strategy) => {
-              const status = STATUS_CONFIG[strategy.status];
-              const StatusIcon = status.icon;
-
+      <div className="panel overflow-hidden rounded-lg">
+        {/* Toolbar: Filter tabs + Search */}
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-4 py-3">
+          <div className="tab-group">
+            {FILTER_TABS.map((tab) => {
+              const count =
+                tab.key === "all"
+                  ? strategies.length
+                  : strategies.filter((s) => s.status === tab.key).length;
               return (
-                <tr
-                  key={strategy.id}
-                  onClick={() => setSelected(strategy)}
-                  className="cursor-pointer transition-colors hover:bg-surface-hover"
+                <button
+                  key={tab.key}
+                  type="button"
+                  onClick={() => setFilter(tab.key)}
+                  className={cn("tab-item", filter === tab.key && "active")}
                 >
-                  <td className="px-4 py-3 font-mono text-xs text-text-secondary">
-                    {formatRelativeTime(strategy.timestamp)}
-                  </td>
-                  <td className="px-4 py-3 text-sm text-text-primary">
-                    {strategy.action}
-                  </td>
-                  <td className="px-4 py-3 font-mono text-xs text-text-secondary">
-                    {truncateAddress(strategy.targetProtocol)}
-                  </td>
-                  <td className="px-4 py-3 font-mono text-sm text-text-primary">
-                    {formatUsd(strategy.amount)}
-                  </td>
-                  <td className="px-4 py-3">
-                    <span className={cn("inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium", status.className)}>
-                      <StatusIcon className="h-3 w-3" />
-                      {status.label}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3">
-                    {strategy.txHash ? (
-                      <a
-                        href={`https://blockscout-paseo.parity-chains.parity.io/tx/${strategy.txHash}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        onClick={(e) => e.stopPropagation()}
-                        className="text-accent hover:text-accent/80"
-                      >
-                        <ExternalLink className="h-3.5 w-3.5" />
-                      </a>
-                    ) : (
-                      <span className="text-text-muted">--</span>
-                    )}
-                  </td>
-                </tr>
+                  {tab.label}
+                  <span className="ml-1 opacity-60">({count})</span>
+                </button>
               );
             })}
-          </tbody>
-        </table>
+          </div>
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-text-muted" />
+            <input
+              type="text"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search strategies..."
+              className="input-trading w-[220px] py-1.5 pl-9 pr-3 text-xs"
+            />
+          </div>
+        </div>
+
+        {/* Table */}
+        <div className="overflow-x-auto">
+          <table className="table-pro">
+            <thead>
+              <tr>
+                <SortableHeader
+                  label="Time"
+                  sortKey="timestamp"
+                  currentKey={sortKey}
+                  dir={sortDir}
+                  onSort={toggleSort}
+                />
+                <th scope="col">Action</th>
+                <th scope="col">Protocol</th>
+                <SortableHeader
+                  label="Amount"
+                  sortKey="amount"
+                  currentKey={sortKey}
+                  dir={sortDir}
+                  onSort={toggleSort}
+                />
+                <SortableHeader
+                  label="Status"
+                  sortKey="status"
+                  currentKey={sortKey}
+                  dir={sortDir}
+                  onSort={toggleSort}
+                />
+                <th scope="col">Tx</th>
+              </tr>
+            </thead>
+            <tbody>
+              {sorted.length === 0 ? (
+                <tr>
+                  <td colSpan={6} className="py-12 text-center font-mono text-xs text-text-muted">
+                    No strategies match your filter
+                  </td>
+                </tr>
+              ) : (
+                sorted.map((strategy) => {
+                  const status = STATUS_CONFIG[strategy.status];
+                  const StatusIcon = status.icon;
+
+                  return (
+                    <tr
+                      key={strategy.id}
+                      onClick={() => setSelected(strategy)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" || e.key === " ") {
+                          e.preventDefault();
+                          setSelected(strategy);
+                        }
+                      }}
+                      tabIndex={0}
+                      className="cursor-pointer"
+                      aria-label={`Strategy: ${strategy.action}, ${strategy.status}`}
+                    >
+                      <td className="text-text-secondary">
+                        {formatRelativeTime(new Date(strategy.timestamp).toISOString())}
+                      </td>
+                      <td className="font-sans text-text-primary">
+                        {strategy.action}
+                      </td>
+                      <td className="text-text-secondary">
+                        {truncateAddress(strategy.target)}
+                      </td>
+                      <td className="text-text-primary">
+                        {formatUsd(strategy.amount)}
+                      </td>
+                      <td>
+                        <span
+                          className={cn(
+                            "pill",
+                            status.className,
+                          )}
+                        >
+                          <StatusIcon className="h-3 w-3" />
+                          {status.label}
+                        </span>
+                      </td>
+                      <td>
+                        {strategy.txHash ? (
+                          <a
+                            href={`https://blockscout-paseo.parity-chains.parity.io/tx/${strategy.txHash}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            onClick={(e) => e.stopPropagation()}
+                            className="text-accent hover:text-accent/80"
+                          >
+                            <ExternalLink className="h-3.5 w-3.5" />
+                          </a>
+                        ) : (
+                          <span className="text-text-muted">--</span>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        {/* Footer */}
+        <div className="border-t border-border px-4 py-2">
+          <p className="font-mono text-[10px] text-text-muted">
+            Showing {sorted.length} of {strategies.length} strategies
+          </p>
+        </div>
       </div>
 
       {/* Detail slide-over */}
@@ -154,7 +258,7 @@ function SortableHeader({
   onSort: (key: SortKey) => void;
 }) {
   return (
-    <th className="px-4 py-3">
+    <th scope="col">
       <button
         type="button"
         onClick={() => onSort(sortKey)}

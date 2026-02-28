@@ -8,34 +8,26 @@ import { PnlChart } from "@/components/dashboard/pnl-chart";
 
 export default function DashboardPage() {
   return (
-    <div className="space-y-6">
-      {/* Page header */}
-      <div>
-        <h1 className="text-2xl font-bold text-text-primary">
-          Vault Dashboard
-        </h1>
-        <p className="mt-1 text-sm text-text-secondary">
-          Real-time overview of the Obidot autonomous vault on Polkadot Hub
-        </p>
-      </div>
-
-      {/* Stat cards row */}
+    <div className="space-y-4">
+      {/* Hero banner with TVL */}
       <VaultOverview />
 
-      {/* Quick stats bar */}
-      <QuickStats />
-
-      {/* Main content grid */}
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-        {/* PnL chart — spans 2 columns */}
-        <div className="lg:col-span-2">
+      {/* Trading terminal grid: chart left, actions right */}
+      <div className="grid grid-cols-1 gap-[1px] overflow-hidden rounded-lg border border-border bg-border lg:grid-cols-[1fr_300px]">
+        {/* Left: Chart + stats */}
+        <div className="flex flex-col bg-surface">
+          {/* Quick stats row inside the chart panel */}
+          <QuickStats />
+          {/* Candlestick chart */}
           <PnlChart />
         </div>
 
-        {/* Right column: Health + Actions */}
-        <div className="space-y-6">
-          <HealthIndicators />
+        {/* Right: Trade form + health */}
+        <div className="flex flex-col bg-surface">
           <VaultActions />
+          <div className="border-t border-border">
+            <HealthIndicators />
+          </div>
         </div>
       </div>
     </div>

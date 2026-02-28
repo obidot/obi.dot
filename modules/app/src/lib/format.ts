@@ -14,7 +14,7 @@ export function formatTokenAmount(
 ): string {
   if (!weiStr || weiStr === "0") return "0.00";
   const value = BigInt(weiStr);
-  const divisor = BigInt(10 ** decimals);
+  const divisor = 10n ** BigInt(decimals);
   const whole = value / divisor;
   const fractional = value % divisor;
   const fracStr = fractional.toString().padStart(decimals, "0");
@@ -56,18 +56,21 @@ export function truncateAddress(address: string, chars = 4): string {
 export function formatRelativeTime(timestamp: string | number): string {
   const now = Date.now();
   const then =
-    typeof timestamp === "string" ? new Date(timestamp).getTime() : timestamp * 1000;
+    typeof timestamp === "string"
+      ? new Date(timestamp).getTime()
+      : timestamp; // agent stores Unix ms (Date.now())
   const diff = now - then;
 
   if (diff < 60_000) return "just now";
   if (diff < 3_600_000) return `${Math.floor(diff / 60_000)}m ago`;
   if (diff < 86_400_000) return `${Math.floor(diff / 3_600_000)}h ago`;
-  return `${Math.floor(diff / 86_400_000)}d ago`;
+  if (diff < 2_592_000_000) return `${Math.floor(diff / 86_400_000)}d ago`;
+  return `${Math.floor(diff / 2_592_000_000)}mo ago`;
 }
 
 /** Format a timestamp to locale string */
 export function formatTimestamp(timestamp: string | number): string {
   const date =
-    typeof timestamp === "string" ? new Date(timestamp) : new Date(timestamp * 1000);
+    typeof timestamp === "string" ? new Date(timestamp) : new Date(timestamp);
   return date.toLocaleString();
 }
