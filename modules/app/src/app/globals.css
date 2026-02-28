@@ -568,6 +568,31 @@ body {
   color: var(--color-bear);
 }
 
+/* ── XCM Flow Dots (cross-chain connector) ─────────────────────────────────── */
+
+/*
+ * Staggered pulse for the XCM connector dots in chain-topology.
+ * Tailwind arbitrary [animation-delay:Nms] covers the delay but we also need
+ * the base keyframe to be a "wave" rather than a simultaneous pulse.
+ * We override Tailwind's generic `animate-pulse` with `xcm-flow` here.
+ */
+
+@keyframes xcm-flow {
+  0%, 100% {
+    opacity: 0.12;
+    transform: scale(0.75);
+  }
+  50% {
+    opacity: 0.85;
+    transform: scale(1);
+  }
+}
+
+/* Applied via inline style in chain-topology.tsx */
+.xcm-dot {
+  animation: xcm-flow 1.8s ease-in-out infinite;
+}
+
 /* ── RainbowKit Connect Button — MetaLiquid pill style ──────────────────────── */
 
 /*
