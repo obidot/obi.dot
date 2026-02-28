@@ -1,19 +1,13 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.28;
 
-import {
-    ERC4626
-} from "@openzeppelin/contracts/token/ERC20/extensions/ERC4626.sol";
+import {ERC4626} from "@openzeppelin/contracts/token/ERC20/extensions/ERC4626.sol";
 import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import {
-    SafeERC20
-} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {AccessControl} from "@openzeppelin/contracts/access/AccessControl.sol";
 import {Pausable} from "@openzeppelin/contracts/utils/Pausable.sol";
-import {
-    ReentrancyGuard
-} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
+import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
 
 import {IIsmpHost} from "./interfaces/IIsmpHost.sol";
@@ -31,13 +25,7 @@ import {CrossChainCodec} from "./libraries/CrossChainCodec.sol";
 ///      2. Cross-chain deposit sync to hub
 ///      3. Cross-chain withdrawal requests from hub
 ///      4. State synchronization from hub (asset totals, emergency state)
-contract ObidotVaultEVM is
-    ERC4626,
-    AccessControl,
-    Pausable,
-    ReentrancyGuard,
-    IIsmpModule
-{
+contract ObidotVaultEVM is ERC4626, AccessControl, Pausable, ReentrancyGuard, IIsmpModule {
     using SafeERC20 for IERC20;
     using Math for uint256;
 
@@ -87,27 +75,13 @@ contract ObidotVaultEVM is
     // ─────────────────────────────────────────────────────────────────────
 
     /// @notice Emitted when a deposit is synced to the hub.
-    event DepositSynced(
-        address indexed depositor,
-        uint256 amount,
-        uint256 sharesMinted,
-        uint256 nonce
-    );
+    event DepositSynced(address indexed depositor, uint256 amount, uint256 sharesMinted, uint256 nonce);
 
     /// @notice Emitted when a withdrawal request is sent to the hub.
-    event WithdrawalRequested(
-        address indexed withdrawer,
-        uint256 amount,
-        uint256 sharesToBurn,
-        uint256 nonce
-    );
+    event WithdrawalRequested(address indexed withdrawer, uint256 amount, uint256 sharesToBurn, uint256 nonce);
 
     /// @notice Emitted when asset sync is received from the hub.
-    event AssetSyncReceived(
-        uint256 globalTotalAssets,
-        uint256 globalTotalShares,
-        uint256 timestamp
-    );
+    event AssetSyncReceived(uint256 globalTotalAssets, uint256 globalTotalShares, uint256 timestamp);
 
     /// @notice Emitted when a strategy report is received from the hub.
     event StrategyReportReceived(uint256 strategyId, bool success, int256 pnl);
@@ -119,11 +93,7 @@ contract ObidotVaultEVM is
     event DepositAckReceived(uint256 depositNonce, bool accepted);
 
     /// @notice Emitted when a withdrawal fulfillment is received.
-    event WithdrawalFulfilled(
-        uint256 withdrawNonce,
-        uint256 amount,
-        bool fullyFulfilled
-    );
+    event WithdrawalFulfilled(uint256 withdrawNonce, uint256 amount, bool fullyFulfilled);
 
     /// @notice Emitted when the deposit cap is updated.
     event DepositCapUpdated(uint256 newCap);
@@ -313,10 +283,7 @@ contract ObidotVaultEVM is
     // ─────────────────────────────────────────────────────────────────────
 
     /// @inheritdoc ERC4626
-    function deposit(
-        uint256 assets,
-        address receiver
-    ) public override whenNotPaused nonReentrant returns (uint256) {
+    function deposit(uint256 assets, address receiver) public override whenNotPaused nonReentrant returns (uint256) {
         uint256 shares = super.deposit(assets, receiver);
 
         // Sync deposit to hub via Hyperbridge
@@ -326,10 +293,7 @@ contract ObidotVaultEVM is
     }
 
     /// @inheritdoc ERC4626
-    function mint(
-        uint256 shares,
-        address receiver
-    ) public override whenNotPaused nonReentrant returns (uint256) {
+    function mint(uint256 shares, address receiver) public override whenNotPaused nonReentrant returns (uint256) {
         uint256 assets = super.mint(shares, receiver);
 
         // Sync deposit to hub
@@ -339,11 +303,7 @@ contract ObidotVaultEVM is
     }
 
     /// @inheritdoc ERC4626
-    function withdraw(
-        uint256 assets,
-        address receiver,
-        address owner
-    ) public override nonReentrant returns (uint256) {
+    function withdraw(uint256 assets, address receiver, address owner) public override nonReentrant returns (uint256) {
         if (paused() && !emergencyMode) revert EnforcedPause();
 
         // Check if we have enough local balance
@@ -359,11 +319,7 @@ contract ObidotVaultEVM is
     }
 
     /// @inheritdoc ERC4626
-    function redeem(
-        uint256 shares,
-        address receiver,
-        address owner
-    ) public override nonReentrant returns (uint256) {
+    function redeem(uint256 shares, address receiver, address owner) public override nonReentrant returns (uint256) {
         if (paused() && !emergencyMode) revert EnforcedPause();
 
         uint256 assets = previewRedeem(shares);
@@ -381,24 +337,19 @@ contract ObidotVaultEVM is
     // ─────────────────────────────────────────────────────────────────────
 
     /// @dev Sync a deposit event to the hub via Hyperbridge.
-    function _syncDepositToHub(
-        address depositor,
-        uint256 amount,
-        uint256 sharesMinted
-    ) internal {
+    function _syncDepositToHub(address depositor, uint256 amount, uint256 sharesMinted) internal {
         uint256 nonce = depositSyncNonce;
         unchecked {
             depositSyncNonce = nonce + 1;
         }
 
-        CrossChainCodec.DepositSyncMessage memory syncMsg = CrossChainCodec
-            .DepositSyncMessage({
-                chainId: chainIdentifier,
-                depositor: depositor,
-                amount: amount,
-                sharesMinted: sharesMinted,
-                nonce: nonce
-            });
+        CrossChainCodec.DepositSyncMessage memory syncMsg = CrossChainCodec.DepositSyncMessage({
+            chainId: chainIdentifier,
+            depositor: depositor,
+            amount: amount,
+            sharesMinted: sharesMinted,
+            nonce: nonce
+        });
 
         bytes memory encoded = CrossChainCodec.encodeDepositSync(syncMsg);
 
@@ -417,37 +368,26 @@ contract ObidotVaultEVM is
     }
 
     /// @dev Request assets from the hub for a withdrawal.
-    function _requestWithdrawFromHub(
-        address withdrawer,
-        uint256 amount,
-        uint256 sharesToBurn
-    ) internal {
+    function _requestWithdrawFromHub(address withdrawer, uint256 amount, uint256 sharesToBurn) internal {
         uint256 nonce = withdrawRequestNonce;
         unchecked {
             withdrawRequestNonce = nonce + 1;
         }
 
-        pendingWithdrawals[nonce] = PendingWithdrawal({
-            withdrawer: withdrawer,
-            amount: amount,
-            sharesToBurn: sharesToBurn,
-            fulfilled: false
-        });
+        pendingWithdrawals[nonce] =
+            PendingWithdrawal({withdrawer: withdrawer, amount: amount, sharesToBurn: sharesToBurn, fulfilled: false});
 
         totalPendingWithdrawals += amount;
 
-        CrossChainCodec.WithdrawRequestMessage
-            memory withdrawMsg = CrossChainCodec.WithdrawRequestMessage({
-                chainId: chainIdentifier,
-                withdrawer: withdrawer,
-                amount: amount,
-                sharesToBurn: sharesToBurn,
-                nonce: nonce
-            });
+        CrossChainCodec.WithdrawRequestMessage memory withdrawMsg = CrossChainCodec.WithdrawRequestMessage({
+            chainId: chainIdentifier,
+            withdrawer: withdrawer,
+            amount: amount,
+            sharesToBurn: sharesToBurn,
+            nonce: nonce
+        });
 
-        bytes memory encoded = CrossChainCodec.encodeWithdrawRequest(
-            withdrawMsg
-        );
+        bytes memory encoded = CrossChainCodec.encodeWithdrawRequest(withdrawMsg);
 
         IIsmpHost.DispatchPost memory post = IIsmpHost.DispatchPost({
             dest: hubChainId,
@@ -468,9 +408,7 @@ contract ObidotVaultEVM is
     // ─────────────────────────────────────────────────────────────────────
 
     /// @inheritdoc IIsmpModule
-    function onAccept(
-        IncomingPostRequest calldata incoming
-    ) external override onlyIsmpHost nonReentrant {
+    function onAccept(IncomingPostRequest calldata incoming) external override onlyIsmpHost nonReentrant {
         PostRequest calldata request = incoming.request;
 
         // Verify source is the hub
@@ -501,18 +439,14 @@ contract ObidotVaultEVM is
     }
 
     /// @inheritdoc IIsmpModule
-    function onPostRequestTimeout(
-        PostRequest calldata request
-    ) external override onlyIsmpHost {
+    function onPostRequestTimeout(PostRequest calldata request) external override onlyIsmpHost {
         // If a deposit sync times out, the deposit is still valid locally
         // but the hub is unaware. A keeper should retry the sync.
         uint8 msgType = CrossChainCodec.messageType(request.body);
         if (msgType == CrossChainCodec.MSG_WITHDRAW_REQUEST) {
             // Withdrawal request timed out — cancel the pending withdrawal
-            CrossChainCodec.WithdrawRequestMessage
-                memory withdrawMsg = CrossChainCodec.decodeWithdrawRequest(
-                    request.body
-                );
+            CrossChainCodec.WithdrawRequestMessage memory withdrawMsg =
+                CrossChainCodec.decodeWithdrawRequest(request.body);
             if (totalPendingWithdrawals >= withdrawMsg.amount) {
                 totalPendingWithdrawals -= withdrawMsg.amount;
             }
@@ -520,19 +454,13 @@ contract ObidotVaultEVM is
     }
 
     /// @inheritdoc IIsmpModule
-    function onPostResponse(
-        IncomingPostResponse calldata
-    ) external override onlyIsmpHost {}
+    function onPostResponse(IncomingPostResponse calldata) external override onlyIsmpHost {}
 
     /// @inheritdoc IIsmpModule
-    function onPostResponseTimeout(
-        PostResponse calldata
-    ) external override onlyIsmpHost {}
+    function onPostResponseTimeout(PostResponse calldata) external override onlyIsmpHost {}
 
     /// @inheritdoc IIsmpModule
-    function onGetResponse(
-        IncomingGetResponse calldata
-    ) external override onlyIsmpHost {}
+    function onGetResponse(IncomingGetResponse calldata) external override onlyIsmpHost {}
 
     /// @inheritdoc IIsmpModule
     function onGetTimeout(GetRequest calldata) external override onlyIsmpHost {}
@@ -543,61 +471,44 @@ contract ObidotVaultEVM is
 
     /// @dev Handle asset sync from hub — update global accounting.
     function _handleAssetSync(bytes calldata body) internal {
-        CrossChainCodec.AssetSyncMessage memory syncMsg = CrossChainCodec
-            .decodeAssetSync(body);
+        CrossChainCodec.AssetSyncMessage memory syncMsg = CrossChainCodec.decodeAssetSync(body);
 
         globalTotalAssets = syncMsg.globalTotalAssets;
         globalTotalShares = syncMsg.globalTotalShares;
         hubRemoteAssets = syncMsg.totalRemoteAssets;
         lastSyncTimestamp = syncMsg.timestamp;
 
-        emit AssetSyncReceived(
-            syncMsg.globalTotalAssets,
-            syncMsg.globalTotalShares,
-            syncMsg.timestamp
-        );
+        emit AssetSyncReceived(syncMsg.globalTotalAssets, syncMsg.globalTotalShares, syncMsg.timestamp);
     }
 
     /// @dev Handle strategy report from hub — informational for this satellite.
     function _handleStrategyReport(bytes calldata body) internal {
-        CrossChainCodec.StrategyReportMessage memory reportMsg = CrossChainCodec
-            .decodeStrategyReport(body);
+        CrossChainCodec.StrategyReportMessage memory reportMsg = CrossChainCodec.decodeStrategyReport(body);
 
         // Update hub remote assets
         hubRemoteAssets = reportMsg.newTotalRemoteAssets;
 
-        emit StrategyReportReceived(
-            reportMsg.strategyId,
-            reportMsg.success,
-            reportMsg.pnl
-        );
+        emit StrategyReportReceived(reportMsg.strategyId, reportMsg.success, reportMsg.pnl);
     }
 
     /// @dev Handle emergency sync from hub — mirror pause/emergency state.
     function _handleEmergencySync(bytes calldata body) internal {
-        CrossChainCodec.EmergencySyncMessage
-            memory emergencyMsg = CrossChainCodec.decodeEmergencySync(body);
+        CrossChainCodec.EmergencySyncMessage memory emergencyMsg = CrossChainCodec.decodeEmergencySync(body);
 
         if (emergencyMsg.paused && !paused()) {
             _pause();
-        } else if (
-            !emergencyMsg.paused && paused() && !emergencyMsg.emergencyMode
-        ) {
+        } else if (!emergencyMsg.paused && paused() && !emergencyMsg.emergencyMode) {
             _unpause();
         }
 
         emergencyMode = emergencyMsg.emergencyMode;
 
-        emit EmergencySyncReceived(
-            emergencyMsg.paused,
-            emergencyMsg.emergencyMode
-        );
+        emit EmergencySyncReceived(emergencyMsg.paused, emergencyMsg.emergencyMode);
     }
 
     /// @dev Handle deposit acknowledgment from hub.
     function _handleDepositAck(bytes calldata body) internal {
-        CrossChainCodec.DepositAckMessage memory ackMsg = CrossChainCodec
-            .decodeDepositAck(body);
+        CrossChainCodec.DepositAckMessage memory ackMsg = CrossChainCodec.decodeDepositAck(body);
 
         depositAcknowledged[ackMsg.depositNonce] = ackMsg.accepted;
         globalTotalAssets = ackMsg.globalTotalAssets;
@@ -607,12 +518,9 @@ contract ObidotVaultEVM is
 
     /// @dev Handle withdrawal fulfillment from hub.
     function _handleWithdrawFulfill(bytes calldata body) internal {
-        CrossChainCodec.WithdrawFulfillMessage
-            memory fulfillMsg = CrossChainCodec.decodeWithdrawFulfill(body);
+        CrossChainCodec.WithdrawFulfillMessage memory fulfillMsg = CrossChainCodec.decodeWithdrawFulfill(body);
 
-        PendingWithdrawal storage pending = pendingWithdrawals[
-            fulfillMsg.withdrawNonce
-        ];
+        PendingWithdrawal storage pending = pendingWithdrawals[fulfillMsg.withdrawNonce];
         pending.fulfilled = true;
 
         if (totalPendingWithdrawals >= fulfillMsg.amount) {
@@ -621,11 +529,7 @@ contract ObidotVaultEVM is
             totalPendingWithdrawals = 0;
         }
 
-        emit WithdrawalFulfilled(
-            fulfillMsg.withdrawNonce,
-            fulfillMsg.amount,
-            fulfillMsg.fullyFulfilled
-        );
+        emit WithdrawalFulfilled(fulfillMsg.withdrawNonce, fulfillMsg.amount, fulfillMsg.fullyFulfilled);
     }
 
     // ─────────────────────────────────────────────────────────────────────
@@ -633,26 +537,22 @@ contract ObidotVaultEVM is
     // ─────────────────────────────────────────────────────────────────────
 
     /// @notice Update the deposit cap.
-    function setDepositCap(
-        uint256 newCap
-    ) external onlyRole(DEFAULT_ADMIN_ROLE) {
+    function setDepositCap(uint256 newCap) external onlyRole(DEFAULT_ADMIN_ROLE) {
         if (newCap == 0) revert InvalidCap();
         depositCap = newCap;
         emit DepositCapUpdated(newCap);
     }
 
     /// @notice Update the maximum sync age.
-    function setMaxSyncAge(
-        uint256 newMaxAge
-    ) external onlyRole(DEFAULT_ADMIN_ROLE) {
+    function setMaxSyncAge(uint256 newMaxAge) external onlyRole(DEFAULT_ADMIN_ROLE) {
         maxSyncAge = newMaxAge;
     }
 
     /// @notice Update hub configuration.
-    function setHubConfig(
-        bytes calldata _hubChainId,
-        bytes calldata _hubRouterModule
-    ) external onlyRole(DEFAULT_ADMIN_ROLE) {
+    function setHubConfig(bytes calldata _hubChainId, bytes calldata _hubRouterModule)
+        external
+        onlyRole(DEFAULT_ADMIN_ROLE)
+    {
         hubChainId = _hubChainId;
         hubRouterModule = _hubRouterModule;
     }
@@ -697,9 +597,7 @@ contract ObidotVaultEVM is
     // ─────────────────────────────────────────────────────────────────────
 
     /// @dev Required override for AccessControl + ERC4626 diamond.
-    function supportsInterface(
-        bytes4 interfaceId
-    ) public view override(AccessControl) returns (bool) {
+    function supportsInterface(bytes4 interfaceId) public view override(AccessControl) returns (bool) {
         return super.supportsInterface(interfaceId);
     }
 

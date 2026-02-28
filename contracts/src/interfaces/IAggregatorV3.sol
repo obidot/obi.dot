@@ -27,18 +27,10 @@ interface IAggregatorV3 {
     /// @return startedAt       Timestamp when the round started.
     /// @return updatedAt       Timestamp when the answer was last updated.
     /// @return answeredInRound The round in which the answer was computed.
-    function getRoundData(
-        uint80 _roundId
-    )
+    function getRoundData(uint80 _roundId)
         external
         view
-        returns (
-            uint80 roundId,
-            int256 answer,
-            uint256 startedAt,
-            uint256 updatedAt,
-            uint80 answeredInRound
-        );
+        returns (uint80 roundId, int256 answer, uint256 startedAt, uint256 updatedAt, uint80 answeredInRound);
 
     /// @notice Returns the latest price data from the oracle.
     /// @dev Consumers MUST validate that `updatedAt` is recent enough and
@@ -51,11 +43,5 @@ interface IAggregatorV3 {
     function latestRoundData()
         external
         view
-        returns (
-            uint80 roundId,
-            int256 answer,
-            uint256 startedAt,
-            uint256 updatedAt,
-            uint80 answeredInRound
-        );
+        returns (uint80 roundId, int256 answer, uint256 startedAt, uint256 updatedAt, uint80 answeredInRound);
 }

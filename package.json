@@ -15,7 +15,19 @@
     "lint": "turbo run lint",
     "typecheck": "turbo run typecheck",
     "format": "turbo run format",
-    "clean": "turbo run clean"
+    "clean": "turbo run clean",
+
+    "agent:dev": "pnpm --filter @obidot/agent run dev",
+    "agent:build": "pnpm --filter @obidot/agent run build",
+    "agent:start": "pnpm --filter @obidot/agent run start",
+    "agent:typecheck": "pnpm --filter @obidot/agent run typecheck",
+    "agent:lint": "pnpm --filter @obidot/agent run lint",
+
+    "app:dev": "pnpm --filter @obidot/app run dev",
+    "app:build": "pnpm --filter @obidot/app run build",
+    "app:start": "pnpm --filter @obidot/app run start",
+    "app:typecheck": "pnpm --filter @obidot/app run typecheck",
+    "app:lint": "pnpm --filter @obidot/app run lint"
   },
   "devDependencies": {
     "turbo": "^2.5.0"

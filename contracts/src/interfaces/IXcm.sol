@@ -59,7 +59,5 @@ interface IXcm {
     /// @param message SCALE-encoded VersionedXcm to estimate.
     /// @return refTime   Estimated execution time in picoseconds.
     /// @return proofSize Estimated proof-of-validity size in bytes.
-    function weighMessage(
-        bytes calldata message
-    ) external view returns (uint64 refTime, uint64 proofSize);
+    function weighMessage(bytes calldata message) external view returns (uint64 refTime, uint64 proofSize);
 }

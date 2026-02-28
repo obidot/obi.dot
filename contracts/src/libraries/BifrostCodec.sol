@@ -92,11 +92,11 @@ library BifrostCodec {
     /// @param amount The amount to stake.
     /// @param beneficiary The AccountId32 on Bifrost to receive vTokens.
     /// @return xcmMessage The SCALE-encoded VersionedXcm V4 message.
-    function encodeMintVToken(
-        uint32 currencyId,
-        uint256 amount,
-        bytes32 beneficiary
-    ) internal pure returns (bytes memory xcmMessage) {
+    function encodeMintVToken(uint32 currencyId, uint256 amount, bytes32 beneficiary)
+        internal
+        pure
+        returns (bytes memory xcmMessage)
+    {
         if (amount == 0) revert ZeroAmount();
 
         // Encode the Bifrost pallet call: vtokenMinting.mint(token_id, amount, remark)
@@ -111,11 +111,11 @@ library BifrostCodec {
     /// @param amount The amount of vTokens to redeem.
     /// @param beneficiary The AccountId32 on Bifrost receiving underlying tokens.
     /// @return xcmMessage The SCALE-encoded VersionedXcm V4 message.
-    function encodeRedeemVToken(
-        uint32 vCurrencyId,
-        uint256 amount,
-        bytes32 beneficiary
-    ) internal pure returns (bytes memory xcmMessage) {
+    function encodeRedeemVToken(uint32 vCurrencyId, uint256 amount, bytes32 beneficiary)
+        internal
+        pure
+        returns (bytes memory xcmMessage)
+    {
         if (amount == 0) revert ZeroAmount();
 
         bytes memory palletCall = _encodeSLPRedeemCall(vCurrencyId, amount);
@@ -142,12 +142,7 @@ library BifrostCodec {
     ) internal pure returns (bytes memory xcmMessage) {
         if (amountIn == 0) revert ZeroAmount();
 
-        bytes memory palletCall = _encodeDEXSwapCall(
-            currencyIn,
-            currencyOut,
-            amountIn,
-            amountOutMin
-        );
+        bytes memory palletCall = _encodeDEXSwapCall(currencyIn, currencyOut, amountIn, amountOutMin);
         xcmMessage = _buildTransactXcm(palletCall, amountIn, beneficiary);
     }
 
@@ -160,11 +155,11 @@ library BifrostCodec {
     /// @param amount Amount of tokens to deposit.
     /// @param beneficiary The AccountId32 on Bifrost.
     /// @return xcmMessage The SCALE-encoded VersionedXcm V4 message.
-    function encodeFarmingDeposit(
-        uint256 poolId,
-        uint256 amount,
-        bytes32 beneficiary
-    ) internal pure returns (bytes memory xcmMessage) {
+    function encodeFarmingDeposit(uint256 poolId, uint256 amount, bytes32 beneficiary)
+        internal
+        pure
+        returns (bytes memory xcmMessage)
+    {
         if (amount == 0) revert ZeroAmount();
 
         bytes memory palletCall = _encodeFarmingDepositCall(poolId, amount);
@@ -176,11 +171,11 @@ library BifrostCodec {
     /// @param amount Amount of tokens to withdraw.
     /// @param beneficiary The AccountId32 on Bifrost.
     /// @return xcmMessage The SCALE-encoded VersionedXcm V4 message.
-    function encodeFarmingWithdraw(
-        uint256 poolId,
-        uint256 amount,
-        bytes32 beneficiary
-    ) internal pure returns (bytes memory xcmMessage) {
+    function encodeFarmingWithdraw(uint256 poolId, uint256 amount, bytes32 beneficiary)
+        internal
+        pure
+        returns (bytes memory xcmMessage)
+    {
         bytes memory palletCall = _encodeFarmingWithdrawCall(poolId, amount);
         xcmMessage = _buildTransactXcm(palletCall, amount, beneficiary);
     }
@@ -189,10 +184,7 @@ library BifrostCodec {
     /// @param poolId The farming pool ID.
     /// @param beneficiary The AccountId32 on Bifrost.
     /// @return xcmMessage The SCALE-encoded VersionedXcm V4 message.
-    function encodeFarmingClaim(
-        uint256 poolId,
-        bytes32 beneficiary
-    ) internal pure returns (bytes memory xcmMessage) {
+    function encodeFarmingClaim(uint256 poolId, bytes32 beneficiary) internal pure returns (bytes memory xcmMessage) {
         bytes memory palletCall = _encodeFarmingClaimCall(poolId);
         xcmMessage = _buildTransactXcm(palletCall, 0, beneficiary);
     }
@@ -206,17 +198,14 @@ library BifrostCodec {
     /// @param amount Amount to contribute.
     /// @param beneficiary The AccountId32 on Bifrost.
     /// @return xcmMessage The SCALE-encoded VersionedXcm V4 message.
-    function encodeSALPContribute(
-        uint32 parachainId,
-        uint256 amount,
-        bytes32 beneficiary
-    ) internal pure returns (bytes memory xcmMessage) {
+    function encodeSALPContribute(uint32 parachainId, uint256 amount, bytes32 beneficiary)
+        internal
+        pure
+        returns (bytes memory xcmMessage)
+    {
         if (amount == 0) revert ZeroAmount();
 
-        bytes memory palletCall = _encodeSALPContributeCall(
-            parachainId,
-            amount
-        );
+        bytes memory palletCall = _encodeSALPContributeCall(parachainId, amount);
         xcmMessage = _buildTransactXcm(palletCall, amount, beneficiary);
     }
 
@@ -227,25 +216,14 @@ library BifrostCodec {
     /// @notice Build the SCALE-encoded destination MultiLocation for Bifrost.
     /// @return dest SCALE-encoded VersionedMultiLocation targeting Bifrost.
     function bifrostDestination() internal pure returns (bytes memory dest) {
-        return
-            MultiLocation.siblingParachain(
-                MultiLocation.VERSION_V4,
-                BIFROST_PARA_ID
-            );
+        return MultiLocation.siblingParachain(MultiLocation.VERSION_V4, BIFROST_PARA_ID);
     }
 
     /// @notice Build destination with a specific account on Bifrost.
     /// @param accountId The 32-byte substrate account.
     /// @return dest SCALE-encoded VersionedMultiLocation.
-    function bifrostAccountDestination(
-        bytes32 accountId
-    ) internal pure returns (bytes memory dest) {
-        return
-            MultiLocation.siblingParachainAccountId32(
-                MultiLocation.VERSION_V4,
-                BIFROST_PARA_ID,
-                accountId
-            );
+    function bifrostAccountDestination(bytes32 accountId) internal pure returns (bytes memory dest) {
+        return MultiLocation.siblingParachainAccountId32(MultiLocation.VERSION_V4, BIFROST_PARA_ID, accountId);
     }
 
     // ─────────────────────────────────────────────────────────────────────
@@ -253,104 +231,79 @@ library BifrostCodec {
     // ─────────────────────────────────────────────────────────────────────
 
     /// @dev Encode SLP mint call: pallet_index(60) . call_index(0) . currency_id . amount
-    function _encodeSLPMintCall(
-        uint32 currencyId,
-        uint256 amount
-    ) internal pure returns (bytes memory) {
-        return
-            abi.encodePacked(
-                PALLET_VTOKEN_MINTING,
-                uint8(0x00), // call index: mint
-                _encodeU32LE(currencyId),
-                _encodeCompactBalance(amount),
-                bytes1(0x00) // remark: None
-            );
+    function _encodeSLPMintCall(uint32 currencyId, uint256 amount) internal pure returns (bytes memory) {
+        return abi.encodePacked(
+            PALLET_VTOKEN_MINTING,
+            uint8(0x00), // call index: mint
+            _encodeU32LE(currencyId),
+            _encodeCompactBalance(amount),
+            bytes1(0x00) // remark: None
+        );
     }
 
     /// @dev Encode SLP redeem call: pallet_index(60) . call_index(1) . v_currency_id . amount
-    function _encodeSLPRedeemCall(
-        uint32 vCurrencyId,
-        uint256 amount
-    ) internal pure returns (bytes memory) {
-        return
-            abi.encodePacked(
-                PALLET_VTOKEN_MINTING,
-                uint8(0x01), // call index: redeem
-                _encodeU32LE(vCurrencyId),
-                _encodeCompactBalance(amount)
-            );
+    function _encodeSLPRedeemCall(uint32 vCurrencyId, uint256 amount) internal pure returns (bytes memory) {
+        return abi.encodePacked(
+            PALLET_VTOKEN_MINTING,
+            uint8(0x01), // call index: redeem
+            _encodeU32LE(vCurrencyId),
+            _encodeCompactBalance(amount)
+        );
     }
 
     /// @dev Encode DEX swap call: pallet_index(61) . call_index(0) . in . out . amount_in . amount_out_min
-    function _encodeDEXSwapCall(
-        uint32 currencyIn,
-        uint32 currencyOut,
-        uint256 amountIn,
-        uint256 amountOutMin
-    ) internal pure returns (bytes memory) {
-        return
-            abi.encodePacked(
-                PALLET_ZENLINK_DEX,
-                uint8(0x00), // call index: swap_exact_tokens_for_tokens
-                _encodeU32LE(currencyIn),
-                _encodeU32LE(currencyOut),
-                _encodeCompactBalance(amountIn),
-                _encodeCompactBalance(amountOutMin)
-            );
+    function _encodeDEXSwapCall(uint32 currencyIn, uint32 currencyOut, uint256 amountIn, uint256 amountOutMin)
+        internal
+        pure
+        returns (bytes memory)
+    {
+        return abi.encodePacked(
+            PALLET_ZENLINK_DEX,
+            uint8(0x00), // call index: swap_exact_tokens_for_tokens
+            _encodeU32LE(currencyIn),
+            _encodeU32LE(currencyOut),
+            _encodeCompactBalance(amountIn),
+            _encodeCompactBalance(amountOutMin)
+        );
     }
 
     /// @dev Encode farming deposit call: pallet_index(62) . call_index(0) . pool_id . amount
-    function _encodeFarmingDepositCall(
-        uint256 poolId,
-        uint256 amount
-    ) internal pure returns (bytes memory) {
-        return
-            abi.encodePacked(
-                PALLET_FARMING,
-                uint8(0x00), // call index: deposit
-                _encodeCompactBalance(poolId),
-                _encodeCompactBalance(amount)
-            );
+    function _encodeFarmingDepositCall(uint256 poolId, uint256 amount) internal pure returns (bytes memory) {
+        return abi.encodePacked(
+            PALLET_FARMING,
+            uint8(0x00), // call index: deposit
+            _encodeCompactBalance(poolId),
+            _encodeCompactBalance(amount)
+        );
     }
 
     /// @dev Encode farming withdraw call: pallet_index(62) . call_index(1) . pool_id . amount
-    function _encodeFarmingWithdrawCall(
-        uint256 poolId,
-        uint256 amount
-    ) internal pure returns (bytes memory) {
-        return
-            abi.encodePacked(
-                PALLET_FARMING,
-                uint8(0x01), // call index: withdraw
-                _encodeCompactBalance(poolId),
-                _encodeCompactBalance(amount)
-            );
+    function _encodeFarmingWithdrawCall(uint256 poolId, uint256 amount) internal pure returns (bytes memory) {
+        return abi.encodePacked(
+            PALLET_FARMING,
+            uint8(0x01), // call index: withdraw
+            _encodeCompactBalance(poolId),
+            _encodeCompactBalance(amount)
+        );
     }
 
     /// @dev Encode farming claim call: pallet_index(62) . call_index(2) . pool_id
-    function _encodeFarmingClaimCall(
-        uint256 poolId
-    ) internal pure returns (bytes memory) {
-        return
-            abi.encodePacked(
-                PALLET_FARMING,
-                uint8(0x02), // call index: claim
-                _encodeCompactBalance(poolId)
-            );
+    function _encodeFarmingClaimCall(uint256 poolId) internal pure returns (bytes memory) {
+        return abi.encodePacked(
+            PALLET_FARMING,
+            uint8(0x02), // call index: claim
+            _encodeCompactBalance(poolId)
+        );
     }
 
     /// @dev Encode SALP contribute call: pallet_index(63) . call_index(0) . para_id . amount
-    function _encodeSALPContributeCall(
-        uint32 parachainId,
-        uint256 amount
-    ) internal pure returns (bytes memory) {
-        return
-            abi.encodePacked(
-                PALLET_SALP,
-                uint8(0x00), // call index: contribute
-                _encodeU32LE(parachainId),
-                _encodeCompactBalance(amount)
-            );
+    function _encodeSALPContributeCall(uint32 parachainId, uint256 amount) internal pure returns (bytes memory) {
+        return abi.encodePacked(
+            PALLET_SALP,
+            uint8(0x00), // call index: contribute
+            _encodeU32LE(parachainId),
+            _encodeCompactBalance(amount)
+        );
     }
 
     // ─────────────────────────────────────────────────────────────────────
@@ -359,11 +312,11 @@ library BifrostCodec {
 
     /// @dev Build a complete XCM V4 Transact message with fee handling.
     ///      Structure: V4([WithdrawAsset, BuyExecution, Transact, RefundSurplus, DepositAsset])
-    function _buildTransactXcm(
-        bytes memory palletCall,
-        uint256 feeAmount,
-        bytes32 beneficiary
-    ) internal pure returns (bytes memory) {
+    function _buildTransactXcm(bytes memory palletCall, uint256 feeAmount, bytes32 beneficiary)
+        internal
+        pure
+        returns (bytes memory)
+    {
         // Encode the Transact instruction
         bytes memory transactInstruction = abi.encodePacked(
             XCM_TRANSACT,
@@ -383,40 +336,36 @@ library BifrostCodec {
         );
 
         // Build the full instruction sequence as V4 XCM
-        return
-            abi.encodePacked(
-                XCM_V4,
-                uint8(0x14), // Compact length = 5 instructions
-                // 1. WithdrawAsset
-                XCM_WITHDRAW_ASSET,
-                _encodeNativeAsset(feeAmount),
-                // 2. BuyExecution
-                XCM_BUY_EXECUTION,
-                _encodeNativeAsset(feeAmount),
-                uint8(0x00), // WeightLimit::Unlimited
-                // 3. Transact
-                transactInstruction,
-                // 4. RefundSurplus
-                uint8(0x0a), // RefundSurplus instruction
-                // 5. DepositAsset
-                XCM_DEPOSIT_ASSET,
-                uint8(0x00), // Wild::All filter
-                beneficiaryLocation
-            );
+        return abi.encodePacked(
+            XCM_V4,
+            uint8(0x14), // Compact length = 5 instructions
+            // 1. WithdrawAsset
+            XCM_WITHDRAW_ASSET,
+            _encodeNativeAsset(feeAmount),
+            // 2. BuyExecution
+            XCM_BUY_EXECUTION,
+            _encodeNativeAsset(feeAmount),
+            uint8(0x00), // WeightLimit::Unlimited
+            // 3. Transact
+            transactInstruction,
+            // 4. RefundSurplus
+            uint8(0x0a), // RefundSurplus instruction
+            // 5. DepositAsset
+            XCM_DEPOSIT_ASSET,
+            uint8(0x00), // Wild::All filter
+            beneficiaryLocation
+        );
     }
 
     /// @dev Encode a native asset representation for XCM.
-    function _encodeNativeAsset(
-        uint256 amount
-    ) internal pure returns (bytes memory) {
-        return
-            abi.encodePacked(
-                uint8(0x04), // Vec length = 1 asset
-                uint8(0x00), // parents = 0
-                uint8(0x00), // interior = Here
-                uint8(0x00), // Fungibility::Fungible
-                _encodeCompactBalance(amount)
-            );
+    function _encodeNativeAsset(uint256 amount) internal pure returns (bytes memory) {
+        return abi.encodePacked(
+            uint8(0x04), // Vec length = 1 asset
+            uint8(0x00), // parents = 0
+            uint8(0x00), // interior = Here
+            uint8(0x00), // Fungibility::Fungible
+            _encodeCompactBalance(amount)
+        );
     }
 
     // ─────────────────────────────────────────────────────────────────────
@@ -425,20 +374,14 @@ library BifrostCodec {
 
     /// @dev Encode a uint32 as 4-byte little-endian.
     function _encodeU32LE(uint32 value) internal pure returns (bytes memory) {
-        return
-            abi.encodePacked(
-                uint8(value & 0xFF),
-                uint8((value >> 8) & 0xFF),
-                uint8((value >> 16) & 0xFF),
-                uint8(value >> 24)
-            );
+        return abi.encodePacked(
+            uint8(value & 0xFF), uint8((value >> 8) & 0xFF), uint8((value >> 16) & 0xFF), uint8(value >> 24)
+        );
     }
 
     /// @dev Encode a u128 value in SCALE compact form for balance values.
     ///      Mirrors the MultiLocation compact encoding but extended for u128.
-    function _encodeCompactBalance(
-        uint256 value
-    ) internal pure returns (bytes memory) {
+    function _encodeCompactBalance(uint256 value) internal pure returns (bytes memory) {
         if (value <= 0x3F) {
             return abi.encodePacked(uint8(uint8(value) << 2));
         } else if (value <= 0x3FFF) {
@@ -446,13 +389,9 @@ library BifrostCodec {
             return abi.encodePacked(uint8(encoded & 0xFF), uint8(encoded >> 8));
         } else if (value <= 0x3FFFFFFF) {
             uint32 encoded = uint32(value << 2) | 0x02;
-            return
-                abi.encodePacked(
-                    uint8(encoded & 0xFF),
-                    uint8((encoded >> 8) & 0xFF),
-                    uint8((encoded >> 16) & 0xFF),
-                    uint8(encoded >> 24)
-                );
+            return abi.encodePacked(
+                uint8(encoded & 0xFF), uint8((encoded >> 8) & 0xFF), uint8((encoded >> 16) & 0xFF), uint8(encoded >> 24)
+            );
         } else {
             // Big integer mode
             uint256 temp = value;
@@ -473,9 +412,7 @@ library BifrostCodec {
     }
 
     /// @dev Encode a byte vector with compact length prefix (SCALE Vec<u8>).
-    function _encodeCompactVec(
-        bytes memory data
-    ) internal pure returns (bytes memory) {
+    function _encodeCompactVec(bytes memory data) internal pure returns (bytes memory) {
         return abi.encodePacked(_encodeCompactBalance(data.length), data);
     }
 }

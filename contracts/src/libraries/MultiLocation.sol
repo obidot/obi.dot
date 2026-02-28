@@ -96,18 +96,14 @@ library MultiLocation {
     /// @param version     XCM version prefix.
     /// @param parachainId The target parachain ID.
     /// @return SCALE-encoded VersionedMultiLocation.
-    function siblingParachain(
-        uint8 version,
-        uint32 parachainId
-    ) internal pure returns (bytes memory) {
+    function siblingParachain(uint8 version, uint32 parachainId) internal pure returns (bytes memory) {
         _validateVersion(version);
-        return
-            abi.encodePacked(
-                version,
-                uint8(1), // parents = 1 (go up to relay)
-                JUNCTIONS_X1, // interior = X1(...)
-                _encodeParachainJunction(parachainId)
-            );
+        return abi.encodePacked(
+            version,
+            uint8(1), // parents = 1 (go up to relay)
+            JUNCTIONS_X1, // interior = X1(...)
+            _encodeParachainJunction(parachainId)
+        );
     }
 
     /// @notice Encode a sibling parachain + AccountId32 location:
@@ -116,20 +112,19 @@ library MultiLocation {
     /// @param parachainId The target parachain ID.
     /// @param accountId   The 32-byte substrate account ID.
     /// @return SCALE-encoded VersionedMultiLocation.
-    function siblingParachainAccountId32(
-        uint8 version,
-        uint32 parachainId,
-        bytes32 accountId
-    ) internal pure returns (bytes memory) {
+    function siblingParachainAccountId32(uint8 version, uint32 parachainId, bytes32 accountId)
+        internal
+        pure
+        returns (bytes memory)
+    {
         _validateVersion(version);
-        return
-            abi.encodePacked(
-                version,
-                uint8(1), // parents = 1
-                JUNCTIONS_X2, // interior = X2(...)
-                _encodeParachainJunction(parachainId),
-                _encodeAccountId32Junction(accountId)
-            );
+        return abi.encodePacked(
+            version,
+            uint8(1), // parents = 1
+            JUNCTIONS_X2, // interior = X2(...)
+            _encodeParachainJunction(parachainId),
+            _encodeAccountId32Junction(accountId)
+        );
     }
 
     /// @notice Encode a sibling parachain + AccountKey20 location:
@@ -138,20 +133,19 @@ library MultiLocation {
     /// @param parachainId The target parachain ID.
     /// @param account     The 20-byte EVM/Ethereum account address.
     /// @return SCALE-encoded VersionedMultiLocation.
-    function siblingParachainAccountKey20(
-        uint8 version,
-        uint32 parachainId,
-        address account
-    ) internal pure returns (bytes memory) {
+    function siblingParachainAccountKey20(uint8 version, uint32 parachainId, address account)
+        internal
+        pure
+        returns (bytes memory)
+    {
         _validateVersion(version);
-        return
-            abi.encodePacked(
-                version,
-                uint8(1), // parents = 1
-                JUNCTIONS_X2, // interior = X2(...)
-                _encodeParachainJunction(parachainId),
-                _encodeAccountKey20Junction(account)
-            );
+        return abi.encodePacked(
+            version,
+            uint8(1), // parents = 1
+            JUNCTIONS_X2, // interior = X2(...)
+            _encodeParachainJunction(parachainId),
+            _encodeAccountKey20Junction(account)
+        );
     }
 
     /// @notice Encode a sibling parachain + PalletInstance + GeneralIndex location:
@@ -162,22 +156,20 @@ library MultiLocation {
     /// @param palletIndex   The pallet instance index.
     /// @param generalIndex  The general index within the pallet (e.g. asset ID).
     /// @return SCALE-encoded VersionedMultiLocation.
-    function siblingParachainPalletAsset(
-        uint8 version,
-        uint32 parachainId,
-        uint8 palletIndex,
-        uint128 generalIndex
-    ) internal pure returns (bytes memory) {
+    function siblingParachainPalletAsset(uint8 version, uint32 parachainId, uint8 palletIndex, uint128 generalIndex)
+        internal
+        pure
+        returns (bytes memory)
+    {
         _validateVersion(version);
-        return
-            abi.encodePacked(
-                version,
-                uint8(1), // parents = 1
-                JUNCTIONS_X3, // interior = X3(...)
-                _encodeParachainJunction(parachainId),
-                _encodePalletInstanceJunction(palletIndex),
-                _encodeGeneralIndexJunction(generalIndex)
-            );
+        return abi.encodePacked(
+            version,
+            uint8(1), // parents = 1
+            JUNCTIONS_X3, // interior = X3(...)
+            _encodeParachainJunction(parachainId),
+            _encodePalletInstanceJunction(palletIndex),
+            _encodeGeneralIndexJunction(generalIndex)
+        );
     }
 
     /// @notice Encode a local "here" location: { parents: 0, interior: Here }.
@@ -193,18 +185,14 @@ library MultiLocation {
     /// @param version     XCM version prefix.
     /// @param parachainId The target child parachain ID.
     /// @return SCALE-encoded VersionedMultiLocation.
-    function childParachain(
-        uint8 version,
-        uint32 parachainId
-    ) internal pure returns (bytes memory) {
+    function childParachain(uint8 version, uint32 parachainId) internal pure returns (bytes memory) {
         _validateVersion(version);
-        return
-            abi.encodePacked(
-                version,
-                uint8(0), // parents = 0 (already on relay)
-                JUNCTIONS_X1, // interior = X1(...)
-                _encodeParachainJunction(parachainId)
-            );
+        return abi.encodePacked(
+            version,
+            uint8(0), // parents = 0 (already on relay)
+            JUNCTIONS_X1, // interior = X1(...)
+            _encodeParachainJunction(parachainId)
+        );
     }
 
     // ─────────────────────────────────────────────────────────────────────
@@ -214,61 +202,44 @@ library MultiLocation {
     /// @notice Encode a Parachain junction: Parachain(Compact<u32>).
     /// @param parachainId The parachain ID.
     /// @return The SCALE-encoded junction bytes.
-    function _encodeParachainJunction(
-        uint32 parachainId
-    ) internal pure returns (bytes memory) {
-        return
-            abi.encodePacked(
-                JUNCTION_PARACHAIN,
-                _encodeCompactU32(parachainId)
-            );
+    function _encodeParachainJunction(uint32 parachainId) internal pure returns (bytes memory) {
+        return abi.encodePacked(JUNCTION_PARACHAIN, _encodeCompactU32(parachainId));
     }
 
     /// @notice Encode an AccountId32 junction: AccountId32 { network: None, id: [u8; 32] }.
     /// @param accountId The 32-byte substrate account identifier.
     /// @return The SCALE-encoded junction bytes.
-    function _encodeAccountId32Junction(
-        bytes32 accountId
-    ) internal pure returns (bytes memory) {
-        return
-            abi.encodePacked(
-                JUNCTION_ACCOUNT_ID32,
-                uint8(0x00), // Option<NetworkId>::None
-                accountId // [u8; 32]
-            );
+    function _encodeAccountId32Junction(bytes32 accountId) internal pure returns (bytes memory) {
+        return abi.encodePacked(
+            JUNCTION_ACCOUNT_ID32,
+            uint8(0x00), // Option<NetworkId>::None
+            accountId // [u8; 32]
+        );
     }
 
     /// @notice Encode an AccountKey20 junction: AccountKey20 { network: None, key: [u8; 20] }.
     /// @param account The 20-byte EVM address.
     /// @return The SCALE-encoded junction bytes.
-    function _encodeAccountKey20Junction(
-        address account
-    ) internal pure returns (bytes memory) {
-        return
-            abi.encodePacked(
-                JUNCTION_ACCOUNT_KEY20,
-                uint8(0x00), // Option<NetworkId>::None
-                account // [u8; 20]
-            );
+    function _encodeAccountKey20Junction(address account) internal pure returns (bytes memory) {
+        return abi.encodePacked(
+            JUNCTION_ACCOUNT_KEY20,
+            uint8(0x00), // Option<NetworkId>::None
+            account // [u8; 20]
+        );
     }
 
     /// @notice Encode a PalletInstance junction: PalletInstance(u8).
     /// @param palletIndex The pallet index byte.
     /// @return The SCALE-encoded junction bytes.
-    function _encodePalletInstanceJunction(
-        uint8 palletIndex
-    ) internal pure returns (bytes memory) {
+    function _encodePalletInstanceJunction(uint8 palletIndex) internal pure returns (bytes memory) {
         return abi.encodePacked(JUNCTION_PALLET_INSTANCE, palletIndex);
     }
 
     /// @notice Encode a GeneralIndex junction: GeneralIndex(Compact<u128>).
     /// @param index The general index value.
     /// @return The SCALE-encoded junction bytes.
-    function _encodeGeneralIndexJunction(
-        uint128 index
-    ) internal pure returns (bytes memory) {
-        return
-            abi.encodePacked(JUNCTION_GENERAL_INDEX, _encodeCompactU128(index));
+    function _encodeGeneralIndexJunction(uint128 index) internal pure returns (bytes memory) {
+        return abi.encodePacked(JUNCTION_GENERAL_INDEX, _encodeCompactU128(index));
     }
 
     // ─────────────────────────────────────────────────────────────────────
@@ -282,9 +253,7 @@ library MultiLocation {
     ///      - Four-byte mode    (16384..=1073741823): [value<<2 | 0b10] as u32 LE
     /// @param value The uint32 value to compact-encode.
     /// @return The SCALE compact-encoded bytes.
-    function _encodeCompactU32(
-        uint32 value
-    ) internal pure returns (bytes memory) {
+    function _encodeCompactU32(uint32 value) internal pure returns (bytes memory) {
         if (value <= 0x3F) {
             // Single-byte mode
             return abi.encodePacked(uint8(value << 2));
@@ -295,13 +264,9 @@ library MultiLocation {
         } else if (value <= 0x3FFFFFFF) {
             // Four-byte mode (little-endian u32)
             uint32 encoded = (value << 2) | 0x02;
-            return
-                abi.encodePacked(
-                    uint8(encoded & 0xFF),
-                    uint8((encoded >> 8) & 0xFF),
-                    uint8((encoded >> 16) & 0xFF),
-                    uint8(encoded >> 24)
-                );
+            return abi.encodePacked(
+                uint8(encoded & 0xFF), uint8((encoded >> 8) & 0xFF), uint8((encoded >> 16) & 0xFF), uint8(encoded >> 24)
+            );
         } else {
             revert InvalidParachainId(value);
         }
@@ -312,9 +277,7 @@ library MultiLocation {
     ///      (prefix byte = number_of_bytes << 2 | 0b11) for values > 2^30.
     /// @param value The uint128 value to compact-encode.
     /// @return The SCALE compact-encoded bytes.
-    function _encodeCompactU128(
-        uint128 value
-    ) internal pure returns (bytes memory) {
+    function _encodeCompactU128(uint128 value) internal pure returns (bytes memory) {
         if (value <= 0x3F) {
             return abi.encodePacked(uint8(uint8(value) << 2));
         } else if (value <= 0x3FFF) {
@@ -322,13 +285,9 @@ library MultiLocation {
             return abi.encodePacked(uint8(encoded & 0xFF), uint8(encoded >> 8));
         } else if (value <= 0x3FFFFFFF) {
             uint32 encoded = uint32(value << 2) | 0x02;
-            return
-                abi.encodePacked(
-                    uint8(encoded & 0xFF),
-                    uint8((encoded >> 8) & 0xFF),
-                    uint8((encoded >> 16) & 0xFF),
-                    uint8(encoded >> 24)
-                );
+            return abi.encodePacked(
+                uint8(encoded & 0xFF), uint8((encoded >> 8) & 0xFF), uint8((encoded >> 16) & 0xFF), uint8(encoded >> 24)
+            );
         } else {
             // Big-integer mode: prefix = (byteLen - 4) << 2 | 0b11
             // Determine the minimal byte length needed
@@ -361,9 +320,7 @@ library MultiLocation {
     ///      Returns 0 if the format doesn't match or points to the relay chain.
     /// @param dest The SCALE-encoded VersionedMultiLocation bytes.
     /// @return parachainId The extracted parachain ID, or 0 if not applicable.
-    function extractParachainId(
-        bytes memory dest
-    ) internal pure returns (uint32 parachainId) {
+    function extractParachainId(bytes memory dest) internal pure returns (uint32 parachainId) {
         // Minimum: version(1) + parents(1) + junctions_variant(1) + junction_variant(1) + compact(1) = 5
         if (dest.length < 5) return 0;
 
@@ -382,7 +339,7 @@ library MultiLocation {
         if (uint8(dest[3]) != JUNCTION_PARACHAIN) return 0;
 
         // Decode compact u32 starting at index 4
-        (parachainId, ) = _decodeCompactU32(dest, 4);
+        (parachainId,) = _decodeCompactU32(dest, 4);
     }
 
     /// @notice Decode a SCALE Compact<u32> value from a byte array at a given offset.
@@ -390,10 +347,11 @@ library MultiLocation {
     /// @param offset The starting byte offset.
     /// @return value     The decoded uint32 value.
     /// @return newOffset The offset after the compact-encoded value.
-    function _decodeCompactU32(
-        bytes memory data,
-        uint256 offset
-    ) internal pure returns (uint32 value, uint256 newOffset) {
+    function _decodeCompactU32(bytes memory data, uint256 offset)
+        internal
+        pure
+        returns (uint32 value, uint256 newOffset)
+    {
         uint8 firstByte = uint8(data[offset]);
         uint8 mode = firstByte & 0x03;
 
@@ -403,24 +361,15 @@ library MultiLocation {
             newOffset = offset + 1;
         } else if (mode == 1) {
             // Two-byte mode (little-endian)
-            require(
-                offset + 2 <= data.length,
-                "MultiLocation: truncated compact u16"
-            );
-            uint16 raw = uint16(uint8(data[offset])) |
-                (uint16(uint8(data[offset + 1])) << 8);
+            require(offset + 2 <= data.length, "MultiLocation: truncated compact u16");
+            uint16 raw = uint16(uint8(data[offset])) | (uint16(uint8(data[offset + 1])) << 8);
             value = uint32(raw >> 2);
             newOffset = offset + 2;
         } else if (mode == 2) {
             // Four-byte mode (little-endian)
-            require(
-                offset + 4 <= data.length,
-                "MultiLocation: truncated compact u32"
-            );
-            uint32 raw = uint32(uint8(data[offset])) |
-                (uint32(uint8(data[offset + 1])) << 8) |
-                (uint32(uint8(data[offset + 2])) << 16) |
-                (uint32(uint8(data[offset + 3])) << 24);
+            require(offset + 4 <= data.length, "MultiLocation: truncated compact u32");
+            uint32 raw = uint32(uint8(data[offset])) | (uint32(uint8(data[offset + 1])) << 8)
+                | (uint32(uint8(data[offset + 2])) << 16) | (uint32(uint8(data[offset + 3])) << 24);
             value = raw >> 2;
             newOffset = offset + 4;
         } else {

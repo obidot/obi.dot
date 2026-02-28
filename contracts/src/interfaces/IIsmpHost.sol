@@ -48,16 +48,12 @@ interface IIsmpHost {
     /// @notice Dispatch a POST request to a remote chain via Hyperbridge.
     /// @param post The dispatch parameters including destination, recipient, body, and timeout.
     /// @return commitment The unique commitment hash identifying this request.
-    function dispatch(
-        DispatchPost memory post
-    ) external payable returns (bytes32 commitment);
+    function dispatch(DispatchPost memory post) external payable returns (bytes32 commitment);
 
     /// @notice Dispatch a GET request (state proof query) to a remote chain.
     /// @param get The dispatch parameters including destination, height, keys, and timeout.
     /// @return commitment The unique commitment hash identifying this request.
-    function dispatch(
-        DispatchGet memory get
-    ) external payable returns (bytes32 commitment);
+    function dispatch(DispatchGet memory get) external payable returns (bytes32 commitment);
 
     /// @notice Returns the identifier of this state machine (e.g. "ETHEREUM", "POLKADOT-HUB").
     /// @return The state machine identifier as bytes.
@@ -74,7 +70,5 @@ interface IIsmpHost {
     /// @notice Estimate the fee for dispatching a cross-chain message.
     /// @param post The dispatch parameters to estimate fees for.
     /// @return fee The estimated fee in native tokens.
-    function dispatchFee(
-        DispatchPost memory post
-    ) external view returns (uint256 fee);
+    function dispatchFee(DispatchPost memory post) external view returns (uint256 fee);
 }

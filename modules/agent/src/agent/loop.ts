@@ -39,6 +39,27 @@ export class AutonomousLoop {
   private running = false;
   private cycleCount = 0;
 
+  /**
+   * Pending strategies awaiting outcome verification.
+   * Maps strategy ID (string) to execution metadata.
+   */
+  private readonly pendingOutcomes = new Map<
+    string,
+    {
+      strategyId: bigint;
+      amount: bigint;
+      targetParachain: number;
+      targetProtocol: string;
+      executedAt: number;
+      retries: number;
+    }
+  >();
+
+  /** Maximum time to wait for XCM delivery confirmation (ms). */
+  private static readonly OUTCOME_TIMEOUT_MS = 10 * 60 * 1000; // 10 minutes
+  /** Maximum retry attempts for outcome verification. */
+  private static readonly MAX_OUTCOME_RETRIES = 3;
+
   constructor() {
     // ── Services ──────────────────────────────────────────────────────
     this.signerService = new SignerService();
@@ -93,6 +114,29 @@ export class AutonomousLoop {
   // ─────────────────────────────────────────────────────────────────────
   //  Public API
   // ─────────────────────────────────────────────────────────────────────
+
+  /**
+   * Returns the combined tool set (ObiKit built-ins + custom Obidot tools).
+   * Used by the Telegram bot and API server to share the same tools.
+   */
+  getTools(): StructuredToolInterface[] {
+    return this.tools;
+  }
+
+  /**
+   * Returns the service instances for use by the API server.
+   */
+  getServices(): {
+    signerService: SignerService;
+    yieldService: YieldService;
+    crossChainService: CrossChainService;
+  } {
+    return {
+      signerService: this.signerService,
+      yieldService: this.yieldService,
+      crossChainService: this.crossChainService,
+    };
+  }
 
   /**
    * Start the autonomous decision loop.
@@ -164,6 +208,9 @@ export class AutonomousLoop {
    */
   private async runCycle(): Promise<void> {
     // ── Phase 1: Perception ──────────────────────────────────────────
+    // First, verify any pending outcomes from previous cycles
+    await this.verifyPendingOutcomes();
+
     loopLog.info("Phase 1: Perception — fetching market data & vault state");
 
     const [yields, bifrostYields, vaultState] = await Promise.all([
@@ -308,9 +355,30 @@ export class AutonomousLoop {
         { txHash: parsed.data?.txHash, nonce: parsed.data?.nonce },
         "Strategy executed successfully on-chain",
       );
+
+      // Track the executed strategy for outcome verification
+      if (parsed.data?.nonce !== undefined) {
+        const strategyId = BigInt(parsed.data.nonce);
+        this.pendingOutcomes.set(strategyId.toString(), {
+          strategyId,
+          amount: BigInt(parsed.data.amount ?? "0"),
+          targetParachain: parsed.data.targetParachain ?? 0,
+          targetProtocol: parsed.data.targetProtocol ?? "",
+          executedAt: Date.now(),
+          retries: 0,
+        });
+
+        loopLog.info(
+          { strategyId: strategyId.toString(), pendingCount: this.pendingOutcomes.size },
+          "Strategy queued for outcome verification",
+        );
+      }
     } else {
       loopLog.error({ error: parsed.error }, "Strategy execution failed");
     }
+
+    // ── Phase 4: Outcome Verification ──────────────────────────────────
+    await this.verifyPendingOutcomes();
   }
 
   // ─────────────────────────────────────────────────────────────────────
@@ -469,6 +537,147 @@ export class AutonomousLoop {
       "All LLM attempts exhausted — returning null",
     );
     return null;
+  }
+
+  // ─────────────────────────────────────────────────────────────────────
+  //  Outcome Verification
+  // ─────────────────────────────────────────────────────────────────────
+
+  /**
+   * Poll pending strategies and report outcomes on-chain.
+   *
+   * For each pending strategy:
+   *   1. Query on-chain StrategyRecord status
+   *   2. If still `Sent` (status=1), check for timeout or retry
+   *   3. If status has changed (Executed/Failed), report outcome
+   *   4. On timeout, report as failed with original amount returned
+   *
+   * The agent acts as a keeper, calling `reportStrategyOutcome()` to
+   * close the accounting loop and trigger PnL tracking.
+   */
+  private async verifyPendingOutcomes(): Promise<void> {
+    if (this.pendingOutcomes.size === 0) return;
+
+    loopLog.info(
+      { pendingCount: this.pendingOutcomes.size },
+      "Phase 4: Verifying pending strategy outcomes",
+    );
+
+    const now = Date.now();
+    const toRemove: string[] = [];
+
+    for (const [id, pending] of this.pendingOutcomes) {
+      try {
+        // Query on-chain strategy status
+        const record = await this.signerService.fetchStrategyRecord(
+          pending.strategyId,
+        );
+
+        const status = record.status;
+
+        if (status === SignerService.StrategyStatus.Sent) {
+          // Still pending — check if timed out
+          const elapsed = now - pending.executedAt;
+
+          if (elapsed > AutonomousLoop.OUTCOME_TIMEOUT_MS) {
+            loopLog.warn(
+              {
+                strategyId: id,
+                elapsedMs: elapsed,
+                timeoutMs: AutonomousLoop.OUTCOME_TIMEOUT_MS,
+              },
+              "Strategy outcome timed out — reporting as failed",
+            );
+
+            // Report as failed; return the original amount as best estimate
+            // (in reality, the keeper would have XCM delivery data)
+            try {
+              await this.signerService.reportOutcome(
+                pending.strategyId,
+                false,
+                pending.amount, // return original amount (no loss assumed on timeout)
+              );
+              loopLog.info(
+                { strategyId: id },
+                "Timeout outcome reported on-chain",
+              );
+            } catch (err) {
+              loopLog.error(
+                { strategyId: id, err },
+                "Failed to report timeout outcome — will retry",
+              );
+              pending.retries++;
+              if (pending.retries >= AutonomousLoop.MAX_OUTCOME_RETRIES) {
+                loopLog.error(
+                  { strategyId: id },
+                  "Max retries exceeded for outcome report — dropping",
+                );
+                toRemove.push(id);
+              }
+              continue;
+            }
+
+            toRemove.push(id);
+          } else {
+            loopLog.debug(
+              {
+                strategyId: id,
+                elapsedMs: elapsed,
+                remainingMs: AutonomousLoop.OUTCOME_TIMEOUT_MS - elapsed,
+              },
+              "Strategy still pending — will check next cycle",
+            );
+          }
+        } else if (
+          status === SignerService.StrategyStatus.Executed ||
+          status === SignerService.StrategyStatus.Failed
+        ) {
+          // Already resolved (possibly by another keeper)
+          loopLog.info(
+            {
+              strategyId: id,
+              status: status === SignerService.StrategyStatus.Executed
+                ? "Executed"
+                : "Failed",
+            },
+            "Strategy outcome already resolved on-chain",
+          );
+          toRemove.push(id);
+        } else {
+          // Unexpected status — log and remove
+          loopLog.warn(
+            { strategyId: id, status },
+            "Unexpected strategy status — removing from tracking",
+          );
+          toRemove.push(id);
+        }
+      } catch (err) {
+        loopLog.error(
+          { strategyId: id, err },
+          "Failed to verify strategy outcome",
+        );
+        pending.retries++;
+        if (pending.retries >= AutonomousLoop.MAX_OUTCOME_RETRIES) {
+          loopLog.error(
+            { strategyId: id },
+            "Max retries exceeded for outcome verification — dropping",
+          );
+          toRemove.push(id);
+        }
+      }
+    }
+
+    // Clean up resolved strategies
+    for (const id of toRemove) {
+      this.pendingOutcomes.delete(id);
+    }
+
+    if (toRemove.length > 0) {
+      loopLog.info(
+        { resolved: toRemove.length, remaining: this.pendingOutcomes.size },
+        "Outcome verification complete",
+      );
+    }
   }
 
   // ─────────────────────────────────────────────────────────────────────
