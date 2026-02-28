@@ -1,40 +1,41 @@
 ---
 title: AI Agent
-description: Autonomous AI agent module — architecture, LangChain tools, decision pipeline, services, cross-chain state aggregation, and Bifrost yield monitoring.
+description: Autonomous AI agent module — architecture, LangChain tools, decision pipeline, services, Fastify API server, WebSocket, Telegram bot, and Bifrost yield monitoring.
 ---
 
-The Obidot AI Agent is an autonomous financial strategist that manages the vault system. Built with TypeScript, [LangChain](https://js.langchain.com/), and [Viem](https://viem.sh/), it runs an observation-decision-execution loop that monitors yield opportunities across Polkadot parachains and EVM chains, then signs and submits strategy intents to the vault's on-chain policy engine.
+The Obidot AI Agent is an autonomous financial strategist that manages the vault system. Built with TypeScript, [LangChain](https://js.langchain.com/), and [Viem](https://viem.sh/), it runs an observation-decision-execution loop that monitors yield opportunities across Polkadot parachains, then signs and submits strategy intents to the vault's on-chain policy engine. It also exposes a Fastify HTTP/WebSocket API consumed by the Next.js dashboard, and optionally integrates with Telegram.
 
 ## Architecture
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                     Autonomous Loop                          │
-│                                                              │
-│  ┌──────────┐   ┌───────────┐   ┌──────────────────────┐   │
-│  │ Phase 1   │   │ Phase 2    │   │ Phase 3               │   │
-│  │ Perceive  │──►│ Decide     │──►│ Execute               │   │
-│  │           │   │            │   │                        │   │
-│  │ Yields    │   │ LLM (GPT)  │   │ Sign EIP-712 intent  │   │
-│  │ Vault     │   │ System     │   │ Submit to vault       │   │
-│  │ Bifrost   │   │ Prompt     │   │ or Bifrost adapter    │   │
-│  │ Cross-    │   │            │   │                        │   │
-│  │ Chain     │   │            │   │                        │   │
-│  └──────────┘   └───────────┘   └──────────────────────┘   │
-│       │                                      │               │
-│       ▼                                      ▼               │
-│  ┌─────────────────┐            ┌─────────────────────┐     │
-│  │ Services         │            │ Signer Service       │     │
-│  │ • YieldService   │            │ • EIP-712 signing    │     │
-│  │ • CrossChain     │            │ • writeContract      │     │
-│  │   Service        │            │ • Bifrost adapter    │     │
-│  └─────────────────┘            └─────────────────────┘     │
-│                                                              │
-│  ┌─────────────────────────────────────────────────────┐    │
-│  │                    ObiKit SDK                         │    │
-│  │  PAK tools (balance, transfer, XCM, staking, swap)   │    │
-│  └─────────────────────────────────────────────────────┘    │
-└─────────────────────────────────────────────────────────────┘
+┌────────────────────────────────────────────────────────────────────┐
+│                        @obidot/agent                                │
+│                                                                      │
+│  ┌──────────────────────────────────────────────────────────────┐   │
+│  │                    Autonomous Loop (loop.ts)                   │   │
+│  │                                                                │   │
+│  │  Phase 1: Perceive ──► Phase 2: Decide ──► Phase 3: Execute   │   │
+│  │  (yields, vault,        (GPT-4o via          (EIP-712 sign,   │   │
+│  │   bifrost, cross-       LangChain)            writeContract)  │   │
+│  │   chain state)                                                 │   │
+│  └──────────────────────────────────────────────────────────────┘   │
+│                                                                      │
+│  ┌─────────────────────┐    ┌────────────────────────────────────┐  │
+│  │   Services           │    │   Fastify API Server (port 3001)   │  │
+│  │ • YieldService       │    │                                    │  │
+│  │ • CrossChainService  │    │   GET  /api/vault/state            │  │
+│  │ • SignerService       │    │   GET  /api/vault/performance      │  │
+│  │ • StrategyStore      │    │   GET  /api/yields                 │  │
+│  │ • EventBus           │    │   GET  /api/yields/bifrost         │  │
+│  │ • OracleService      │    │   GET  /api/strategies             │  │
+│  │ • PriceAggregator    │    │   GET  /api/crosschain/state       │  │
+│  └─────────────────────┘    │   GET  /api/agent/log              │  │
+│                              │   POST /api/chat                   │  │
+│  ┌─────────────────────┐    │   GET  /ws  (WebSocket)            │  │
+│  │   Telegram Bot       │    └────────────────────────────────────┘  │
+│  │ (GPT-4o + tools)     │                                            │
+│  └─────────────────────┘                                            │
+└────────────────────────────────────────────────────────────────────┘
 ```
 
 ## Module Structure
@@ -42,22 +43,38 @@ The Obidot AI Agent is an autonomous financial strategist that manages the vault
 ```
 modules/agent/
 ├── src/
-│   ├── main.ts                    # Entry point — starts the autonomous loop
+│   ├── main.ts                       # Entry point — starts loop, API server, Telegram bot
 │   ├── agent/
-│   │   ├── loop.ts                # AutonomousLoop class — 3-phase cycle
-│   │   ├── systemPrompt.ts        # LLM system prompt (identity, rules, output format)
-│   │   └── tools.ts               # 6 LangChain tools (yield, vault, strategy, Bifrost, cross-chain)
+│   │   ├── loop.ts                   # AutonomousLoop class — 4-phase cycle
+│   │   ├── systemPrompt.ts           # LLM system prompt (identity, rules, output format)
+│   │   └── tools.ts                  # 6 LangChain tools (yield, vault, strategy, Bifrost, cross-chain)
+│   ├── api/
+│   │   ├── server.ts                 # Fastify server with CORS, WebSocket upgrade
+│   │   └── routes/
+│   │       ├── vault.ts              # GET /api/vault/state, /api/vault/performance
+│   │       ├── yields.ts             # GET /api/yields, /api/yields/bifrost
+│   │       ├── strategies.ts         # GET /api/strategies
+│   │       ├── crosschain.ts         # GET /api/crosschain/state
+│   │       └── agent.ts              # GET /api/agent/log, POST /api/chat
 │   ├── config/
-│   │   ├── constants.ts           # Addresses, ABIs, protocol registry, chain configs
-│   │   └── env.ts                 # Environment variable parsing (Zod validated)
+│   │   ├── constants.ts              # Addresses, ABIs, protocol registry, chain configs
+│   │   ├── env.ts                    # Environment variable parsing (Zod validated)
+│   │   └── oracle.config.ts          # Oracle feed definitions (symbols, decimals, heartbeats)
 │   ├── services/
-│   │   ├── yield.service.ts       # Yield fetcher (parachains + Bifrost products)
-│   │   ├── crosschain.service.ts  # Multi-chain state aggregator
-│   │   └── signer.service.ts      # EIP-712 signing + on-chain execution
+│   │   ├── yield.service.ts          # Yield fetcher — DeFiLlama TVL + simulated APYs
+│   │   ├── crosschain.service.ts     # Multi-chain state aggregator
+│   │   ├── signer.service.ts         # EIP-712 signing + on-chain execution
+│   │   ├── strategy-store.service.ts # In-memory strategy + decision log (singleton)
+│   │   ├── event-bus.service.ts      # Node EventEmitter bus for real-time WebSocket relay
+│   │   ├── oracle.service.ts         # Multi-source price aggregation with TWAP
+│   │   └── price-aggregator.service.ts # On-chain/off-chain price fetching (Pyth, CG, Binance)
+│   ├── telegram/
+│   │   └── bot.ts                    # Telegram bot — GPT-4o with all tools, /start command
 │   ├── types/
-│   │   └── index.ts               # Zod schemas, TypeScript types, decision union
+│   │   ├── index.ts                  # Zod schemas, TypeScript types, decision union
+│   │   └── oracle.types.ts           # Oracle-specific types (OracleSource, OracleQuote, etc.)
 │   └── utils/
-│       └── logger.ts              # Pino structured logger
+│       └── logger.ts                 # Pino structured logger
 ├── package.json
 ├── tsconfig.json
 └── .env.example
@@ -133,7 +150,7 @@ When no profitable opportunity exists or risk is too high:
 
 ## LangChain Tools
 
-The agent registers 6 custom LangChain tools with the ObiKit SDK:
+The agent registers 6 custom LangChain tools:
 
 ### Perception Tools
 
@@ -164,19 +181,33 @@ All execution tools enforce hard limits before submitting transactions:
 
 ### YieldService
 
-Fetches yield data from DeFi protocols. For Bifrost, it tracks 7 distinct products:
+Fetches yield data from DeFi protocols using a fast per-slug TVL approach:
 
-| Product | Category | APY Range | Currency |
-|---------|----------|-----------|----------|
-| Bifrost SLP vDOT | SLP | 7–11% | DOT → vDOT |
-| Bifrost SLP vKSM | SLP | 5.5–8.5% | KSM → vKSM |
-| Bifrost DEX DOT/vDOT | DEX | 8–18% | DOT ↔ vDOT |
-| Bifrost DEX BNC/DOT | DEX | 12–25% | BNC ↔ DOT |
-| Bifrost Farm DOT/vDOT LP | Farming | 15–35% | LP tokens |
-| Bifrost Farm BNC/DOT LP | Farming | 20–45% | LP tokens |
-| Bifrost SALP | SALP | 3–6% | DOT |
+- **TVL data**: Fetched from `api.llama.fi/tvl/{slug}` per protocol — returns a single number in ~700ms (replaces the bulk `/yields/pools` endpoint which returns ~12MB and always times out)
+- **APY data**: Simulated via a sine-wave oscillator seeded per protocol, producing realistic bounded ranges
+- **Bifrost yields**: 7 products returned with simulated APYs (Bifrost's API returns collator data, not vToken APYs)
+- **Cache TTL**: 5 minutes (previously 2 minutes before the DeFiLlama fix)
 
-Each product returns a `BifrostYield` object with APY, category, currency IDs, pool ID, and active status.
+Tracked parachain protocols and their APY ranges:
+
+| Protocol | Parachain | APY Range |
+|----------|-----------|-----------|
+| Hydration Omnipool | HydraDX (2034) | 8–15% |
+| Acala Liquid DOT | Acala (2000) | 6–12% |
+| Moonwell Lending | Moonbeam (2004) | 4–9% |
+| Astar dApp Staking | Astar (2006) | 5–10% |
+
+Bifrost products:
+
+| Product | Category | APY Range |
+|---------|----------|-----------|
+| Bifrost SLP vDOT | SLP | 7–11% |
+| Bifrost SLP vKSM | SLP | 5.5–8.5% |
+| Bifrost DEX DOT/vDOT | DEX | 8–18% |
+| Bifrost DEX BNC/DOT | DEX | 12–25% |
+| Bifrost Farm DOT/vDOT LP | Farming | 15–35% |
+| Bifrost Farm BNC/DOT LP | Farming | 20–45% |
+| Bifrost SALP | SALP | 3–6% |
 
 ### CrossChainService
 
@@ -184,23 +215,18 @@ Aggregates vault state across all configured chains:
 
 ```typescript
 class CrossChainService {
-  // Fetch combined hub + satellite state
   async fetchCrossChainState(hubState: VaultState): Promise<CrossChainVaultState>
-
-  // Find satellites with stale sync data
   getStaleSatellites(): SatelliteChainState[]
-
-  // Check if CrossChainRouter is operational
   async isRouterActive(): Promise<boolean>
 }
 ```
 
-The service creates Viem `PublicClient` instances for each configured satellite chain and reads on-chain state in parallel:
+Reads performed in parallel for each configured satellite:
 
 | Read | Source | Data |
 |------|--------|------|
 | Hub cross-chain data | `ObidotVault` | `totalSatelliteAssets`, `globalTotalAssets` |
-| Satellite state | `ObidotVaultEVM` (per chain) | `totalAssets`, `globalTotalAssets`, `emergencyMode`, `lastSyncTimestamp`, `paused` |
+| Satellite state | `ObidotVaultEVM` (per chain) | `totalAssets`, `emergencyMode`, `lastSyncTimestamp`, `paused` |
 | Router status | `CrossChainRouter` | `paused` |
 
 ### SignerService
@@ -214,55 +240,149 @@ Manages EIP-712 signing and on-chain transaction execution:
 | `previewBifrostStrategy(...)` | Read `BifrostAdapter.previewStrategy()` |
 | `executeBifrostStrategy(...)` | Write `BifrostAdapter.executeBifrostStrategy()` |
 
-The service uses Viem's `createWalletClient` with the strategist's private key for signing and `createPublicClient` for reading state.
+Uses Viem's `createWalletClient` with the strategist's private key for signing and `createPublicClient` for reading.
+
+### StrategyStore
+
+In-memory singleton that records all strategy executions and agent decisions for the API:
+
+```typescript
+class StrategyStoreService {
+  addStrategy(record: StrategyRecord): void
+  updateStrategy(id: string, update: Partial<StrategyRecord>): void
+  getStrategies(): StrategyRecord[]
+  addDecision(decision: AgentDecisionRecord): void
+  getDecisions(limit?: number): AgentDecisionRecord[]
+}
+```
+
+`StrategyRecord` fields: `id`, `action`, `target`, `amount`, `reasoning`, `status` (`pending` | `executed` | `failed` | `timeout`), `timestamp`, `outcomeTimestamp`, `txHash`.
+
+`AgentDecisionRecord` fields: `cycle`, `action`, `reasoning`, `timestamp`, plus an optional `snapshot` (vault state at decision time: `totalAssets`, `idleBalance`, `topYieldApy`, `topYieldProtocol`).
+
+### EventBus
+
+A Node.js `EventEmitter` singleton used to relay real-time events to WebSocket clients:
+
+```typescript
+class EventBusService {
+  emit(event: string, data: unknown): void
+  on(event: string, listener: (data: unknown) => void): void
+  off(event: string, listener: (data: unknown) => void): void
+}
+```
+
+Event types currently emitted: `vault:stateUpdate`, `strategy:executed`, `agent:decision`, `heartbeat`.
+
+### OracleService
+
+Multi-source price aggregation with TWAP (time-weighted average price):
+
+```typescript
+class OracleService {
+  async getPrice(symbol: string): Promise<OracleQuote>
+  async getAllPrices(): Promise<Map<string, OracleQuote>>
+  async startPriceUpdates(intervalMs?: number): Promise<void>
+}
+```
+
+Configured via `oracle.config.ts` which defines feed symbols, decimal precision, and heartbeat intervals for each asset.
+
+### PriceAggregatorService
+
+Fetches prices from multiple off-chain sources and aggregates them:
+
+| Source | Endpoint | Use |
+|--------|----------|-----|
+| Pyth Hermes | `hermes.pyth.network` | Primary price feed for most assets |
+| CoinGecko | `api.coingecko.com` | Fallback and cross-reference |
+| Binance | `api.binance.com` | Spot price cross-check |
+| Subsquid | GraphQL endpoint | On-chain event indexing |
 
 ## Autonomous Loop
 
 ### Phase 1: Perception
 
-The loop gathers market data from all available sources:
-
 ```typescript
-// 1. Fetch parachain yields
-const yields = await yieldService.fetchYields();
-
-// 2. Fetch Bifrost-specific yields
+const yields        = await yieldService.fetchYields();
 const bifrostYields = await yieldService.fetchBifrostYields();
-
-// 3. Read vault state
-const vaultState = await fetchVaultStateTool.invoke();
-
-// 4. Fetch cross-chain state (if configured)
-const crossChainState = await crossChainService.fetchCrossChainState(vaultState);
+const vaultState    = await fetchVaultStateTool.invoke();
+const crossChain    = await crossChainService.fetchCrossChainState(vaultState);
 ```
 
 ### Phase 2: Decision
 
-The collected data is formatted into a user message and sent to the LLM along with the system prompt:
-
 ```typescript
 const decision = await llm.invoke([
   { role: "system", content: SYSTEM_PROMPT },
-  { role: "user", content: buildUserMessage(snapshot) },
+  { role: "user",   content: buildUserMessage({ yields, bifrostYields, vaultState, crossChain }) },
 ]);
 ```
 
-The user message includes:
-- APY rates for each protocol (tabular format)
-- Bifrost product yields with categories and risk levels
-- Vault state (idle balance, remote assets, total, caps)
-- Cross-chain state (satellite balances, sync freshness, stale flags)
+The user message includes APY rates, Bifrost product yields, vault balances, and cross-chain satellite states.
 
 ### Phase 3: Execution
-
-Based on the decision's `action` type:
 
 | Action | Execution |
 |--------|-----------|
 | `REALLOCATE` | `execute_strategy` tool → EIP-712 sign → `vault.executeStrategy()` |
 | `BIFROST_STRATEGY` | `execute_bifrost_strategy` tool → `adapter.executeBifrostStrategy()` |
-| `CROSS_CHAIN_REBALANCE` | Logged for manual execution (admin-level operation) |
-| `NO_ACTION` | Logged, no transaction |
+| `CROSS_CHAIN_REBALANCE` | Logged to strategy store — requires manual admin execution |
+| `NO_ACTION` | Logged to strategy store, no transaction |
+
+### Phase 4: Outcome Recording
+
+After each cycle the decision (action, reasoning, snapshot) is written to `StrategyStoreService` and emitted on the `EventBus` so WebSocket clients receive it in real-time.
+
+## API Server
+
+The Fastify HTTP server starts on port `API_PORT` (default `3001`). All routes are prefixed `/api/`. CORS is open (suitable for local development). WebSocket upgrades are handled at `GET /ws`.
+
+### Endpoints
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/api/vault/state` | On-chain vault state from `ObidotVault` |
+| `GET` | `/api/vault/performance` | Cumulative PnL, high-water mark, fees accrued |
+| `GET` | `/api/yields` | All parachain protocol yields |
+| `GET` | `/api/yields/bifrost` | All Bifrost product yields |
+| `GET` | `/api/strategies` | Strategy execution history from StrategyStore |
+| `GET` | `/api/crosschain/state` | Hub + satellite vault state aggregate |
+| `GET` | `/api/agent/log` | Agent decision log (most recent first) |
+| `POST` | `/api/chat` | LLM chat — GPT-4o with all tools (up to 5 iterations) |
+| `GET` | `/ws` | WebSocket — streams `EventBus` events to connected clients |
+
+### Response Envelope
+
+All REST responses follow a standard envelope:
+
+```json
+{ "success": true, "data": <T> }
+{ "success": false, "error": "message" }
+```
+
+### WebSocket Events
+
+The WebSocket streams `EventBus` events as JSON:
+
+```typescript
+type WsEvent =
+  | { type: "vault:stateUpdate"; data: VaultState }
+  | { type: "strategy:executed"; data: StrategyRecord }
+  | { type: "agent:decision";    data: AgentDecisionRecord }
+  | { type: "heartbeat";         data: { timestamp: string } }
+```
+
+The heartbeat fires every 30 seconds to keep connections alive.
+
+## Telegram Bot
+
+When `TELEGRAM_BOT_TOKEN` is set, a Telegram bot is started alongside the loop and API server. The bot:
+
+- Responds to the `/start` command with a welcome message
+- Passes any text message to GPT-4o with all 6 LangChain tools available
+- Runs up to 5 tool-calling iterations per query (same runner as `/api/chat`)
+- Uses `ADMIN_CHAT_ID` to restrict access to a specific Telegram user/chat (optional)
 
 ## System Prompt
 
@@ -302,7 +422,8 @@ The prompt enforces a strict 3-step pipeline:
 | `PRIVATE_KEY` | Yes | Strategist private key for EIP-712 signing |
 | `RPC_URL` | Yes | Polkadot Hub EVM RPC endpoint |
 | `VAULT_ADDRESS` | Yes | ObidotVault contract address |
-| `OPENAI_API_KEY` | Yes | OpenAI API key for GPT model |
+| `OPENAI_API_KEY` | Yes | OpenAI API key for GPT-4o model |
+| `API_PORT` | No | HTTP server port (default `3001`) |
 | `CROSS_CHAIN_ROUTER_ADDRESS` | No | CrossChainRouter contract address |
 | `BIFROST_ADAPTER_ADDRESS` | No | BifrostAdapter contract address |
 | `ETH_RPC_URL` | No | Ethereum satellite RPC |
@@ -313,12 +434,12 @@ The prompt enforces a strict 3-step pipeline:
 | `BASE_SATELLITE_VAULT` | No | Base ObidotVaultEVM address |
 | `OP_RPC_URL` | No | Optimism satellite RPC |
 | `OP_SATELLITE_VAULT` | No | Optimism ObidotVaultEVM address |
+| `TELEGRAM_BOT_TOKEN` | No | Telegram Bot API token |
+| `ADMIN_CHAT_ID` | No | Telegram chat ID for access restriction |
 
 Cross-chain and Bifrost features are automatically enabled when their respective addresses are configured.
 
 ### Protocol Registry
-
-The agent maintains a registry of known Bifrost protocols:
 
 ```typescript
 const BIFROST_PROTOCOLS = {
@@ -331,8 +452,6 @@ const BIFROST_PROTOCOLS = {
 
 ### Satellite Chain Registry
 
-EVM satellite chains are configured via environment variables:
-
 ```typescript
 const EVM_CHAINS: Record<string, EVMChainConfig> = {
   ethereum: { name: "Ethereum",  rpcUrl: ETH_RPC_URL, vaultAddress: ETH_SATELLITE_VAULT },
@@ -342,7 +461,7 @@ const EVM_CHAINS: Record<string, EVMChainConfig> = {
 };
 ```
 
-Chains without both `rpcUrl` and `vaultAddress` configured are automatically skipped.
+Chains without both `rpcUrl` and `vaultAddress` are automatically skipped.
 
 ## Running the Agent
 
@@ -353,8 +472,14 @@ pnpm install --filter @obidot/agent
 # Type check
 pnpm --filter @obidot/agent run typecheck
 
-# Start the agent
+# Lint
+pnpm --filter @obidot/agent run lint
+
+# Start (dev mode with tsx watch)
 pnpm --filter @obidot/agent run dev
+
+# Start (production)
+pnpm --filter @obidot/agent run start
 ```
 
-The agent starts its autonomous loop, executing one cycle at a configurable interval (default: every 60 seconds). Each cycle runs the full perception → decision → execution pipeline.
+The agent starts its autonomous loop and API server together. The loop runs one cycle at a configurable interval (default: 60 seconds). The API server is available at `http://localhost:3001` once started.

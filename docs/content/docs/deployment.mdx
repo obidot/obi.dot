@@ -119,6 +119,26 @@ The `foundry.toml` includes additional RPC endpoints:
 | `westend_hub` | `https://westend-asset-hub-eth-rpc.polkadot.io` |
 | `kusama_hub` | `https://kusama-asset-hub-eth-rpc.polkadot.io` |
 
+## Live Deployment
+
+The following contracts are deployed on **Polkadot Hub Testnet (Paseo)**, chain ID `420420417`, as of 2026-02-27:
+
+| Contract | Address |
+|----------|---------|
+| TestDOT (tDOT) | `0x2402C804aD8a6217BF73D8483dA7564065c56083` |
+| KeeperOracle | `0xf64d93DC125AC1B366532BBbA165615f6D566C7F` |
+| OracleRegistry | `0x8b7C7345d6cF9de45f4aacC61F56F0241d47e88B` |
+| ObidotVault | `0x37D7959f5f97D37799E0d04b7684c41CB2Ff878d` |
+| CrossChainRouter | `0xE65D7B65a1972A82bCF65f6711a43355Faa3f490` |
+| BifrostAdapter | `0x265Cb785De0fF2e5BcebDEb53095aDCAE9175527` |
+
+**Deployment configuration:**
+- Oracle initial price: $7.00 (DOT/USD, 8 decimals)
+- Deposit cap: 1,000,000 tDOT
+- Max daily loss: 50,000 tDOT
+- Minted to deployer: 100,000 tDOT
+- Bifrost parachain (ID 2030) whitelisted
+
 ## Environment Variables
 
 ### Required
@@ -559,7 +579,7 @@ Before going to production, verify the following:
 
 ### Pre-Deployment
 
-- [ ] All 91+ tests pass (`forge test`)
+- [ ] All 400+ tests pass (`forge test`)
 - [ ] Invariant tests pass with CI-level depth (`FOUNDRY_PROFILE=ci forge test`)
 - [ ] PolkaVM build compiles cleanly (`FOUNDRY_PROFILE=polkadot forge build`)
 - [ ] Underlying asset contract is verified and audited

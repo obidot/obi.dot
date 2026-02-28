@@ -1,9 +1,9 @@
 ---
 title: Obidot Documentation
-description: Autonomous Cross-Chain Finance Layer for Polkadot — an ERC-4626 yield-bearing vault with AI-driven strategy execution across multiple chains via Hyperbridge and native XCM.
+description: Autonomous Cross-Chain Finance Layer for Polkadot — an ERC-4626 yield-bearing vault with AI-driven strategy execution across multiple chains via native XCM.
 ---
 
-Welcome to the Obidot documentation. Obidot is an **Autonomous Cross-Chain Finance Layer** for Polkadot, built as an ERC-4626 yield-bearing vault deployed to the Polkadot Hub EVM (REVM). It enables an off-chain AI agent to autonomously route funds across Polkadot parachains via native XCM and to EVM chains via Hyperbridge ISMP, while enforcing strict on-chain risk policies.
+Welcome to the Obidot documentation. Obidot is an **Autonomous Cross-Chain Finance Layer** for Polkadot, built as an ERC-4626 yield-bearing vault deployed to the Polkadot Hub EVM (REVM). It enables an off-chain AI agent to autonomously route funds across Polkadot parachains via native XCM, while enforcing strict on-chain risk policies.
 
 ## Core Concepts
 
@@ -18,6 +18,7 @@ Welcome to the Obidot documentation. Obidot is an **Autonomous Cross-Chain Finan
   <Card title="Bifrost Integration" href="/docs/bifrost" />
   <Card title="Satellite Vault (EVM)" href="/docs/satellite-vault" />
   <Card title="AI Agent" href="/docs/agent" />
+  <Card title="Dashboard" href="/docs/dashboard" />
   <Card title="Security Model" href="/docs/security" />
   <Card title="Deployment" href="/docs/deployment" />
 </Cards>
@@ -41,9 +42,10 @@ Depositors interact with a standard ERC-4626 interface — `deposit`, `mint`, `w
 - **On-Chain Policy Engine** — Parachain and protocol whitelists, per-protocol exposure caps, daily loss circuit breaker
 - **Oracle-Based Slippage Protection** — Pyth Network price feeds validate expected returns against real-time prices
 - **Native XCM Dispatch** — Cross-chain messages sent via the Polkadot Hub XCM precompile at `0x00000000000000000000000000000000000a0000`
-- **Hyperbridge Cross-Chain** — Satellite vaults on Ethereum, Arbitrum, Optimism, and Base connected via ISMP for trustless cross-chain state sync and fund transfers
 - **Bifrost DeFi Strategies** — Liquid staking (SLP), DEX swaps, yield farming, and SALP via on-chain Bifrost adapter with SCALE-encoded XCM calls
-- **Autonomous AI Agent** — LangChain-powered agent with on-chain perception tools, Bifrost yield analysis, and cross-chain rebalancing
+- **Autonomous AI Agent** — LangChain-powered agent with on-chain perception tools, Bifrost yield analysis, cross-chain rebalancing, Fastify REST API, and Telegram bot
+- **Financial Intelligence Hub** — Next.js dashboard with AI-powered market pulse, opportunity radar, risk matrix, position simulator, and portfolio optimizer
+- **Real-Time Dashboard** — Six-page web app (Next.js 15, React 19, TailwindCSS v4) with live wallet balance, strategy feed, and cross-chain topology
 - **Emergency Mode** — Admin can pause the vault and enable proportional withdrawals that bypass remote asset accounting
 
 ## Target Network
@@ -57,11 +59,36 @@ Depositors interact with a standard ERC-4626 interface — `deposit`, `mint`, `w
 
 ## Tech Stack
 
-- **Solidity** `0.8.28` with Foundry
+### Smart Contracts
+- **Solidity** `0.8.28` with Foundry (400+ tests)
 - **OpenZeppelin Contracts** v5.5.0 (`ERC4626`, `AccessControl`, `Pausable`, `ReentrancyGuard`)
 - **Pyth SDK Solidity** v2.2.0 for oracle interface
 - **PolkaVM** deployment via Revive LLVM compiler (`resolc`)
 
+### Off-Chain Agent
+- **Node.js / TypeScript** — strict ES2022, pino logging
+- **LangChain** (`@langchain/core`, `@langchain/openai`) — GPT-4o agent loop
+- **viem** v2 — on-chain reads and EIP-712 signing
+- **Fastify** — REST API server on port 3001
+- **Telegram Bot API** — optional operator notifications
+
+### Dashboard App
+- **Next.js 15** (App Router, Turbopack) with **React 19**
+- **TailwindCSS v4** — custom design system
+- **TanStack Query v5** — server state and polling
+- **Wagmi v2** + **RainbowKit v2** + **viem v2** — wallet connection and on-chain reads
+
 ## Contract Addresses
 
-Obidot is currently deployed on the Polkadot Hub Testnet (Paseo). See the [Deployment](/docs/deployment) page for instructions on deploying your own instance.
+Deployed on **Polkadot Hub Testnet (Paseo)**, chain ID `420420417`, on 2026-02-27:
+
+| Contract | Address |
+|----------|---------|
+| TestDOT (tDOT) | `0x2402C804aD8a6217BF73D8483dA7564065c56083` |
+| KeeperOracle | `0xf64d93DC125AC1B366532BBbA165615f6D566C7F` |
+| OracleRegistry | `0x8b7C7345d6cF9de45f4aacC61F56F0241d47e88B` |
+| ObidotVault | `0x37D7959f5f97D37799E0d04b7684c41CB2Ff878d` |
+| CrossChainRouter | `0xE65D7B65a1972A82bCF65f6711a43355Faa3f490` |
+| BifrostAdapter | `0x265Cb785De0fF2e5BcebDEb53095aDCAE9175527` |
+
+See the [Deployment](/docs/deployment) page for instructions on deploying your own instance.

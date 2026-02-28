@@ -12,6 +12,7 @@
     "bifrost",
     "satellite-vault",
     "agent",
+    "dashboard",
     "security",
     "deployment"
   ]

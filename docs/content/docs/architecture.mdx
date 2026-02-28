@@ -5,7 +5,7 @@ description: High-level architecture of the Obidot autonomous cross-chain financ
 
 ## System Overview
 
-Obidot is designed as a modular system where each component has a clearly defined responsibility. The core smart contract — `ObidotVault` — acts as the coordination point between depositors, an AI strategist, keepers, and the Polkadot XCM transport layer. The system extends across chains via Hyperbridge ISMP, with satellite vaults on EVM chains and Bifrost DeFi integration on Polkadot.
+Obidot is designed as a modular system where each component has a clearly defined responsibility. The core smart contract — `ObidotVault` — acts as the coordination point between depositors, an AI strategist, keepers, and the Polkadot XCM transport layer. The system extends across chains via Hyperbridge ISMP, with satellite vaults on EVM chains and Bifrost DeFi integration on Polkadot. A Next.js dashboard provides a real-time operator interface.
 
 ```
                                     Polkadot Hub
@@ -28,6 +28,26 @@ Keeper ─────── reports outcome (P&L) ─────────�
               Ethereum              Arbitrum/Optimism/Base
           ObidotVaultEVM            ObidotVaultEVM
            (Satellite)               (Satellite)
+
+Off-Chain Layer
+──────────────────────────────────────────────────────────
+AI Agent (LangChain + GPT-4o)
+  ├── Phase 1: Perceive   — vault state, balances, oracle prices
+  ├── Phase 2: Reason     — LLM decision (deploy / rebalance / hold)
+  ├── Phase 3: Act        — sign + submit StrategyIntent on-chain
+  └── Phase 4: Record     — write outcome to StrategyStore, emit EventBus
+
+Fastify API (port 3001) ──► WebSocket /ws ──► Next.js Dashboard
+  ├── REST: /api/vault, /api/yields, /api/strategies, /api/crosschain, /api/agent
+  └── Telegram Bot (optional operator notifications)
+
+Next.js Dashboard (port 3000)
+  ├── /           — Vault overview, QuickStats, PnL chart
+  ├── /yields     — Protocol yield grid
+  ├── /strategies — Strategy table with detail side panel
+  ├── /crosschain — Chain topology map, satellite table
+  ├── /agent      — Agent status, decision feed
+  └── /insights   — Financial Intelligence Hub (AI-powered analytics)
 ```
 
 ## Actor Model
@@ -190,7 +210,7 @@ contracts/
 │   ├── Deploy.s.sol             # Hub vault deployment
 │   └── DeployCrossChain.s.sol   # Cross-chain infrastructure deployment
 ├── test/
-│   ├── ObidotVault.t.sol        # Hub vault tests (91+ tests)
+│   ├── ObidotVault.t.sol        # Hub vault tests (400+ tests across all suites)
 │   ├── CrossChain.t.sol         # Cross-chain integration tests
 │   ├── CrossChainCodec.t.sol    # Codec roundtrip + fuzz tests
 │   └── BifrostCodec.t.sol       # Bifrost encoding tests
@@ -198,19 +218,63 @@ contracts/
 
 modules/agent/
 ├── src/
-│   ├── main.ts                  # Entry point
+│   ├── main.ts                        # Entry point (agent loop + API server)
 │   ├── agent/
-│   │   ├── loop.ts              # 3-phase autonomous loop
-│   │   ├── systemPrompt.ts      # LLM system prompt
-│   │   └── tools.ts             # 6 LangChain tools
+│   │   ├── loop.ts                    # 4-phase autonomous loop
+│   │   ├── systemPrompt.ts            # LLM system prompt
+│   │   └── tools.ts                   # 6 LangChain tools
+│   ├── api/
+│   │   ├── server.ts                  # Fastify server (port 3001, CORS open)
+│   │   └── routes/
+│   │       ├── vault.ts               # GET /api/vault
+│   │       ├── yields.ts              # GET /api/yields
+│   │       ├── strategies.ts          # GET /api/strategies, GET /api/strategies/:id
+│   │       ├── crosschain.ts          # GET /api/crosschain
+│   │       └── agent.ts               # GET /api/agent, POST /api/agent/trigger
 │   ├── config/
-│   │   ├── constants.ts         # Addresses, ABIs, protocols
-│   │   └── env.ts               # Environment variables
+│   │   ├── constants.ts               # Addresses, ABIs, protocols
+│   │   ├── env.ts                     # Environment variables
+│   │   └── oracle.config.ts           # TWAP oracle source configuration
 │   ├── services/
-│   │   ├── yield.service.ts     # Yield monitoring
-│   │   ├── crosschain.service.ts # Multi-chain state aggregation
-│   │   └── signer.service.ts    # EIP-712 signing + execution
+│   │   ├── yield.service.ts           # Yield monitoring (DeFiLlama + oscillator)
+│   │   ├── crosschain.service.ts      # Multi-chain state aggregation
+│   │   ├── signer.service.ts          # EIP-712 signing + execution
+│   │   ├── strategy-store.service.ts  # In-memory strategy records + decision log
+│   │   ├── event-bus.service.ts       # Node EventEmitter → WebSocket relay
+│   │   ├── oracle.service.ts          # Multi-source TWAP price aggregation
+│   │   └── price-aggregator.service.ts # Pyth Hermes, CoinGecko, Binance, Subsquid
+│   ├── telegram/
+│   │   └── bot.ts                     # Telegram bot (GPT-4o, 6 tools, /start)
 │   └── types/
-│       └── index.ts             # Schemas, types, decision union
+│       ├── index.ts                   # Schemas, types, decision union
+│       └── oracle.types.ts            # Oracle source types
+└── package.json
+
+modules/app/
+├── src/
+│   ├── app/
+│   │   ├── layout.tsx                 # Root layout (RainbowKit, TanStack Query)
+│   │   ├── globals.css                # TailwindCSS v4 + design system utilities
+│   │   ├── page.tsx                   # / Dashboard
+│   │   ├── yields/page.tsx            # /yields
+│   │   ├── strategies/page.tsx        # /strategies
+│   │   ├── crosschain/page.tsx        # /crosschain
+│   │   ├── agent/page.tsx             # /agent
+│   │   ├── insights/page.tsx          # /insights (Financial Intelligence Hub)
+│   │   └── api/[...path]/route.ts     # Proxy → http://localhost:3001/api/*
+│   ├── components/                    # All UI components per page
+│   ├── hooks/                         # useVaultData, useYields, useStrategies,
+│   │                                  # useAgentStatus, useWebSocket
+│   ├── lib/
+│   │   ├── api.ts                     # Typed API client
+│   │   ├── format.ts                  # Number/date formatters
+│   │   ├── constants.ts               # Contract addresses, ABIs
+│   │   ├── yield-opportunity-score.ts # Opportunity scoring engine
+│   │   ├── risk-analyzer.ts           # Risk matrix computation engine
+│   │   └── position-simulator.ts      # Position simulation engine
+│   ├── stores/                        # (reserved — currently empty)
+│   └── types/
+│       └── index.ts                   # Shared TypeScript types
+├── next.config.ts                     # API proxy rewrites
 └── package.json
 ```
