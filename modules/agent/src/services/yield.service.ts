@@ -4,31 +4,6 @@ import { BifrostCurrencyId } from "../types/index.js";
 import { yieldLog } from "../utils/logger.js";
 
 // ─────────────────────────────────────────────────────────────────────────────
-//  Bifrost API Types
-// ─────────────────────────────────────────────────────────────────────────────
-
-/** Bifrost dApp staking API response for vToken exchange rates. */
-interface BifrostVTokenInfo {
-  vtoken: string;
-  token: string;
-  tokenAmount: string;
-  vtokenAmount: string;
-  apy: string;
-}
-
-/** DeFiLlama pool response shape. */
-interface DeFiLlamaPool {
-  pool: string;
-  chain: string;
-  project: string;
-  symbol: string;
-  tvlUsd: number;
-  apyBase?: number;
-  apyReward?: number;
-  apy: number;
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
 //  YieldService — Market Data Aggregator (Real + Fallback)
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -37,26 +12,23 @@ interface DeFiLlamaPool {
  * fallback to simulated data when APIs are unreachable.
  *
  * Data sources:
- *   - Bifrost dApp Staking API: real vDOT/vKSM exchange rates & APY
- *   - DeFiLlama Yields API: real-time APYs and TVL for Bifrost & Hydration
- *   - Simulation fallback: sine-wave mock data when live sources fail
+ *   - DeFiLlama TVL API: per-protocol TVL via `api.llama.fi/tvl/{slug}` (~700ms)
+ *   - Simulation fallback: sine-wave mock APYs when live sources fail
+ *
+ * Note: DeFiLlama's bulk `/pools` endpoint (~12 MB) is intentionally not used —
+ * it has no server-side filtering and times out reliably. The per-slug TVL
+ * endpoint is fast, small, and returns exactly what we need.
  */
 export class YieldService {
   // ── API Endpoints ──────────────────────────────────────────────────────
-  private static readonly BIFROST_API_URL =
-    "https://api.bifrost.app/api/dapp/staking";
-  private static readonly DEFILLAMA_YIELDS_URL =
-    "https://yields.llama.fi/pools";
+  private static readonly DEFILLAMA_TVL_URL = "https://api.llama.fi/tvl";
   private static readonly FETCH_TIMEOUT_MS = 8_000;
 
   // ── Cache ──────────────────────────────────────────────────────────────
-  private static readonly CACHE_TTL_MS = 120_000; // 2 minutes
-  private cachedBifrostData: {
-    data: BifrostVTokenInfo[];
-    fetchedAt: number;
-  } | null = null;
-  private cachedDeFiLlamaData: {
-    data: DeFiLlamaPool[];
+  private static readonly CACHE_TTL_MS = 300_000; // 5 minutes — TVL changes slowly
+  private cachedTvlData: {
+    hydration: number | null;
+    bifrost: number | null;
     fetchedAt: number;
   } | null = null;
 
@@ -80,7 +52,8 @@ export class YieldService {
   /**
    * Fetch current APY data for all tracked protocols.
    *
-   * Attempts real DeFiLlama data first, falls back to simulation.
+   * TVL is sourced from DeFiLlama's fast per-slug endpoint. APY always
+   * uses simulation (no reliable Polkadot APY feed available).
    *
    * @returns Array of protocol yield data points.
    */
@@ -88,39 +61,23 @@ export class YieldService {
     yieldLog.info("Fetching yield data for tracked protocols");
 
     const now = new Date();
-
-    // Try DeFiLlama for Hydration & Bifrost aggregate APYs
-    const llamaPools = await this.fetchDeFiLlamaPools();
-
-    const hydrationPool = llamaPools?.find(
-      (p) =>
-        p.project === "hydradx" ||
-        p.project === "hydration" ||
-        (p.chain === "Polkadot" && p.symbol?.includes("DOT")),
-    );
-
-    const bifrostPool = llamaPools?.find(
-      (p) =>
-        p.project === "bifrost-liquid-staking" ||
-        p.project === "bifrost" ||
-        (p.chain === "Polkadot" && p.symbol?.includes("vDOT")),
-    );
+    const tvl = await this.fetchProtocolTvls();
 
     const yields: ProtocolYield[] = [
       {
         name: KNOWN_PARACHAINS.HYDRATION.name,
         paraId: KNOWN_PARACHAINS.HYDRATION.paraId,
         protocol: KNOWN_PARACHAINS.HYDRATION.protocol,
-        apyPercent: hydrationPool?.apy ?? this.simulateApy("Hydration"),
-        tvlUsd: hydrationPool?.tvlUsd ?? this.simulateTvl(15_000_000, 25_000_000),
+        apyPercent: this.simulateApy("Hydration"),
+        tvlUsd: tvl.hydration ?? this.simulateTvl(15_000_000, 25_000_000),
         fetchedAt: now,
       },
       {
         name: KNOWN_PARACHAINS.BIFROST.name,
         paraId: KNOWN_PARACHAINS.BIFROST.paraId,
         protocol: KNOWN_PARACHAINS.BIFROST.protocol,
-        apyPercent: bifrostPool?.apy ?? this.simulateApy("Bifrost"),
-        tvlUsd: bifrostPool?.tvlUsd ?? this.simulateTvl(30_000_000, 50_000_000),
+        apyPercent: this.simulateApy("Bifrost"),
+        tvlUsd: tvl.bifrost ?? this.simulateTvl(30_000_000, 50_000_000),
         fetchedAt: now,
       },
     ];
@@ -132,7 +89,8 @@ export class YieldService {
           paraId: y.paraId,
           apyPercent: y.apyPercent.toFixed(2),
           tvlUsd: y.tvlUsd.toLocaleString(),
-          source: hydrationPool || bifrostPool ? "defillama" : "simulation",
+          tvlSource: tvl.hydration !== null || tvl.bifrost !== null ? "defillama-tvl" : "simulation",
+          apySource: "simulation",
         },
         "Yield data fetched",
       );
@@ -144,9 +102,8 @@ export class YieldService {
   /**
    * Fetch Bifrost-specific yield data for all DeFi products.
    *
-   * Fetches real vDOT/vKSM exchange rates from the Bifrost API to
-   * compute accurate SLP staking APYs. DEX, Farming, and SALP yields
-   * are sourced from DeFiLlama or fall back to simulation.
+   * TVL for liquid staking products is sourced from DeFiLlama's fast
+   * per-slug endpoint. All APYs use simulation.
    *
    * @returns Array of Bifrost-specific yield data points.
    */
@@ -155,75 +112,23 @@ export class YieldService {
 
     const now = new Date();
     const bifrostParaId = KNOWN_PARACHAINS.BIFROST.paraId;
+    const tvl = await this.fetchProtocolTvls();
 
-    // Fetch real Bifrost vToken data
-    const vTokenData = await this.fetchBifrostVTokenRates();
-    const llamaPools = await this.fetchDeFiLlamaPools();
+    // Split the total Bifrost TVL heuristically across products
+    const bifrostTotalTvl = tvl.bifrost;
+    const vDotTvl = bifrostTotalTvl
+      ? Math.round(bifrostTotalTvl * 0.6) // ~60% in vDOT SLP
+      : this.simulateTvl(80_000_000, 120_000_000);
+    const vKsmTvl = bifrostTotalTvl
+      ? Math.round(bifrostTotalTvl * 0.2) // ~20% in vKSM SLP
+      : this.simulateTvl(20_000_000, 40_000_000);
 
-    // Extract real APYs from Bifrost API
-    const vDotInfo = vTokenData?.find(
-      (v) => v.vtoken === "vDOT" || v.vtoken === "VDOT",
+    const tvlSource = bifrostTotalTvl !== null ? "defillama-tvl" : "simulation";
+
+    yieldLog.info(
+      { tvlSource, bifrostTotalTvl, vDotTvl, vKsmTvl },
+      "Bifrost TVL resolved",
     );
-    const vKsmInfo = vTokenData?.find(
-      (v) => v.vtoken === "vKSM" || v.vtoken === "VKSM",
-    );
-
-    // Try to find DeFiLlama pools for Bifrost products
-    const bifrostLlamaPools = llamaPools?.filter(
-      (p) =>
-        p.project === "bifrost-liquid-staking" ||
-        p.project === "bifrost-dex" ||
-        p.project === "bifrost",
-    );
-    const vDotLlamaPool = bifrostLlamaPools?.find((p) =>
-      p.symbol?.includes("vDOT"),
-    );
-    const vKsmLlamaPool = bifrostLlamaPools?.find((p) =>
-      p.symbol?.includes("vKSM"),
-    );
-
-    // Compute SLP APY from exchange rate or use API-provided APY
-    const vDotApy = vDotInfo
-      ? parseFloat(vDotInfo.apy)
-      : (vDotLlamaPool?.apy ?? this.simulateApy("Bifrost-SLP-vDOT"));
-    const vKsmApy = vKsmInfo
-      ? parseFloat(vKsmInfo.apy)
-      : (vKsmLlamaPool?.apy ?? this.simulateApy("Bifrost-SLP-vKSM"));
-
-    // Compute exchange rates for logging
-    const vDotExchangeRate = vDotInfo
-      ? parseFloat(vDotInfo.tokenAmount) / parseFloat(vDotInfo.vtokenAmount)
-      : undefined;
-    const vKsmExchangeRate = vKsmInfo
-      ? parseFloat(vKsmInfo.tokenAmount) / parseFloat(vKsmInfo.vtokenAmount)
-      : undefined;
-
-    if (vDotExchangeRate) {
-      yieldLog.info(
-        { vDotExchangeRate, vDotApy: vDotApy.toFixed(2) },
-        "Real Bifrost vDOT exchange rate fetched",
-      );
-    }
-    if (vKsmExchangeRate) {
-      yieldLog.info(
-        { vKsmExchangeRate, vKsmApy: vKsmApy.toFixed(2) },
-        "Real Bifrost vKSM exchange rate fetched",
-      );
-    }
-
-    // Compute TVLs from DeFiLlama or exchange rate data
-    const vDotTvl =
-      vDotLlamaPool?.tvlUsd ??
-      (vDotInfo
-        ? parseFloat(vDotInfo.tokenAmount) * 7 // approximate DOT price ~$7
-        : this.simulateTvl(80_000_000, 120_000_000));
-    const vKsmTvl =
-      vKsmLlamaPool?.tvlUsd ??
-      (vKsmInfo
-        ? parseFloat(vKsmInfo.tokenAmount) * 25 // approximate KSM price ~$25
-        : this.simulateTvl(20_000_000, 40_000_000));
-
-    const dataSource = vDotInfo ? "bifrost-api" : vDotLlamaPool ? "defillama" : "simulation";
 
     const bifrostYields: BifrostYield[] = [
       // ── SLP: Liquid Staking Products ────────────────────────────────
@@ -231,7 +136,7 @@ export class YieldService {
         name: "Bifrost vDOT (Liquid Staking)",
         paraId: bifrostParaId,
         protocol: BIFROST_PROTOCOLS.SLP.protocol,
-        apyPercent: vDotApy,
+        apyPercent: this.simulateApy("Bifrost-SLP-vDOT"),
         tvlUsd: vDotTvl,
         fetchedAt: now,
         category: "SLP",
@@ -243,7 +148,7 @@ export class YieldService {
         name: "Bifrost vKSM (Liquid Staking)",
         paraId: bifrostParaId,
         protocol: BIFROST_PROTOCOLS.SLP.protocol,
-        apyPercent: vKsmApy,
+        apyPercent: this.simulateApy("Bifrost-SLP-vKSM"),
         tvlUsd: vKsmTvl,
         fetchedAt: now,
         category: "SLP",
@@ -257,10 +162,8 @@ export class YieldService {
         name: "Bifrost DOT/vDOT Pool",
         paraId: bifrostParaId,
         protocol: BIFROST_PROTOCOLS.DEX.protocol,
-        apyPercent: this.findLlamaPoolApy(llamaPools, "bifrost-dex", "DOT-vDOT")
-          ?? this.simulateApy("Bifrost-DEX-DOT-vDOT"),
-        tvlUsd: this.findLlamaPoolTvl(llamaPools, "bifrost-dex", "DOT-vDOT")
-          ?? this.simulateTvl(5_000_000, 15_000_000),
+        apyPercent: this.simulateApy("Bifrost-DEX-DOT-vDOT"),
+        tvlUsd: this.simulateTvl(5_000_000, 15_000_000),
         fetchedAt: now,
         category: "DEX",
         currencyIn: BifrostCurrencyId.DOT,
@@ -271,10 +174,8 @@ export class YieldService {
         name: "Bifrost BNC/DOT Pool",
         paraId: bifrostParaId,
         protocol: BIFROST_PROTOCOLS.DEX.protocol,
-        apyPercent: this.findLlamaPoolApy(llamaPools, "bifrost-dex", "BNC-DOT")
-          ?? this.simulateApy("Bifrost-DEX-BNC-DOT"),
-        tvlUsd: this.findLlamaPoolTvl(llamaPools, "bifrost-dex", "BNC-DOT")
-          ?? this.simulateTvl(3_000_000, 8_000_000),
+        apyPercent: this.simulateApy("Bifrost-DEX-BNC-DOT"),
+        tvlUsd: this.simulateTvl(3_000_000, 8_000_000),
         fetchedAt: now,
         category: "DEX",
         currencyIn: BifrostCurrencyId.BNC,
@@ -332,7 +233,7 @@ export class YieldService {
           apyPercent: y.apyPercent.toFixed(2),
           tvlUsd: y.tvlUsd.toLocaleString(),
           isActive: y.isActive,
-          source: dataSource,
+          apySource: "simulation",
         },
         "Bifrost yield data fetched",
       );
@@ -346,151 +247,62 @@ export class YieldService {
   // ─────────────────────────────────────────────────────────────────────
 
   /**
-   * Fetch vToken exchange rates and APYs from the Bifrost dApp API.
-   * Returns cached data if within TTL. Returns null on failure.
+   * Fetch TVL for Hydration and Bifrost from DeFiLlama's fast per-slug
+   * endpoint (`api.llama.fi/tvl/{slug}`). Runs both requests in parallel.
+   * Returns cached data if within TTL. Falls back to null on failure.
    */
-  private async fetchBifrostVTokenRates(): Promise<BifrostVTokenInfo[] | null> {
-    // Check cache
+  private async fetchProtocolTvls(): Promise<{
+    hydration: number | null;
+    bifrost: number | null;
+  }> {
+    // Return cached data if still fresh
     if (
-      this.cachedBifrostData &&
-      Date.now() - this.cachedBifrostData.fetchedAt < YieldService.CACHE_TTL_MS
+      this.cachedTvlData &&
+      Date.now() - this.cachedTvlData.fetchedAt < YieldService.CACHE_TTL_MS
     ) {
-      return this.cachedBifrostData.data;
-    }
-
-    try {
-      const response = await fetch(YieldService.BIFROST_API_URL, {
-        signal: AbortSignal.timeout(YieldService.FETCH_TIMEOUT_MS),
-        headers: { Accept: "application/json" },
-      });
-
-      if (!response.ok) {
-        throw new Error(`Bifrost API HTTP ${response.status}`);
-      }
-
-      const data = (await response.json()) as {
-        data?: BifrostVTokenInfo[];
-        result?: BifrostVTokenInfo[];
+      return {
+        hydration: this.cachedTvlData.hydration,
+        bifrost: this.cachedTvlData.bifrost,
       };
+    }
 
-      // Bifrost API may return data under `data` or `result` key
-      const vtokens = data.data ?? data.result ?? [];
-
-      if (vtokens.length > 0) {
-        this.cachedBifrostData = { data: vtokens, fetchedAt: Date.now() };
-        yieldLog.info(
-          { count: vtokens.length },
-          "Bifrost vToken rates fetched successfully",
+    const fetchTvl = async (slug: string): Promise<number | null> => {
+      try {
+        const response = await fetch(
+          `${YieldService.DEFILLAMA_TVL_URL}/${slug}`,
+          {
+            signal: AbortSignal.timeout(YieldService.FETCH_TIMEOUT_MS),
+            headers: { Accept: "application/json" },
+          },
         );
-        return vtokens;
+        if (!response.ok) {
+          throw new Error(`DeFiLlama TVL HTTP ${response.status} for ${slug}`);
+        }
+        const text = await response.text();
+        const value = parseFloat(text);
+        if (isNaN(value)) {
+          throw new Error(`DeFiLlama TVL non-numeric response for ${slug}: ${text}`);
+        }
+        yieldLog.info({ slug, tvlUsd: value }, "DeFiLlama TVL fetched");
+        return value;
+      } catch (err) {
+        yieldLog.warn({ err, slug }, "Failed to fetch DeFiLlama TVL — using fallback");
+        return null;
       }
+    };
 
-      yieldLog.warn("Bifrost API returned empty vToken data");
-      return null;
-    } catch (err) {
-      yieldLog.warn(
-        { err },
-        "Failed to fetch Bifrost vToken rates — using fallback",
-      );
-      return this.cachedBifrostData?.data ?? null;
-    }
-  }
+    const [hydrationResult, bifrostResult] = await Promise.allSettled([
+      fetchTvl("hydradx"),
+      fetchTvl("bifrost-liquid-staking"),
+    ]);
 
-  /**
-   * Fetch pool data from DeFiLlama Yields API.
-   * Filters for Polkadot ecosystem pools (Bifrost, Hydration).
-   * Returns cached data if within TTL. Returns null on failure.
-   */
-  private async fetchDeFiLlamaPools(): Promise<DeFiLlamaPool[] | null> {
-    // Check cache
-    if (
-      this.cachedDeFiLlamaData &&
-      Date.now() - this.cachedDeFiLlamaData.fetchedAt <
-        YieldService.CACHE_TTL_MS
-    ) {
-      return this.cachedDeFiLlamaData.data;
-    }
+    const hydration =
+      hydrationResult.status === "fulfilled" ? hydrationResult.value : null;
+    const bifrost =
+      bifrostResult.status === "fulfilled" ? bifrostResult.value : null;
 
-    try {
-      const response = await fetch(YieldService.DEFILLAMA_YIELDS_URL, {
-        signal: AbortSignal.timeout(YieldService.FETCH_TIMEOUT_MS),
-        headers: { Accept: "application/json" },
-      });
-
-      if (!response.ok) {
-        throw new Error(`DeFiLlama HTTP ${response.status}`);
-      }
-
-      const raw = (await response.json()) as { data: DeFiLlamaPool[] };
-      const allPools = raw.data ?? [];
-
-      // Filter to Polkadot ecosystem projects
-      const polkadotProjects = new Set([
-        "bifrost-liquid-staking",
-        "bifrost-dex",
-        "bifrost",
-        "hydradx",
-        "hydration",
-      ]);
-      const filtered = allPools.filter(
-        (p) =>
-          polkadotProjects.has(p.project) ||
-          p.chain === "Polkadot" ||
-          p.chain === "Bifrost",
-      );
-
-      if (filtered.length > 0) {
-        this.cachedDeFiLlamaData = { data: filtered, fetchedAt: Date.now() };
-        yieldLog.info(
-          { poolCount: filtered.length, totalPools: allPools.length },
-          "DeFiLlama Polkadot pools fetched",
-        );
-        return filtered;
-      }
-
-      yieldLog.warn("No Polkadot ecosystem pools found on DeFiLlama");
-      return null;
-    } catch (err) {
-      yieldLog.warn(
-        { err },
-        "Failed to fetch DeFiLlama pools — using fallback",
-      );
-      return this.cachedDeFiLlamaData?.data ?? null;
-    }
-  }
-
-  // ─────────────────────────────────────────────────────────────────────
-  //  DeFiLlama Helpers
-  // ─────────────────────────────────────────────────────────────────────
-
-  /**
-   * Find a specific pool's APY from DeFiLlama data.
-   */
-  private findLlamaPoolApy(
-    pools: DeFiLlamaPool[] | null,
-    project: string,
-    symbolFragment: string,
-  ): number | undefined {
-    if (!pools) return undefined;
-    const pool = pools.find(
-      (p) => p.project === project && p.symbol?.includes(symbolFragment),
-    );
-    return pool?.apy;
-  }
-
-  /**
-   * Find a specific pool's TVL from DeFiLlama data.
-   */
-  private findLlamaPoolTvl(
-    pools: DeFiLlamaPool[] | null,
-    project: string,
-    symbolFragment: string,
-  ): number | undefined {
-    if (!pools) return undefined;
-    const pool = pools.find(
-      (p) => p.project === project && p.symbol?.includes(symbolFragment),
-    );
-    return pool?.tvlUsd;
+    this.cachedTvlData = { hydration, bifrost, fetchedAt: Date.now() };
+    return { hydration, bifrost };
   }
 
   // ─────────────────────────────────────────────────────────────────────
