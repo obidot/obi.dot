@@ -567,3 +567,47 @@ body {
 .pct-down {
   color: var(--color-bear);
 }
+
+/* ── RainbowKit Connect Button — MetaLiquid pill style ──────────────────────── */
+
+/*
+ * Override RainbowKit's default button to match the MetaLiquid / Vooi aesthetic:
+ * solid neon-green pill for "Connect Wallet", compact address chip when connected.
+ */
+
+.connect-wallet-wrap [data-testid="rk-connect-button"],
+.connect-wallet-wrap button[data-testid="rk-connect-button"] {
+  background: var(--color-primary) !important;
+  color: var(--color-background) !important;
+  border: none !important;
+  border-radius: 8px !important;
+  padding: 6px 16px !important;
+  font-family: var(--font-mono) !important;
+  font-size: 13px !important;
+  font-weight: 600 !important;
+  height: 34px !important;
+  transition: background 150ms ease, box-shadow 150ms ease !important;
+  box-shadow: none !important;
+}
+
+.connect-wallet-wrap [data-testid="rk-connect-button"]:hover {
+  background: #00f090 !important;
+  box-shadow: 0 0 16px rgba(0, 220, 130, 0.25) !important;
+}
+
+/* Connected state: account address chip */
+.connect-wallet-wrap [data-testid="rk-account-button"] {
+  background: var(--color-surface-hover) !important;
+  border: 1px solid var(--color-border) !important;
+  border-radius: 8px !important;
+  color: var(--color-text-primary) !important;
+  font-family: var(--font-mono) !important;
+  font-size: 12px !important;
+  height: 34px !important;
+  padding: 0 12px !important;
+  transition: border-color 150ms ease !important;
+}
+
+.connect-wallet-wrap [data-testid="rk-account-button"]:hover {
+  border-color: var(--color-primary-dim) !important;
+}

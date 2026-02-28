@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
 import { Providers } from "@/components/providers/query-provider";
-import { Sidebar } from "@/components/layout/sidebar";
-import { Header } from "@/components/layout/header";
+import { Navbar } from "@/components/layout/navbar";
 import { ChatWidget } from "@/components/chat/chat-widget";
 import "./globals.css";
 
@@ -25,8 +24,7 @@ export default function RootLayout({
             Skip to main content
           </a>
           <div className="flex min-h-screen flex-col">
-            <Sidebar />
-            <Header />
+            <Navbar />
             <main id="main-content" className="flex-1 px-5 py-4">{children}</main>
           </div>
           <ChatWidget />
