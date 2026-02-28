@@ -10,6 +10,7 @@ const NAV_ITEMS = [
   { label: "Dashboard", href: "/" },
   { label: "Strategies", href: "/strategies" },
   { label: "Yields", href: "/yields" },
+  { label: "Insights", href: "/insights" },
   { label: "Cross-Chain", href: "/crosschain" },
   { label: "Agent", href: "/agent" },
 ];
