@@ -1,8 +1,10 @@
 "use client";
 
 import { useState } from "react";
-import { cn } from "@/lib/format";
+import { useAccount, useBalance } from "wagmi";
+import { cn, formatTokenAmount } from "@/lib/format";
 import { Loader2 } from "lucide-react";
+import { CONTRACTS } from "@/lib/constants";
 
 type Action = "deposit" | "withdraw";
 
@@ -13,13 +15,22 @@ const PCT_OPTIONS = [
   { label: "100%", value: 1.0 },
 ];
 
-// Placeholder balance — wallet integration is UI-only for now
-const MOCK_BALANCE = 0;
-
 export function VaultActions() {
   const [action, setAction] = useState<Action>("deposit");
   const [amount, setAmount] = useState("");
   const [loading, setLoading] = useState(false);
+
+  const { address, isConnected } = useAccount();
+  const { data: balanceData } = useBalance({
+    address,
+    token: CONTRACTS.TEST_DOT as `0x${string}`,
+    query: { enabled: isConnected && !!address },
+  });
+
+  // Formatted balance as a plain number for percentage math
+  const balanceFormatted = balanceData
+    ? Number(formatTokenAmount(balanceData.value.toString(), balanceData.decimals, 6))
+    : 0;
 
   const handleAmountChange = (raw: string) => {
     // Allow only digits and a single decimal point
@@ -29,8 +40,8 @@ export function VaultActions() {
   };
 
   const handlePct = (fraction: number) => {
-    if (MOCK_BALANCE <= 0) return;
-    const val = (MOCK_BALANCE * fraction).toFixed(6).replace(/\.?0+$/, "");
+    if (!isConnected || balanceFormatted <= 0) return;
+    const val = (balanceFormatted * fraction).toFixed(6).replace(/\.?0+$/, "");
     setAmount(val);
   };
 
@@ -40,6 +51,10 @@ export function VaultActions() {
     setLoading(true);
     setTimeout(() => setLoading(false), 1500);
   };
+
+  const displayBalance = isConnected && balanceData
+    ? `${formatTokenAmount(balanceData.value.toString(), balanceData.decimals, 4)} tDOT`
+    : "—";
 
   return (
     <div className="p-4">
@@ -80,7 +95,7 @@ export function VaultActions() {
       <div className="flex items-center justify-between mb-2">
         <span className="text-[11px] text-text-muted">Available Balance</span>
         <span className="font-mono text-[12px] text-text-secondary">
-          {MOCK_BALANCE.toFixed(2)} tDOT
+          {displayBalance}
         </span>
       </div>
 
@@ -133,7 +148,7 @@ export function VaultActions() {
       {/* Submit button */}
       <button
         type="button"
-        disabled={!amount || loading}
+        disabled={!isConnected || !amount || loading}
         onClick={handleSubmit}
         className={cn(
           action === "deposit" ? "btn-primary" : "btn-danger",
@@ -143,9 +158,11 @@ export function VaultActions() {
         {action === "deposit" ? "DEPOSIT tDOT" : "WITHDRAW tDOT"}
       </button>
 
-      <p className="mt-2 text-center text-[10px] text-text-muted">
-        Connect wallet to enable transactions
-      </p>
+      {!isConnected && (
+        <p className="mt-2 text-center text-[10px] text-text-muted">
+          Connect wallet to enable transactions
+        </p>
+      )}
     </div>
   );
 }

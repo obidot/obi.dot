@@ -3,6 +3,7 @@
 import { useStrategies } from "@/hooks/use-strategies";
 import { StrategyTable } from "@/components/strategies/strategy-table";
 import { PanelSkeleton } from "@/components/ui/skeleton";
+import { PageHero, HeroStat } from "@/components/ui/page-hero";
 import { Activity, TrendingUp, CheckCircle2, XCircle, RefreshCw } from "lucide-react";
 
 export default function StrategiesPage() {
@@ -15,52 +16,35 @@ export default function StrategiesPage() {
 
   return (
     <div className="space-y-4">
-      {/* Hero bar */}
-      <div className="hero-banner px-6 py-5">
-        <div className="relative z-10 flex flex-wrap items-end justify-between gap-4">
-          <div>
-            <p className="text-xs uppercase tracking-wider text-text-muted">
-              Strategy Engine
-            </p>
-            <h1 className="mt-1 stat-number text-2xl text-text-primary">
-              Execution History
-            </h1>
-            <p className="mt-1 text-xs text-text-secondary">
-              AI agent strategy execution log and performance tracking
-            </p>
-          </div>
-          <div className="flex items-center gap-6">
-            <div className="text-right">
-              <p className="text-[10px] uppercase tracking-wider text-text-muted">Total</p>
-              <div className="flex items-center gap-1.5">
-                <Activity className="h-3.5 w-3.5 text-accent" />
-                <span className="stat-number text-lg text-text-primary">{total}</span>
-              </div>
-            </div>
-            <div className="text-right">
-              <p className="text-[10px] uppercase tracking-wider text-text-muted">Executed</p>
-              <div className="flex items-center gap-1.5">
-                <CheckCircle2 className="h-3.5 w-3.5 text-primary" />
-                <span className="stat-number text-lg text-primary">{executed}</span>
-              </div>
-            </div>
-            <div className="text-right">
-              <p className="text-[10px] uppercase tracking-wider text-text-muted">Failed</p>
-              <div className="flex items-center gap-1.5">
-                <XCircle className="h-3.5 w-3.5 text-danger" />
-                <span className="stat-number text-lg text-danger">{failed}</span>
-              </div>
-            </div>
-            <div className="text-right">
-              <p className="text-[10px] uppercase tracking-wider text-text-muted">Success Rate</p>
-              <div className="flex items-center gap-1.5">
-                <TrendingUp className="h-3.5 w-3.5 text-primary" />
-                <span className="stat-number text-lg text-primary">{successRate}%</span>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
+      <PageHero
+        eyebrow="Strategy Engine"
+        title="Execution History"
+        description="AI agent strategy execution log and performance tracking"
+        stats={
+          <>
+            <HeroStat
+              label="Total"
+              icon={<Activity className="h-3.5 w-3.5 text-accent" />}
+              value={<span className="text-text-primary">{total}</span>}
+            />
+            <HeroStat
+              label="Executed"
+              icon={<CheckCircle2 className="h-3.5 w-3.5 text-primary" />}
+              value={<span className="text-primary">{executed}</span>}
+            />
+            <HeroStat
+              label="Failed"
+              icon={<XCircle className="h-3.5 w-3.5 text-danger" />}
+              value={<span className="text-danger">{failed}</span>}
+            />
+            <HeroStat
+              label="Success Rate"
+              icon={<TrendingUp className="h-3.5 w-3.5 text-primary" />}
+              value={<span className="text-primary">{successRate}%</span>}
+            />
+          </>
+        }
+      />
 
       {isLoading ? (
         <PanelSkeleton rows={8} />

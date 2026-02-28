@@ -3,6 +3,7 @@
 import { useYields, useBifrostYields } from "@/hooks/use-yields";
 import { YieldGrid } from "@/components/yields/yield-grid";
 import { PanelSkeleton } from "@/components/ui/skeleton";
+import { PageHero, HeroStat } from "@/components/ui/page-hero";
 import { TrendingUp, Globe, Layers, RefreshCw } from "lucide-react";
 
 export default function YieldsPage() {
@@ -24,45 +25,30 @@ export default function YieldsPage() {
 
   return (
     <div className="space-y-4">
-      {/* Hero bar */}
-      <div className="hero-banner px-6 py-5">
-        <div className="relative z-10 flex flex-wrap items-end justify-between gap-4">
-          <div>
-            <p className="text-xs uppercase tracking-wider text-text-muted">
-              Yield Explorer
-            </p>
-            <h1 className="mt-1 stat-number text-2xl text-text-primary">
-              Cross-Chain Yields
-            </h1>
-            <p className="mt-1 text-xs text-text-secondary">
-              Live yield opportunities from Bifrost, DeFiLlama, and more
-            </p>
-          </div>
-          <div className="flex items-center gap-6">
-            <div className="text-right">
-              <p className="text-[10px] uppercase tracking-wider text-text-muted">Sources</p>
-              <div className="flex items-center gap-1.5">
-                <Layers className="h-3.5 w-3.5 text-accent" />
-                <span className="stat-number text-lg text-text-primary">{totalSources}</span>
-              </div>
-            </div>
-            <div className="text-right">
-              <p className="text-[10px] uppercase tracking-wider text-text-muted">Best APY</p>
-              <div className="flex items-center gap-1.5">
-                <TrendingUp className="h-3.5 w-3.5 text-primary" />
-                <span className="stat-number text-lg text-primary">{bestApy.toFixed(2)}%</span>
-              </div>
-            </div>
-            <div className="text-right">
-              <p className="text-[10px] uppercase tracking-wider text-text-muted">Avg APY</p>
-              <div className="flex items-center gap-1.5">
-                <Globe className="h-3.5 w-3.5 text-secondary" />
-                <span className="stat-number text-lg text-secondary">{avgApy.toFixed(2)}%</span>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
+      <PageHero
+        eyebrow="Yield Explorer"
+        title="Cross-Chain Yields"
+        description="Live yield opportunities from Bifrost, DeFiLlama, and more"
+        stats={
+          <>
+            <HeroStat
+              label="Sources"
+              icon={<Layers className="h-3.5 w-3.5 text-accent" />}
+              value={<span className="text-text-primary">{totalSources}</span>}
+            />
+            <HeroStat
+              label="Best APY"
+              icon={<TrendingUp className="h-3.5 w-3.5 text-primary" />}
+              value={<span className="text-primary">{bestApy.toFixed(2)}%</span>}
+            />
+            <HeroStat
+              label="Avg APY"
+              icon={<Globe className="h-3.5 w-3.5 text-secondary" />}
+              value={<span className="text-secondary">{avgApy.toFixed(2)}%</span>}
+            />
+          </>
+        }
+      />
 
       {isLoading ? (
         <PanelSkeleton rows={6} />
