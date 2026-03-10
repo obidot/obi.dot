@@ -13,12 +13,12 @@ export const CONTRACTS = {
   HYPER_EXECUTOR: "0xaEC0009B15449102a39204259d07c2517cf8fC0f",
   NATIVE_DOT: "0xE72453bD8d5ECF56ccdDeF949C8AE0Cea5A41E7d",
   NATIVE_USDC: "0xAf233E9f2ED78022CAdEA58a84144ce6BcDFd63E",
-  // DEX aggregator (not yet deployed — zero-address placeholders)
-  SWAP_ROUTER: "0x0000000000000000000000000000000000000000",
-  SWAP_QUOTER: "0x0000000000000000000000000000000000000000",
-  HYDRATION_ADAPTER: "0x0000000000000000000000000000000000000000",
-  ASSET_HUB_ADAPTER: "0x0000000000000000000000000000000000000000",
-  BIFROST_DEX_ADAPTER: "0x0000000000000000000000000000000000000000",
+  // Phase 3 deployments — DEX aggregator (2026-03-11)
+  SWAP_ROUTER: "0xeABB7c2C02eD819BDee9336cD12e9668A33ab924",
+  SWAP_QUOTER: "0x81d7aCFEF474DA6c76eC1b5A05a137cB9f3A5Db1",
+  HYDRATION_ADAPTER: "0xBF9e3ad0818719F0DF26075005A978793248f523",
+  ASSET_HUB_ADAPTER: "0x67E0B572A7761C13D7C9A3f737C825A506a85CF4",
+  BIFROST_DEX_ADAPTER: "0x386FC9514594c589ad7481AFC3eC36216DE91dC0",
 } as const;
 
 export const CHAIN = {
@@ -133,8 +133,9 @@ export const POOL_ADAPTER_ABI = [
     type: "function",
     name: "supportsPair",
     inputs: [
-      { name: "tokenA", type: "address" },
-      { name: "tokenB", type: "address" },
+      { name: "pool", type: "address" },
+      { name: "tokenIn", type: "address" },
+      { name: "tokenOut", type: "address" },
     ],
     outputs: [{ name: "", type: "bool" }],
     stateMutability: "view",

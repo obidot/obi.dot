@@ -8,8 +8,6 @@ import type {
   StrategyRecord,
   AgentDecision,
   ChatMessage,
-  SwapQuoteResult,
-  SwapRoutesResponse,
 } from "@/types";
 
 // ── Generic Fetch Wrapper ─────────────────────────────────────────────────
@@ -88,22 +86,4 @@ export async function sendChatMessage(message: string): Promise<ChatMessage> {
     content: data.response,
     timestamp: new Date().toISOString(),
   };
-}
-
-// ── Swap / DEX Aggregator ─────────────────────────────────────────────────
-
-/** Fetch a swap quote from the agent API (proxied to SwapQuoter on-chain) */
-export async function getSwapQuote(params: {
-  pool: string;
-  tokenIn: string;
-  tokenOut: string;
-  amountIn: string;
-}): Promise<SwapQuoteResult> {
-  const qs = new URLSearchParams(params).toString();
-  return fetchJson<SwapQuoteResult>(`/swap/quote?${qs}`);
-}
-
-/** Fetch available swap routes / pool adapter status from the agent API */
-export async function getSwapRoutes(): Promise<SwapRoutesResponse> {
-  return fetchJson<SwapRoutesResponse>("/swap/routes");
 }
