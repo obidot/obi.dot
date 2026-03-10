@@ -42,6 +42,7 @@ Depositors interact with a standard ERC-4626 interface — `deposit`, `mint`, `w
 - **On-Chain Policy Engine** — Parachain and protocol whitelists, per-protocol exposure caps, daily loss circuit breaker
 - **Oracle-Based Slippage Protection** — Pyth Network price feeds validate expected returns against real-time prices
 - **Native XCM Dispatch** — Cross-chain messages sent via the Polkadot Hub XCM precompile at `0x00000000000000000000000000000000000a0000`
+- **DEX Aggregator Router** — On-hub swap routing via `SwapRouter` with pluggable pool adapters (Hydration Omnipool, AssetHub pairs, Bifrost DEX)
 - **Bifrost DeFi Strategies** — Liquid staking (SLP), DEX swaps, yield farming, and SALP via on-chain Bifrost adapter with SCALE-encoded XCM calls
 - **Autonomous AI Agent** — LangChain-powered agent with on-chain perception tools, Bifrost yield analysis, cross-chain rebalancing, Fastify REST API, and Telegram bot
 - **Financial Intelligence Hub** — Next.js dashboard with AI-powered market pulse, opportunity radar, risk matrix, position simulator, and portfolio optimizer
@@ -54,13 +55,14 @@ Depositors interact with a standard ERC-4626 interface — `deposit`, `mint`, `w
 |-----------|-------|
 | Network | Polkadot Hub Testnet (Paseo) |
 | Chain ID | `420420417` |
-| RPC | `https://services.polkadothub-rpc.com/testnet` |
+| RPC | `https://eth-rpc-testnet.polkadot.io/` |
+| Block Explorer | `https://blockscout-testnet.polkadot.io/` |
 | XCM Precompile | `0x00000000000000000000000000000000000a0000` |
 
 ## Tech Stack
 
 ### Smart Contracts
-- **Solidity** `0.8.28` with Foundry (400+ tests)
+- **Solidity** `0.8.28` with Foundry (562 tests, 97 suites)
 - **OpenZeppelin Contracts** v5.5.0 (`ERC4626`, `AccessControl`, `Pausable`, `ReentrancyGuard`)
 - **Pyth SDK Solidity** v2.2.0 for oracle interface
 - **PolkaVM** deployment via Revive LLVM compiler (`resolc`)
@@ -80,15 +82,46 @@ Depositors interact with a standard ERC-4626 interface — `deposit`, `mint`, `w
 
 ## Contract Addresses
 
-Deployed on **Polkadot Hub Testnet (Paseo)**, chain ID `420420417`, on 2026-02-27:
+All contracts are deployed on **Polkadot Hub Testnet (Paseo)**, chain ID `420420417`.
+The canonical source of truth is [`deployments.json`](https://github.com/obidot/obi.router/blob/main/deployments.json).
+
+### Phase 1 — Core Vault (2026-02-27)
 
 | Contract | Address |
 |----------|---------|
-| TestDOT (tDOT) | `0x2402C804aD8a6217BF73D8483dA7564065c56083` |
-| KeeperOracle | `0xf64d93DC125AC1B366532BBbA165615f6D566C7F` |
-| OracleRegistry | `0x8b7C7345d6cF9de45f4aacC61F56F0241d47e88B` |
-| ObidotVault | `0x37D7959f5f97D37799E0d04b7684c41CB2Ff878d` |
-| CrossChainRouter | `0xE65D7B65a1972A82bCF65f6711a43355Faa3f490` |
-| BifrostAdapter | `0x265Cb785De0fF2e5BcebDEb53095aDCAE9175527` |
+| `TestDOT` (tDOT ERC-20) | `0x2402C804aD8a6217BF73D8483dA7564065c56083` |
+| `KeeperOracle` | `0xf64d93DC125AC1B366532BBbA165615f6D566C7F` |
+| `OracleRegistry` | `0x8b7C7345d6cF9de45f4aacC61F56F0241d47e88B` |
+| `ObidotVault` | `0x37D7959f5f97D37799E0d04b7684c41CB2Ff878d` |
+| `BifrostAdapter` | `0x265Cb785De0fF2e5BcebDEb53095aDCAE9175527` |
+
+### Phase 2 — Executor + Asset Layer (2026-03-04)
+
+| Contract | Address |
+|----------|---------|
+| `XCMExecutor` | `0xE8FDc9093395eA02017d5D66899F3E04CFF1CF64` |
+| `NativeAsset` (DOT proxy) | `0xE72453bD8d5ECF56ccdDeF949C8AE0Cea5A41E7d` |
+| `NativeAsset` (USDC proxy) | `0xAf233E9f2ED78022CAdEA58a84144ce6BcDFd63E` |
+
+### Phase 3 — DEX Aggregator Router (2026-03-11)
+
+| Contract | Address |
+|----------|---------|
+| `SwapRouter` | `0xeABB7c2C02eD819BDee9336cD12e9668A33ab924` |
+| `SwapQuoter` | `0x81d7aCFEF474DA6c76eC1b5A05a137cB9f3A5Db1` |
+| `HydrationOmnipoolAdapter` | `0xBF9e3ad0818719F0DF26075005A978793248f523` |
+| `AssetHubPairAdapter` | `0x67E0B572A7761C13D7C9A3f737C825A506a85CF4` |
+| `BifrostDEXAdapter` | `0x386FC9514594c589ad7481AFC3eC36216DE91dC0` |
+
+### Phase 4 — Hyperbridge ISMP v1.6.0 Fix (2026-03-11)
+
+| Contract | Address |
+|----------|---------|
+| `HyperExecutor` | `0x82D7f3CbC0346e3B0aC463230891CB18470A28c7` |
+| `CrossChainRouter` | `0x8903331DfE3dcFd8E23bBA2D716B692f1510491e` |
+
+> **Deprecated:** `CrossChainRouter` `0xE65D7B65a1972A82bCF65f6711a43355Faa3f490` (Phase 1) and
+> `HyperExecutor` `0xaEC0009B15449102a39204259d07c2517cf8fC0f` (Phase 2) used the pre-v1.6.0
+> `IIsmpHost` interface and are no longer active.
 
 See the [Deployment](/docs/deployment) page for instructions on deploying your own instance.

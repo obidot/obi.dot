@@ -38,25 +38,26 @@ Hyperbridge ISMP provides a **state-proof-based** cross-chain messaging protocol
 
 ### IIsmpHost Interface
 
-The ISMP Host is a system contract on each chain that provides the entry point for cross-chain messaging:
+The ISMP Host is a system contract on each chain that provides the entry point for cross-chain messaging.
+Obidot targets **Hyperbridge v1.6.0**, which changed the `DispatchPost` struct and fee API.
 
 ```solidity
 interface IIsmpHost {
     struct DispatchPost {
-        bytes dest;       // Destination state machine identifier
-        bytes to;         // Receiving module address
-        bytes body;       // Message payload
-        uint64 timeout;   // Timeout in seconds (0 = none)
-        uint256 gaslimit; // Execution gas limit on destination
+        bytes dest;      // Destination state machine identifier
+        bytes to;        // Receiving module address
+        bytes body;      // Message payload
+        uint64 timeout;  // Timeout in seconds (0 = none)
+        uint256 fee;     // ISMP dispatch fee (in fee token)
+        address payer;   // Address that pays the fee
     }
 
     /// Dispatch a POST request, returns commitment hash
     function dispatch(DispatchPost calldata post)
         external payable returns (bytes32 commitment);
 
-    /// Estimate fee for a POST dispatch
-    function dispatchFee(DispatchPost calldata post)
-        external view returns (uint256 fee);
+    /// Fee per byte of message body (replaces dispatchFee() from pre-v1.6.0)
+    function perByteFee() external view returns (uint256);
 
     /// Returns this state machine's identifier
     function host() external view returns (bytes memory);
@@ -68,6 +69,12 @@ interface IIsmpHost {
     function nonce() external view returns (uint256);
 }
 ```
+
+> **Breaking change from pre-v1.6.0:** The old interface had `DispatchPost.gaslimit` and a
+> `dispatchFee(DispatchPost)` view function. Hyperbridge v1.6.0 replaced these with
+> `DispatchPost.fee` + `DispatchPost.payer` and a `perByteFee()` function. The fee is now
+> computed as `perByteFee() * max(32, body.length)`. Phase 2's `HyperExecutor` and
+> `CrossChainRouter` used the old interface; both were redeployed in Phase 4 to fix this.
 
 ### IIsmpModule Callbacks
 
@@ -117,8 +124,8 @@ The adapter maintains:
 
 Internal dispatch is handled by `_dispatchMessage`:
 
-1. Estimate fee via `ismpHost.dispatchFee(post)`
-2. Construct the `DispatchPost` with destination chain, recipient module, body, timeout, and gas limit
+1. Compute fee: `ismpHost.perByteFee() * max(32, body.length)`
+2. Construct the `DispatchPost` with destination chain, recipient module, body, timeout, fee, and payer
 3. Call `ismpHost.dispatch{value: fee}(post)` to send the message
 4. Emit `MessageDispatched` event with the commitment hash
 
