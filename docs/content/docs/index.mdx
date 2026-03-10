@@ -13,6 +13,7 @@ Welcome to the Obidot documentation. Obidot is an **Autonomous Cross-Chain Finan
   <Card title="Strategy Execution" href="/docs/strategy-execution" />
   <Card title="Policy Engine" href="/docs/policy-engine" />
   <Card title="Oracle Integration" href="/docs/oracle" />
+  <Card title="DEX Aggregator Router" href="/docs/dex-aggregator" />
   <Card title="XCM Cross-Chain" href="/docs/xcm" />
   <Card title="Cross-Chain (Hyperbridge)" href="/docs/cross-chain" />
   <Card title="Bifrost Integration" href="/docs/bifrost" />
@@ -27,11 +28,11 @@ Welcome to the Obidot documentation. Obidot is an **Autonomous Cross-Chain Finan
 
 Obidot separates concerns across three distinct actor types:
 
-| Role | Responsibility |
-|------|---------------|
-| **Admin** | Configures policy engine parameters, manages roles, emergency controls |
-| **AI Strategist** | Signs EIP-712 strategy intents specifying capital deployment targets |
-| **Keeper** | Reports cross-chain strategy outcomes and P&L back to the vault |
+| Role              | Responsibility                                                         |
+| ----------------- | ---------------------------------------------------------------------- |
+| **Admin**         | Configures policy engine parameters, manages roles, emergency controls |
+| **AI Strategist** | Signs EIP-712 strategy intents specifying capital deployment targets   |
+| **Keeper**        | Reports cross-chain strategy outcomes and P&L back to the vault        |
 
 Depositors interact with a standard ERC-4626 interface — `deposit`, `mint`, `withdraw`, and `redeem` — while the AI strategist operates within on-chain policy bounds enforced by the smart contract itself.
 
@@ -51,23 +52,25 @@ Depositors interact with a standard ERC-4626 interface — `deposit`, `mint`, `w
 
 ## Target Network
 
-| Parameter | Value |
-|-----------|-------|
-| Network | Polkadot Hub Testnet (Paseo) |
-| Chain ID | `420420417` |
-| RPC | `https://eth-rpc-testnet.polkadot.io/` |
-| Block Explorer | `https://blockscout-testnet.polkadot.io/` |
+| Parameter      | Value                                        |
+| -------------- | -------------------------------------------- |
+| Network        | Polkadot Hub Testnet (Paseo)                 |
+| Chain ID       | `420420417`                                  |
+| RPC            | `https://eth-rpc-testnet.polkadot.io/`       |
+| Block Explorer | `https://blockscout-testnet.polkadot.io/`    |
 | XCM Precompile | `0x00000000000000000000000000000000000a0000` |
 
 ## Tech Stack
 
 ### Smart Contracts
+
 - **Solidity** `0.8.28` with Foundry (562 tests, 97 suites)
 - **OpenZeppelin Contracts** v5.5.0 (`ERC4626`, `AccessControl`, `Pausable`, `ReentrancyGuard`)
 - **Pyth SDK Solidity** v2.2.0 for oracle interface
 - **PolkaVM** deployment via Revive LLVM compiler (`resolc`)
 
 ### Off-Chain Agent
+
 - **Node.js / TypeScript** — strict ES2022, pino logging
 - **LangChain** (`@langchain/core`, `@langchain/openai`) — GPT-4o agent loop
 - **viem** v2 — on-chain reads and EIP-712 signing
@@ -75,6 +78,7 @@ Depositors interact with a standard ERC-4626 interface — `deposit`, `mint`, `w
 - **Telegram Bot API** — optional operator notifications
 
 ### Dashboard App
+
 - **Next.js 15** (App Router, Turbopack) with **React 19**
 - **TailwindCSS v4** — custom design system
 - **TanStack Query v5** — server state and polling
@@ -87,37 +91,37 @@ The canonical source of truth is [`deployments.json`](https://github.com/obidot/
 
 ### Phase 1 — Core Vault (2026-02-27)
 
-| Contract | Address |
-|----------|---------|
+| Contract                | Address                                      |
+| ----------------------- | -------------------------------------------- |
 | `TestDOT` (tDOT ERC-20) | `0x2402C804aD8a6217BF73D8483dA7564065c56083` |
-| `KeeperOracle` | `0xf64d93DC125AC1B366532BBbA165615f6D566C7F` |
-| `OracleRegistry` | `0x8b7C7345d6cF9de45f4aacC61F56F0241d47e88B` |
-| `ObidotVault` | `0x37D7959f5f97D37799E0d04b7684c41CB2Ff878d` |
-| `BifrostAdapter` | `0x265Cb785De0fF2e5BcebDEb53095aDCAE9175527` |
+| `KeeperOracle`          | `0xf64d93DC125AC1B366532BBbA165615f6D566C7F` |
+| `OracleRegistry`        | `0x8b7C7345d6cF9de45f4aacC61F56F0241d47e88B` |
+| `ObidotVault`           | `0x37D7959f5f97D37799E0d04b7684c41CB2Ff878d` |
+| `BifrostAdapter`        | `0x265Cb785De0fF2e5BcebDEb53095aDCAE9175527` |
 
 ### Phase 2 — Executor + Asset Layer (2026-03-04)
 
-| Contract | Address |
-|----------|---------|
-| `XCMExecutor` | `0xE8FDc9093395eA02017d5D66899F3E04CFF1CF64` |
-| `NativeAsset` (DOT proxy) | `0xE72453bD8d5ECF56ccdDeF949C8AE0Cea5A41E7d` |
+| Contract                   | Address                                      |
+| -------------------------- | -------------------------------------------- |
+| `XCMExecutor`              | `0xE8FDc9093395eA02017d5D66899F3E04CFF1CF64` |
+| `NativeAsset` (DOT proxy)  | `0xE72453bD8d5ECF56ccdDeF949C8AE0Cea5A41E7d` |
 | `NativeAsset` (USDC proxy) | `0xAf233E9f2ED78022CAdEA58a84144ce6BcDFd63E` |
 
 ### Phase 3 — DEX Aggregator Router (2026-03-11)
 
-| Contract | Address |
-|----------|---------|
-| `SwapRouter` | `0xeABB7c2C02eD819BDee9336cD12e9668A33ab924` |
-| `SwapQuoter` | `0x81d7aCFEF474DA6c76eC1b5A05a137cB9f3A5Db1` |
+| Contract                   | Address                                      |
+| -------------------------- | -------------------------------------------- |
+| `SwapRouter`               | `0xeABB7c2C02eD819BDee9336cD12e9668A33ab924` |
+| `SwapQuoter`               | `0x81d7aCFEF474DA6c76eC1b5A05a137cB9f3A5Db1` |
 | `HydrationOmnipoolAdapter` | `0xBF9e3ad0818719F0DF26075005A978793248f523` |
-| `AssetHubPairAdapter` | `0x67E0B572A7761C13D7C9A3f737C825A506a85CF4` |
-| `BifrostDEXAdapter` | `0x386FC9514594c589ad7481AFC3eC36216DE91dC0` |
+| `AssetHubPairAdapter`      | `0x67E0B572A7761C13D7C9A3f737C825A506a85CF4` |
+| `BifrostDEXAdapter`        | `0x386FC9514594c589ad7481AFC3eC36216DE91dC0` |
 
 ### Phase 4 — Hyperbridge ISMP v1.6.0 Fix (2026-03-11)
 
-| Contract | Address |
-|----------|---------|
-| `HyperExecutor` | `0x82D7f3CbC0346e3B0aC463230891CB18470A28c7` |
+| Contract           | Address                                      |
+| ------------------ | -------------------------------------------- |
+| `HyperExecutor`    | `0x82D7f3CbC0346e3B0aC463230891CB18470A28c7` |
 | `CrossChainRouter` | `0x8903331DfE3dcFd8E23bBA2D716B692f1510491e` |
 
 > **Deprecated:** `CrossChainRouter` `0xE65D7B65a1972A82bCF65f6711a43355Faa3f490` (Phase 1) and
