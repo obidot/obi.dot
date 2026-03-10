@@ -1,5 +1,10 @@
 # obi-kit Integration Plan
 
+> **Status: ✅ Complete (v0.1.0)**
+> All 4 tasks below are addressed. For the next phase of SDK work (real contract connections, new tools, v0.2.0), see:
+> - [`tasks/agent-rebuild-plan.md`](./agent-rebuild-plan.md) — agent module rebuild (Phase 7: SDK integration)
+> - [`obi-kit/tasks/obi-kit-rebuild-plan.md`](../../obi-kit/tasks/obi-kit-rebuild-plan.md) — full obi-kit v0.2.0 plan
+
 ## Overview
 
 Connect the [obi-kit](https://github.com/obidot/obi-kit) open-source SDK to the live Obidot contracts, enabling developers to build custom AI agents that interact with the vault.

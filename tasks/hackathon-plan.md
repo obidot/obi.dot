@@ -1,5 +1,7 @@
 # Obidot Hackathon Improvement Plan
 
+> **Status: ✅ Complete — all 8 phases shipped.**
+
 > Master plan for winning the Polkadot hackathon. All improvements are validated against
 > Polkadot Hub PVM constraints, Bifrost integration requirements, and XCM precompile specs.
 

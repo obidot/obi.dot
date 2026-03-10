@@ -5,7 +5,7 @@ import { env } from "./env.js";
 //  Network Constants
 // ─────────────────────────────────────────────────────────────────────────────
 
-/** Polkadot Hub Testnet (Paseo) Chain ID. */
+/** Polkadot Hub TestNet Chain ID. */
 export const CHAIN_ID = 420_420_417;
 
 /** JSON-RPC endpoint for Polkadot Hub EVM. */
@@ -412,6 +412,30 @@ export const BIFROST_ADAPTER_ADDRESS = (env.BIFROST_ADAPTER_ADDRESS ??
   "0x0000000000000000000000000000000000000000") as Address;
 
 // ─────────────────────────────────────────────────────────────────────────────
+//  DEX Aggregator Contract Addresses
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** SwapRouter address on Polkadot Hub (zero-address if not yet deployed). */
+export const SWAP_ROUTER_ADDRESS = (env.SWAP_ROUTER_ADDRESS ??
+  "0x0000000000000000000000000000000000000000") as Address;
+
+/** SwapQuoter address on Polkadot Hub (zero-address if not yet deployed). */
+export const SWAP_QUOTER_ADDRESS = (env.SWAP_QUOTER_ADDRESS ??
+  "0x0000000000000000000000000000000000000000") as Address;
+
+/** HydrationOmnipoolAdapter address (zero-address if not yet deployed). */
+export const HYDRATION_ADAPTER_ADDRESS = (env.HYDRATION_ADAPTER_ADDRESS ??
+  "0x0000000000000000000000000000000000000000") as Address;
+
+/** AssetHubPairAdapter address (zero-address if not yet deployed). */
+export const ASSET_HUB_ADAPTER_ADDRESS = (env.ASSET_HUB_ADAPTER_ADDRESS ??
+  "0x0000000000000000000000000000000000000000") as Address;
+
+/** BifrostDEXAdapter address (zero-address if not yet deployed). */
+export const BIFROST_DEX_ADAPTER_ADDRESS = (env.BIFROST_DEX_ADAPTER_ADDRESS ??
+  "0x0000000000000000000000000000000000000000") as Address;
+
+// ─────────────────────────────────────────────────────────────────────────────
 //  Cross-Chain Contract ABIs (minimal)
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -554,6 +578,433 @@ export const VAULT_CROSS_CHAIN_ABI = [
     stateMutability: "view",
   },
 ] as const;
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  Vault ABI — New Intent & Swap Functions
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Additional ABI entries for executeIntent, executeLocalSwap, and related
+ * functions added in the DEX aggregator update.
+ */
+export const VAULT_INTENT_ABI = [
+  // ── Read Functions ─────────────────────────────────────────────────────
+  {
+    type: "function",
+    name: "intentNonces",
+    inputs: [{ name: "solver", type: "address" }],
+    outputs: [{ name: "", type: "uint256" }],
+    stateMutability: "view",
+  },
+  {
+    type: "function",
+    name: "swapRouter",
+    inputs: [],
+    outputs: [{ name: "", type: "address" }],
+    stateMutability: "view",
+  },
+  {
+    type: "function",
+    name: "SOLVER_ROLE",
+    inputs: [],
+    outputs: [{ name: "", type: "bytes32" }],
+    stateMutability: "view",
+  },
+
+  // ── Write Functions ────────────────────────────────────────────────────
+  {
+    type: "function",
+    name: "executeIntent",
+    inputs: [
+      {
+        name: "intent",
+        type: "tuple",
+        components: [
+          {
+            name: "inAsset",
+            type: "tuple",
+            components: [
+              { name: "token", type: "address" },
+              { name: "assetId", type: "uint256" },
+            ],
+          },
+          {
+            name: "outAsset",
+            type: "tuple",
+            components: [
+              { name: "token", type: "address" },
+              { name: "assetId", type: "uint256" },
+            ],
+          },
+          { name: "amount", type: "uint256" },
+          { name: "minOut", type: "uint256" },
+          {
+            name: "dest",
+            type: "tuple",
+            components: [
+              { name: "destType", type: "uint8" },
+              { name: "paraId", type: "uint32" },
+              { name: "chainId", type: "uint8" },
+            ],
+          },
+          { name: "calldata_", type: "bytes" },
+          { name: "nonce", type: "uint256" },
+          { name: "deadline", type: "uint256" },
+        ],
+      },
+      { name: "signature", type: "bytes" },
+    ],
+    outputs: [],
+    stateMutability: "nonpayable",
+  },
+  {
+    type: "function",
+    name: "executeLocalSwap",
+    inputs: [
+      {
+        name: "params",
+        type: "tuple",
+        components: [
+          {
+            name: "route",
+            type: "tuple",
+            components: [
+              { name: "poolType", type: "uint8" },
+              { name: "pool", type: "address" },
+              { name: "tokenIn", type: "address" },
+              { name: "tokenOut", type: "address" },
+              { name: "feeBps", type: "uint256" },
+              { name: "data", type: "bytes" },
+            ],
+          },
+          { name: "amountIn", type: "uint256" },
+          { name: "minAmountOut", type: "uint256" },
+          { name: "to", type: "address" },
+          { name: "deadline", type: "uint256" },
+        ],
+      },
+      {
+        name: "intent",
+        type: "tuple",
+        components: [
+          { name: "asset", type: "address" },
+          { name: "amount", type: "uint256" },
+          { name: "minReturn", type: "uint256" },
+          { name: "maxSlippageBps", type: "uint256" },
+          { name: "deadline", type: "uint256" },
+          { name: "nonce", type: "uint256" },
+          { name: "xcmCall", type: "bytes" },
+          { name: "targetParachain", type: "uint32" },
+          { name: "targetProtocol", type: "address" },
+        ],
+      },
+      { name: "signature", type: "bytes" },
+    ],
+    outputs: [{ name: "amountOut", type: "uint256" }],
+    stateMutability: "nonpayable",
+  },
+  {
+    type: "function",
+    name: "setSwapRouter",
+    inputs: [{ name: "router", type: "address" }],
+    outputs: [],
+    stateMutability: "nonpayable",
+  },
+
+  // ── Events ─────────────────────────────────────────────────────────────
+  {
+    type: "event",
+    name: "IntentExecuted",
+    inputs: [
+      { name: "solver", type: "address", indexed: true },
+      { name: "inToken", type: "address", indexed: true },
+      { name: "outToken", type: "address", indexed: true },
+      { name: "amount", type: "uint256", indexed: false },
+      { name: "nonce", type: "uint256", indexed: false },
+    ],
+  },
+  {
+    type: "event",
+    name: "LocalSwapExecuted",
+    inputs: [
+      { name: "strategist", type: "address", indexed: true },
+      { name: "tokenIn", type: "address", indexed: true },
+      { name: "tokenOut", type: "address", indexed: true },
+      { name: "amountIn", type: "uint256", indexed: false },
+      { name: "amountOut", type: "uint256", indexed: false },
+    ],
+  },
+  {
+    type: "event",
+    name: "SwapRouterUpdated",
+    inputs: [
+      { name: "oldRouter", type: "address", indexed: false },
+      { name: "newRouter", type: "address", indexed: false },
+    ],
+  },
+  {
+    type: "event",
+    name: "HyperIntentQueued",
+    inputs: [
+      { name: "solver", type: "address", indexed: true },
+      { name: "chainId", type: "uint8", indexed: false },
+      { name: "amount", type: "uint256", indexed: false },
+    ],
+  },
+] as const;
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  SwapRouter ABI (minimal)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Minimal ABI for SwapRouter read/write via agent. */
+export const SWAP_ROUTER_ABI = [
+  {
+    type: "function",
+    name: "swap",
+    inputs: [
+      {
+        name: "params",
+        type: "tuple",
+        components: [
+          {
+            name: "route",
+            type: "tuple",
+            components: [
+              { name: "poolType", type: "uint8" },
+              { name: "pool", type: "address" },
+              { name: "tokenIn", type: "address" },
+              { name: "tokenOut", type: "address" },
+              { name: "feeBps", type: "uint256" },
+              { name: "data", type: "bytes" },
+            ],
+          },
+          { name: "amountIn", type: "uint256" },
+          { name: "minAmountOut", type: "uint256" },
+          { name: "to", type: "address" },
+          { name: "deadline", type: "uint256" },
+        ],
+      },
+    ],
+    outputs: [{ name: "amountOut", type: "uint256" }],
+    stateMutability: "nonpayable",
+  },
+  {
+    type: "function",
+    name: "swapMultiHop",
+    inputs: [
+      {
+        name: "routes",
+        type: "tuple[]",
+        components: [
+          { name: "poolType", type: "uint8" },
+          { name: "pool", type: "address" },
+          { name: "tokenIn", type: "address" },
+          { name: "tokenOut", type: "address" },
+          { name: "feeBps", type: "uint256" },
+          { name: "data", type: "bytes" },
+        ],
+      },
+      { name: "amountIn", type: "uint256" },
+      { name: "minAmountOut", type: "uint256" },
+      { name: "to", type: "address" },
+      { name: "deadline", type: "uint256" },
+    ],
+    outputs: [{ name: "amountOut", type: "uint256" }],
+    stateMutability: "nonpayable",
+  },
+  {
+    type: "function",
+    name: "adapters",
+    inputs: [{ name: "poolType", type: "uint8" }],
+    outputs: [{ name: "", type: "address" }],
+    stateMutability: "view",
+  },
+  {
+    type: "function",
+    name: "paused",
+    inputs: [],
+    outputs: [{ name: "", type: "bool" }],
+    stateMutability: "view",
+  },
+] as const;
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  SwapQuoter ABI (minimal)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Minimal ABI for SwapQuoter reads via agent. */
+export const SWAP_QUOTER_ABI = [
+  {
+    type: "function",
+    name: "getBestQuote",
+    inputs: [
+      { name: "pool", type: "address" },
+      { name: "tokenIn", type: "address" },
+      { name: "tokenOut", type: "address" },
+      { name: "amountIn", type: "uint256" },
+    ],
+    outputs: [
+      {
+        name: "",
+        type: "tuple",
+        components: [
+          { name: "source", type: "uint8" },
+          { name: "pool", type: "address" },
+          { name: "feeBps", type: "uint256" },
+          { name: "amountIn", type: "uint256" },
+          { name: "amountOut", type: "uint256" },
+        ],
+      },
+    ],
+    stateMutability: "view",
+  },
+  {
+    type: "function",
+    name: "getAllQuotes",
+    inputs: [
+      { name: "pool", type: "address" },
+      { name: "tokenIn", type: "address" },
+      { name: "tokenOut", type: "address" },
+      { name: "amountIn", type: "uint256" },
+    ],
+    outputs: [
+      {
+        name: "",
+        type: "tuple[]",
+        components: [
+          { name: "source", type: "uint8" },
+          { name: "pool", type: "address" },
+          { name: "feeBps", type: "uint256" },
+          { name: "amountIn", type: "uint256" },
+          { name: "amountOut", type: "uint256" },
+        ],
+      },
+    ],
+    stateMutability: "view",
+  },
+  {
+    type: "function",
+    name: "quoteMultiHop",
+    inputs: [
+      {
+        name: "routes",
+        type: "tuple[]",
+        components: [
+          { name: "poolType", type: "uint8" },
+          { name: "pool", type: "address" },
+          { name: "tokenIn", type: "address" },
+          { name: "tokenOut", type: "address" },
+          { name: "feeBps", type: "uint256" },
+          { name: "data", type: "bytes" },
+        ],
+      },
+      { name: "amountIn", type: "uint256" },
+    ],
+    outputs: [{ name: "finalAmountOut", type: "uint256" }],
+    stateMutability: "view",
+  },
+  {
+    type: "function",
+    name: "buildBestSwap",
+    inputs: [
+      { name: "pool", type: "address" },
+      { name: "tokenIn", type: "address" },
+      { name: "tokenOut", type: "address" },
+      { name: "amountIn", type: "uint256" },
+      { name: "slippageBps", type: "uint256" },
+      { name: "to", type: "address" },
+      { name: "deadline", type: "uint256" },
+    ],
+    outputs: [
+      {
+        name: "",
+        type: "tuple",
+        components: [
+          {
+            name: "route",
+            type: "tuple",
+            components: [
+              { name: "poolType", type: "uint8" },
+              { name: "pool", type: "address" },
+              { name: "tokenIn", type: "address" },
+              { name: "tokenOut", type: "address" },
+              { name: "feeBps", type: "uint256" },
+              { name: "data", type: "bytes" },
+            ],
+          },
+          { name: "amountIn", type: "uint256" },
+          { name: "minAmountOut", type: "uint256" },
+          { name: "to", type: "address" },
+          { name: "deadline", type: "uint256" },
+        ],
+      },
+    ],
+    stateMutability: "view",
+  },
+] as const;
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  IPoolAdapter ABI (minimal)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Minimal ABI for IPoolAdapter reads via agent. */
+export const POOL_ADAPTER_ABI = [
+  {
+    type: "function",
+    name: "getAmountOut",
+    inputs: [
+      { name: "pool", type: "address" },
+      { name: "tokenIn", type: "address" },
+      { name: "tokenOut", type: "address" },
+      { name: "amountIn", type: "uint256" },
+      { name: "data", type: "bytes" },
+    ],
+    outputs: [{ name: "amountOut", type: "uint256" }],
+    stateMutability: "view",
+  },
+  {
+    type: "function",
+    name: "supportsPair",
+    inputs: [
+      { name: "pool", type: "address" },
+      { name: "tokenIn", type: "address" },
+      { name: "tokenOut", type: "address" },
+    ],
+    outputs: [{ name: "supported", type: "bool" }],
+    stateMutability: "view",
+  },
+] as const;
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  EIP-712 Types for UniversalIntent
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * EIP-712 type definitions for the UniversalIntent struct.
+ * Field ordering must match the Solidity UNIVERSAL_INTENT_TYPEHASH exactly.
+ */
+export const UNIVERSAL_INTENT_TYPES = {
+  UniversalIntent: [
+    { name: "inAsset", type: "Asset" },
+    { name: "outAsset", type: "Asset" },
+    { name: "amount", type: "uint256" },
+    { name: "minOut", type: "uint256" },
+    { name: "dest", type: "Destination" },
+    { name: "calldata_", type: "bytes" },
+    { name: "nonce", type: "uint256" },
+    { name: "deadline", type: "uint256" },
+  ],
+  Asset: [
+    { name: "token", type: "address" },
+    { name: "assetId", type: "uint256" },
+  ],
+  Destination: [
+    { name: "destType", type: "uint8" },
+    { name: "paraId", type: "uint32" },
+    { name: "chainId", type: "uint8" },
+  ],
+} as const;
 
 // ─────────────────────────────────────────────────────────────────────────────
 //  Agent Parameters

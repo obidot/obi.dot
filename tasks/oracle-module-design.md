@@ -1,5 +1,9 @@
 # Oracle Module Design — Comprehensive Plan
 
+> **Status: ⚡ Partially Implemented**
+> - **Implemented:** `KeeperOracle.sol` (keeper-pushable AggV3), `OracleRegistry.sol` (multi-asset registry with staleness checks), `SlippageGuard.sol` (2% max slippage library) — all deployed on Paseo testnet.
+> - **Planned (next phase):** Multi-source aggregation, TWAP, batched updates, RedStone/Chainlink CCIP integration — tracked in [`tasks/agent-rebuild-plan.md`](./agent-rebuild-plan.md) Phase 5.
+
 > **Target:** Polkadot Hub EVM (pallet-revive / PolkaVM)
 > **Constraint:** No Pyth, no Chainlink, no native oracle deployed on-chain today.
 > **Migration path:** Hot-swap via `vault.setOracle()` when native oracle arrives.

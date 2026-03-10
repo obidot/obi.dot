@@ -1,5 +1,8 @@
 # Obidot App Build Plan — Frontend + Shared Backend
 
+> **Status: ✅ Complete (Phase 1–3 implemented)**
+> Next phase: see [`tasks/doc-app-rebuild-plan.md`](./doc-app-rebuild-plan.md) for the full docs site + app rebuild plan.
+
 > Build a production-grade Next.js app (`modules/app`) with a dark DeFi aesthetic,
 > TradingView charts, wallet integration, AI chat widget, and real-time WebSocket updates.
 > The app shares a backend API with the Telegram bot and autonomous agent loop.

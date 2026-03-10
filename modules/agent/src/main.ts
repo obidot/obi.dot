@@ -34,10 +34,14 @@ async function main(): Promise<void> {
       signerService: services.signerService,
       yieldService: services.yieldService,
       crossChainService: services.crossChainService,
+      swapRouterService: services.swapRouterService,
       tools,
     });
   } catch (error) {
-    logger.error({ err: error }, "Failed to start API server — continuing without it");
+    logger.error(
+      { err: error },
+      "Failed to start API server — continuing without it",
+    );
   }
 
   // ── Telegram Bot (optional) ────────────────────────────────────────────
@@ -47,7 +51,10 @@ async function main(): Promise<void> {
       await startTelegramBot(tools);
       logger.info("Telegram bot started successfully");
     } catch (error) {
-      logger.error({ err: error }, "Failed to start Telegram bot — continuing without it");
+      logger.error(
+        { err: error },
+        "Failed to start Telegram bot — continuing without it",
+      );
     }
   } else {
     logger.info("No TELEGRAM_BOT_TOKEN — Telegram bot disabled");

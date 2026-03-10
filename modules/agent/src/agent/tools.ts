@@ -3,21 +3,28 @@ import { Tool } from "@langchain/core/tools";
 import { SignerService } from "../services/signer.service.js";
 import { YieldService } from "../services/yield.service.js";
 import { CrossChainService } from "../services/crosschain.service.js";
+import { SwapRouterService } from "../services/swap-router.service.js";
+import { IntentService } from "../services/intent.service.js";
 import {
   ASSET_ADDRESS,
   INTENT_DEADLINE_SECONDS,
   MAX_STRATEGY_AMOUNT,
   PLACEHOLDER_XCM_CALL,
+  VAULT_ADDRESS,
 } from "../config/constants.js";
 import {
   aiDecisionSchema,
   BifrostStrategyType,
   BifrostCurrencyId,
   BIFROST_STRATEGY_LABELS,
+  DestType,
+  POOL_TYPE_LABELS,
   type StrategyIntent,
   type ReallocateDecision,
+  type LocalSwapDecision,
+  type UniversalIntentDecision,
 } from "../types/index.js";
-import { agentLog } from "../utils/logger.js";
+import { agentLog, swapLog, intentLog } from "../utils/logger.js";
 
 // ─────────────────────────────────────────────────────────────────────────────
 //  FetchYieldsTool — Perception phase
@@ -542,28 +549,520 @@ export class ExecuteBifrostStrategyTool extends Tool {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+//  SwapQuoteTool — DEX aggregator read-only quote
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * LangChain tool that queries the SwapQuoter for the best swap quote
+ * across all registered pool adapters. Read-only — does not execute any swap.
+ *
+ * Input JSON:
+ *   { pool: "0x…", tokenIn: "0x…", tokenOut: "0x…", amountIn: "1000000…" }
+ */
+export class SwapQuoteTool extends Tool {
+  name = "swap_quote";
+  description =
+    "Get the best swap quote from the DEX aggregator. Input MUST be a JSON " +
+    "object with: pool (address), tokenIn (address), tokenOut (address), " +
+    "amountIn (wei string). Returns the best quote across all pool adapters " +
+    "including source pool type, estimated output amount, and fee. " +
+    "Also returns all available quotes for comparison.";
+
+  private readonly swapRouterService: SwapRouterService;
+
+  constructor(swapRouterService: SwapRouterService) {
+    super();
+    this.swapRouterService = swapRouterService;
+  }
+
+  /** @internal LangChain entry-point. */
+  protected async _call(input: string): Promise<string> {
+    try {
+      // ── 1. Parse input ─────────────────────────────────────────────
+      let params: {
+        pool: string;
+        tokenIn: string;
+        tokenOut: string;
+        amountIn: string;
+      };
+      try {
+        params = JSON.parse(input);
+      } catch {
+        return JSON.stringify({
+          success: false,
+          error:
+            "Invalid JSON input. Expected { pool, tokenIn, tokenOut, amountIn }.",
+        });
+      }
+
+      if (
+        !params.pool ||
+        !params.tokenIn ||
+        !params.tokenOut ||
+        !params.amountIn
+      ) {
+        return JSON.stringify({
+          success: false,
+          error: "Missing required fields: pool, tokenIn, tokenOut, amountIn.",
+        });
+      }
+
+      // ── 2. Check deployment ────────────────────────────────────────
+      if (!this.swapRouterService.isQuoterDeployed) {
+        return JSON.stringify({
+          success: false,
+          error: "SwapQuoter is not yet deployed. Swap quoting is unavailable.",
+        });
+      }
+
+      const pool = params.pool as `0x${string}`;
+      const tokenIn = params.tokenIn as `0x${string}`;
+      const tokenOut = params.tokenOut as `0x${string}`;
+      const amountIn = BigInt(params.amountIn);
+
+      // ── 3. Fetch best quote + all quotes ───────────────────────────
+      const [bestQuote, allQuotes] = await Promise.all([
+        this.swapRouterService.getBestQuote(pool, tokenIn, tokenOut, amountIn),
+        this.swapRouterService.getAllQuotes(pool, tokenIn, tokenOut, amountIn),
+      ]);
+
+      if (!bestQuote) {
+        return JSON.stringify({
+          success: true,
+          data: {
+            bestQuote: null,
+            allQuotes: [],
+            message: "No quotes available for this token pair.",
+          },
+        });
+      }
+
+      swapLog.info(
+        {
+          source: POOL_TYPE_LABELS[bestQuote.source] ?? bestQuote.source,
+          amountOut: bestQuote.amountOut.toString(),
+          quotesCount: allQuotes.length,
+        },
+        "SwapQuoteTool returned best quote",
+      );
+
+      return JSON.stringify({
+        success: true,
+        data: {
+          bestQuote: {
+            source:
+              POOL_TYPE_LABELS[bestQuote.source] ?? String(bestQuote.source),
+            pool: bestQuote.pool,
+            feeBps: bestQuote.feeBps.toString(),
+            amountIn: bestQuote.amountIn.toString(),
+            amountOut: bestQuote.amountOut.toString(),
+          },
+          allQuotes: allQuotes.map((q) => ({
+            source: POOL_TYPE_LABELS[q.source] ?? String(q.source),
+            pool: q.pool,
+            feeBps: q.feeBps.toString(),
+            amountIn: q.amountIn.toString(),
+            amountOut: q.amountOut.toString(),
+          })),
+          adapters: this.swapRouterService.getPoolAdapters().map((a) => ({
+            poolType: a.name,
+            address: a.address,
+            deployed: a.deployed,
+          })),
+        },
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      swapLog.error({ err: error }, "SwapQuoteTool failed");
+      return JSON.stringify({ success: false, error: message });
+    }
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  ExecuteLocalSwapTool — On-hub swap via vault + SwapRouter
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * LangChain tool that executes an on-hub swap routed through the SwapRouter
+ * via the vault's `executeLocalSwap()` function.
+ *
+ * Flow:
+ *   1. Validate LOCAL_SWAP decision via Zod
+ *   2. Build best swap params via SwapQuoter
+ *   3. Build & sign a StrategyIntent with targetParachain=0 (hub)
+ *   4. Submit vault.executeLocalSwap(SwapParams, StrategyIntent, sig)
+ */
+export class ExecuteLocalSwapTool extends Tool {
+  name = "execute_local_swap";
+  description =
+    "Execute an on-hub DEX swap via the vault's SwapRouter integration. " +
+    'Input MUST be a JSON object with: action ("LOCAL_SWAP"), ' +
+    "poolType (0=HydrationOmnipool, 1=AssetHubPair, 2=BifrostDEX, 3=Custom), " +
+    "pool (address), tokenIn (address), tokenOut (address), " +
+    "amount (wei string), maxSlippageBps (1-200), reasoning (string). " +
+    "Queries SwapQuoter for the best route, signs a StrategyIntent via EIP-712, " +
+    "and executes the swap on-chain.";
+
+  private readonly swapRouterService: SwapRouterService;
+  private readonly intentService: IntentService;
+
+  constructor(
+    swapRouterService: SwapRouterService,
+    intentService: IntentService,
+  ) {
+    super();
+    this.swapRouterService = swapRouterService;
+    this.intentService = intentService;
+  }
+
+  /** @internal LangChain entry-point. */
+  protected async _call(input: string): Promise<string> {
+    try {
+      // ── 1. Parse raw LLM output ──────────────────────────────────────
+      let rawDecision: unknown;
+      try {
+        rawDecision = JSON.parse(input);
+      } catch {
+        return JSON.stringify({
+          success: false,
+          error: "Invalid JSON input. Expected a LOCAL_SWAP decision object.",
+        });
+      }
+
+      // ── 2. Zod-validate the AI decision ──────────────────────────────
+      const parseResult = aiDecisionSchema.safeParse(rawDecision);
+      if (!parseResult.success) {
+        swapLog.warn(
+          { errors: parseResult.error.flatten() },
+          "LOCAL_SWAP decision failed Zod validation",
+        );
+        return JSON.stringify({
+          success: false,
+          error: `Validation failed: ${parseResult.error.message}`,
+        });
+      }
+
+      const decision = parseResult.data;
+      if (decision.action !== "LOCAL_SWAP") {
+        return JSON.stringify({
+          success: false,
+          error: `ExecuteLocalSwapTool only handles LOCAL_SWAP, got ${decision.action}`,
+        });
+      }
+
+      const swap = decision as LocalSwapDecision;
+
+      // ── 3. Check deployment ──────────────────────────────────────────
+      if (!this.swapRouterService.isRouterDeployed) {
+        return JSON.stringify({
+          success: false,
+          error: "SwapRouter is not yet deployed. Local swaps unavailable.",
+        });
+      }
+
+      if (!this.swapRouterService.isQuoterDeployed) {
+        return JSON.stringify({
+          success: false,
+          error: "SwapQuoter is not yet deployed. Cannot build swap params.",
+        });
+      }
+
+      // ── 4. Enforce agent-side guardrails ──────────────────────────────
+      const amount = BigInt(swap.amount);
+      if (amount > MAX_STRATEGY_AMOUNT) {
+        return JSON.stringify({
+          success: false,
+          error: `Amount ${amount} exceeds MAX_STRATEGY_AMOUNT ${MAX_STRATEGY_AMOUNT}`,
+        });
+      }
+
+      // ── 5. Build swap params via SwapQuoter ───────────────────────────
+      const deadline = this.intentService.computeDeadline();
+      const slippageBps = BigInt(swap.maxSlippageBps);
+
+      const swapParams = await this.swapRouterService.buildBestSwap(
+        swap.pool as `0x${string}`,
+        swap.tokenIn as `0x${string}`,
+        swap.tokenOut as `0x${string}`,
+        amount,
+        slippageBps,
+        VAULT_ADDRESS,
+        deadline,
+      );
+
+      if (!swapParams) {
+        return JSON.stringify({
+          success: false,
+          error: "SwapQuoter.buildBestSwap returned no result for this pair.",
+        });
+      }
+
+      // ── 6. Fetch nonce + build StrategyIntent ─────────────────────────
+      const nonce = await this.intentService.fetchIntentNonce();
+      const minReturn = (amount * (10_000n - slippageBps)) / 10_000n;
+
+      const strategyIntent: StrategyIntent = {
+        asset: ASSET_ADDRESS,
+        amount,
+        minReturn,
+        maxSlippageBps: slippageBps,
+        deadline,
+        nonce,
+        xcmCall: PLACEHOLDER_XCM_CALL,
+        targetParachain: 0, // hub — local swap
+        targetProtocol: swap.pool as `0x${string}`,
+      };
+
+      swapLog.info(
+        {
+          poolType: POOL_TYPE_LABELS[swap.poolType] ?? swap.poolType,
+          tokenIn: swap.tokenIn,
+          tokenOut: swap.tokenOut,
+          amount: amount.toString(),
+          minAmountOut: swapParams.minAmountOut.toString(),
+          nonce: nonce.toString(),
+          reasoning: swap.reasoning,
+        },
+        "Executing local swap",
+      );
+
+      // ── 7. Sign StrategyIntent via EIP-712 ────────────────────────────
+      const signature =
+        await this.intentService.signStrategyIntent(strategyIntent);
+
+      // ── 8. Submit vault.executeLocalSwap() ────────────────────────────
+      const txHash = await this.intentService.executeLocalSwap(
+        swapParams,
+        strategyIntent,
+        signature,
+      );
+
+      swapLog.info({ txHash }, "Local swap executed successfully");
+
+      return JSON.stringify({
+        success: true,
+        data: {
+          action: "LOCAL_SWAP",
+          txHash,
+          poolType: POOL_TYPE_LABELS[swap.poolType] ?? String(swap.poolType),
+          tokenIn: swap.tokenIn,
+          tokenOut: swap.tokenOut,
+          amountIn: amount.toString(),
+          minAmountOut: swapParams.minAmountOut.toString(),
+          nonce: nonce.toString(),
+          reasoning: swap.reasoning,
+        },
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      swapLog.error({ err: error }, "ExecuteLocalSwapTool failed");
+      return JSON.stringify({ success: false, error: message });
+    }
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  ExecuteIntentTool — Universal cross-chain intent execution
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * LangChain tool that builds, signs, and submits a UniversalIntent to the
+ * vault's `executeIntent()` function for cross-chain operations.
+ *
+ * Flow:
+ *   1. Validate UNIVERSAL_INTENT decision via Zod
+ *   2. Fetch intent nonce
+ *   3. Build UniversalIntent struct
+ *   4. Sign via EIP-712
+ *   5. Submit vault.executeIntent(intent, signature)
+ */
+export class ExecuteIntentTool extends Tool {
+  name = "execute_intent";
+  description =
+    "Execute a cross-chain intent via the vault's universal intent system. " +
+    'Input MUST be a JSON object with: action ("UNIVERSAL_INTENT"), ' +
+    "tokenIn (address), tokenOut (address), amount (wei string), " +
+    "maxSlippageBps (1-200), destType (0=Native/XCM, 1=Hyper/Hyperbridge), " +
+    "targetParachain (for XCM, optional), targetChainId (for Hyperbridge, optional), " +
+    "inAssetId (optional, default 0), outAssetId (optional, default 0), " +
+    "reasoning (string). Signs a UniversalIntent via EIP-712 and executes on-chain.";
+
+  private readonly intentService: IntentService;
+
+  constructor(intentService: IntentService) {
+    super();
+    this.intentService = intentService;
+  }
+
+  /** @internal LangChain entry-point. */
+  protected async _call(input: string): Promise<string> {
+    try {
+      // ── 1. Parse raw LLM output ──────────────────────────────────────
+      let rawDecision: unknown;
+      try {
+        rawDecision = JSON.parse(input);
+      } catch {
+        return JSON.stringify({
+          success: false,
+          error:
+            "Invalid JSON input. Expected a UNIVERSAL_INTENT decision object.",
+        });
+      }
+
+      // ── 2. Zod-validate the AI decision ──────────────────────────────
+      const parseResult = aiDecisionSchema.safeParse(rawDecision);
+      if (!parseResult.success) {
+        intentLog.warn(
+          { errors: parseResult.error.flatten() },
+          "UNIVERSAL_INTENT decision failed Zod validation",
+        );
+        return JSON.stringify({
+          success: false,
+          error: `Validation failed: ${parseResult.error.message}`,
+        });
+      }
+
+      const decision = parseResult.data;
+      if (decision.action !== "UNIVERSAL_INTENT") {
+        return JSON.stringify({
+          success: false,
+          error: `ExecuteIntentTool only handles UNIVERSAL_INTENT, got ${decision.action}`,
+        });
+      }
+
+      const intentDecision = decision as UniversalIntentDecision;
+
+      // ── 3. Enforce agent-side guardrails ──────────────────────────────
+      const amount = BigInt(intentDecision.amount);
+      if (amount > MAX_STRATEGY_AMOUNT) {
+        return JSON.stringify({
+          success: false,
+          error: `Amount ${amount} exceeds MAX_STRATEGY_AMOUNT ${MAX_STRATEGY_AMOUNT}`,
+        });
+      }
+
+      // ── 4. Fetch nonce + compute slippage ─────────────────────────────
+      const nonce = await this.intentService.fetchIntentNonce();
+      const deadline = this.intentService.computeDeadline();
+      const slippageBps = BigInt(intentDecision.maxSlippageBps);
+      const minOut = (amount * (10_000n - slippageBps)) / 10_000n;
+
+      // ── 5. Build UniversalIntent struct ───────────────────────────────
+      const intent = {
+        inAsset: {
+          token: intentDecision.tokenIn as `0x${string}`,
+          assetId: BigInt(intentDecision.inAssetId ?? "0"),
+        },
+        outAsset: {
+          token: intentDecision.tokenOut as `0x${string}`,
+          assetId: BigInt(intentDecision.outAssetId ?? "0"),
+        },
+        amount,
+        minOut,
+        dest: {
+          destType: intentDecision.destType,
+          paraId: intentDecision.targetParachain ?? 0,
+          chainId: intentDecision.targetChainId ?? 0,
+        },
+        calldata_: "0x" as `0x${string}`, // placeholder — populated by on-chain router
+        nonce,
+        deadline,
+      };
+
+      intentLog.info(
+        {
+          tokenIn: intentDecision.tokenIn,
+          tokenOut: intentDecision.tokenOut,
+          amount: amount.toString(),
+          destType:
+            intentDecision.destType === DestType.Native ? "XCM" : "Hyperbridge",
+          paraId: intent.dest.paraId,
+          chainId: intent.dest.chainId,
+          nonce: nonce.toString(),
+          reasoning: intentDecision.reasoning,
+        },
+        "Building universal intent",
+      );
+
+      // ── 6. Sign via EIP-712 ───────────────────────────────────────────
+      const signature = await this.intentService.signUniversalIntent(intent);
+
+      // ── 7. Submit vault.executeIntent() ───────────────────────────────
+      const txHash = await this.intentService.executeIntent(intent, signature);
+
+      intentLog.info({ txHash }, "Universal intent executed successfully");
+
+      return JSON.stringify({
+        success: true,
+        data: {
+          action: "UNIVERSAL_INTENT",
+          txHash,
+          tokenIn: intentDecision.tokenIn,
+          tokenOut: intentDecision.tokenOut,
+          amount: amount.toString(),
+          minOut: minOut.toString(),
+          destType:
+            intentDecision.destType === DestType.Native ? "XCM" : "Hyperbridge",
+          targetParachain: intent.dest.paraId,
+          targetChainId: intent.dest.chainId,
+          nonce: nonce.toString(),
+          reasoning: intentDecision.reasoning,
+        },
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      intentLog.error({ err: error }, "ExecuteIntentTool failed");
+      return JSON.stringify({ success: false, error: message });
+    }
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 //  Tool Factory
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
  * Create all custom Obidot tools to be registered with ObiKit via `addTool()`.
  *
- * @param signerService     - The initialized SignerService for on-chain interaction.
- * @param yieldService      - The initialized YieldService for market data.
- * @param crossChainService - The initialized CrossChainService for multi-chain state.
+ * @param signerService      - The initialized SignerService for on-chain interaction.
+ * @param yieldService       - The initialized YieldService for market data.
+ * @param crossChainService  - The initialized CrossChainService for multi-chain state.
+ * @param swapRouterService  - The initialized SwapRouterService for DEX aggregator reads.
+ * @param intentService      - The initialized IntentService for intent signing/execution.
  * @returns Array of LangChain Tool instances.
  */
 export function createObidotTools(
   signerService: SignerService,
   yieldService: YieldService,
   crossChainService: CrossChainService,
+  swapRouterService?: SwapRouterService,
+  intentService?: IntentService,
 ): Tool[] {
-  return [
+  const tools: Tool[] = [
+    // ── Perception tools ───────────────────────────────────────────────
     new FetchYieldsTool(yieldService),
     new FetchBifrostYieldsTool(yieldService),
     new FetchVaultStateTool(signerService),
     new FetchCrossChainStateTool(signerService, crossChainService),
+    // ── Execution tools (legacy) ───────────────────────────────────────
     new ExecuteStrategyTool(signerService),
     new ExecuteBifrostStrategyTool(signerService),
   ];
+
+  // ── DEX aggregator tools (conditional on service availability) ─────
+  if (swapRouterService) {
+    tools.push(new SwapQuoteTool(swapRouterService));
+
+    if (intentService) {
+      tools.push(new ExecuteLocalSwapTool(swapRouterService, intentService));
+    }
+  }
+
+  // ── Universal intent tool (conditional on service availability) ─────
+  if (intentService) {
+    tools.push(new ExecuteIntentTool(intentService));
+  }
+
+  return tools;
 }

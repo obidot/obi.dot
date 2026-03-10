@@ -98,11 +98,72 @@ export interface ChatMessage {
   timestamp: string;
 }
 
+// ── DEX Aggregator Types ──────────────────────────────────────────────────
+
+/** Pool type enum (matches on-chain PoolType) */
+export enum PoolType {
+  HydrationOmnipool = 0,
+  AssetHubPair = 1,
+  BifrostDEX = 2,
+  Custom = 3,
+}
+
+/** Human-readable pool type labels */
+export const POOL_TYPE_LABELS: Record<PoolType, string> = {
+  [PoolType.HydrationOmnipool]: "Hydration Omnipool",
+  [PoolType.AssetHubPair]: "AssetHub Pair",
+  [PoolType.BifrostDEX]: "Bifrost DEX",
+  [PoolType.Custom]: "Custom",
+};
+
+/** Swap quote result from agent API */
+export interface SwapQuoteResult {
+  source: PoolType;
+  pool: string;
+  feeBps: number;
+  amountIn: string;
+  amountOut: string;
+}
+
+/** Available pool adapter info from agent API */
+export interface PoolAdapterInfo {
+  poolType: PoolType;
+  label: string;
+  adapter: string;
+  deployed: boolean;
+}
+
+/** Swap routes response from agent API */
+export interface SwapRoutesResponse {
+  adapters: PoolAdapterInfo[];
+  routerDeployed: boolean;
+  routerPaused: boolean;
+}
+
+/** Token descriptor for the swap UI */
+export interface SwapToken {
+  address: string;
+  symbol: string;
+  name: string;
+  decimals: number;
+}
+
+// ── WebSocket Event Types ─────────────────────────────────────────────────
+
 /** WebSocket event types */
 export type WsEvent =
   | { type: "vault:stateUpdate"; data: VaultState }
   | { type: "strategy:executed"; data: StrategyRecord }
   | { type: "agent:decision"; data: AgentDecision }
+  | {
+      type: "swap:executed";
+      data: {
+        txHash: string;
+        amountIn: string;
+        amountOut: string;
+        source: PoolType;
+      };
+    }
   | { type: "heartbeat"; data: { timestamp: string } };
 
 /** Navigation item */

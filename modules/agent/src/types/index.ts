@@ -76,6 +76,133 @@ export enum BifrostCurrencyId {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+//  DEX Aggregator Types — Mirrors ISwapRouter.sol structs
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Pool type enum — mirrors ISwapRouter.PoolType in Solidity.
+ */
+export enum PoolType {
+  HydrationOmnipool = 0,
+  AssetHubPair = 1,
+  BifrostDEX = 2,
+  Custom = 3,
+}
+
+/**
+ * Human-readable labels for pool types.
+ */
+export const POOL_TYPE_LABELS: Record<PoolType, string> = {
+  [PoolType.HydrationOmnipool]: "Hydration Omnipool",
+  [PoolType.AssetHubPair]: "AssetHub Pair",
+  [PoolType.BifrostDEX]: "Bifrost DEX",
+  [PoolType.Custom]: "Custom",
+};
+
+/**
+ * A single swap route through a specific pool.
+ * Mirrors ISwapRouter.Route in Solidity.
+ */
+export interface Route {
+  poolType: PoolType;
+  pool: Address;
+  tokenIn: Address;
+  tokenOut: Address;
+  feeBps: bigint;
+  data: Hex;
+}
+
+/**
+ * Parameters for a single swap execution.
+ * Mirrors ISwapRouter.SwapParams in Solidity.
+ */
+export interface SwapParams {
+  route: Route;
+  amountIn: bigint;
+  minAmountOut: bigint;
+  to: Address;
+  deadline: bigint;
+}
+
+/**
+ * A split leg: fraction of input routed through a specific pool.
+ * Mirrors ISwapRouter.SplitLeg in Solidity.
+ */
+export interface SplitLeg {
+  route: Route;
+  weight: bigint;
+}
+
+/**
+ * Quote result from the SwapQuoter.
+ * Mirrors ISwapRouter.Quote in Solidity.
+ */
+export interface SwapQuote {
+  source: PoolType;
+  pool: Address;
+  feeBps: bigint;
+  amountIn: bigint;
+  amountOut: bigint;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  Universal Intent Types — Mirrors IntentTypes.sol
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Destination type enum — mirrors IntentTypes.DestType.
+ */
+export enum DestType {
+  Native = 0,
+  Hyper = 1,
+}
+
+/**
+ * On-chain asset descriptor.
+ * Mirrors IntentTypes.Asset in Solidity.
+ */
+export interface IntentAsset {
+  token: Address;
+  assetId: bigint;
+}
+
+/**
+ * Routing destination for a UniversalIntent.
+ * Mirrors IntentTypes.Destination in Solidity.
+ */
+export interface Destination {
+  destType: DestType;
+  paraId: number;
+  chainId: number;
+}
+
+/**
+ * Universal intent struct signed by the off-chain AI strategist.
+ * Mirrors IntentTypes.UniversalIntent in Solidity.
+ */
+export interface UniversalIntent {
+  inAsset: IntentAsset;
+  outAsset: IntentAsset;
+  amount: bigint;
+  minOut: bigint;
+  dest: Destination;
+  calldata_: Hex;
+  nonce: bigint;
+  deadline: bigint;
+}
+
+/**
+ * Serialized swap quote result for API responses.
+ */
+export interface SwapQuoteResult {
+  source: string;
+  pool: string;
+  feeBps: string;
+  amountIn: string;
+  amountOut: string;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 //  AI Decision Schema — Zod-validated LLM output
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -141,6 +268,64 @@ const crossChainRebalanceDecisionSchema = z.object({
 });
 
 /**
+ * Schema for a "LOCAL_SWAP" decision from the AI.
+ * Used for on-hub swaps routed through the SwapRouter via the vault.
+ */
+const localSwapDecisionSchema = z.object({
+  action: z.literal("LOCAL_SWAP"),
+  /** Pool type: 0=HydrationOmnipool, 1=AssetHubPair, 2=BifrostDEX, 3=Custom */
+  poolType: z.nativeEnum(PoolType),
+  /** Pool or adapter address to route through */
+  pool: z.string().regex(/^0x[0-9a-fA-F]{40}$/, "Must be a valid EVM address"),
+  /** Input token address */
+  tokenIn: z
+    .string()
+    .regex(/^0x[0-9a-fA-F]{40}$/, "Must be a valid EVM address"),
+  /** Output token address */
+  tokenOut: z
+    .string()
+    .regex(/^0x[0-9a-fA-F]{40}$/, "Must be a valid EVM address"),
+  amount: z
+    .string()
+    .regex(/^\d+$/, "Amount must be a numeric string (wei)")
+    .refine((v: string) => BigInt(v) > 0n, "Amount must be positive"),
+  maxSlippageBps: z.number().int().min(1).max(200),
+  reasoning: z.string().min(1).max(500),
+});
+
+/**
+ * Schema for a "UNIVERSAL_INTENT" decision from the AI.
+ * Used for cross-chain intent execution (XCM or Hyperbridge).
+ */
+const universalIntentDecisionSchema = z.object({
+  action: z.literal("UNIVERSAL_INTENT"),
+  /** Input token address */
+  tokenIn: z
+    .string()
+    .regex(/^0x[0-9a-fA-F]{40}$/, "Must be a valid EVM address"),
+  /** Input asset ID (remote, e.g. Hydration assetId) */
+  inAssetId: z.string().regex(/^\d+$/).default("0"),
+  /** Output token address */
+  tokenOut: z
+    .string()
+    .regex(/^0x[0-9a-fA-F]{40}$/, "Must be a valid EVM address"),
+  /** Output asset ID */
+  outAssetId: z.string().regex(/^\d+$/).default("0"),
+  amount: z
+    .string()
+    .regex(/^\d+$/, "Amount must be a numeric string (wei)")
+    .refine((v: string) => BigInt(v) > 0n, "Amount must be positive"),
+  maxSlippageBps: z.number().int().min(1).max(200),
+  /** Destination type: 0=Native (XCM), 1=Hyper (Hyperbridge) */
+  destType: z.nativeEnum(DestType),
+  /** Target parachain ID (for Native) */
+  targetParachain: z.number().int().nonnegative().optional(),
+  /** Target Hyperbridge chain ID (for Hyper) */
+  targetChainId: z.number().int().nonnegative().optional(),
+  reasoning: z.string().min(1).max(500),
+});
+
+/**
  * Schema for a "NO_ACTION" decision from the AI.
  */
 const noActionDecisionSchema = z.object({
@@ -156,6 +341,8 @@ export const aiDecisionSchema = z.discriminatedUnion("action", [
   reallocateDecisionSchema,
   bifrostStrategyDecisionSchema,
   crossChainRebalanceDecisionSchema,
+  localSwapDecisionSchema,
+  universalIntentDecisionSchema,
   noActionDecisionSchema,
 ]);
 
@@ -177,6 +364,14 @@ export type CrossChainRebalanceDecision = z.infer<
 
 /** Type-narrowing helper: is this a no-action decision? */
 export type NoActionDecision = z.infer<typeof noActionDecisionSchema>;
+
+/** Type-narrowing helper: is this a local swap decision? */
+export type LocalSwapDecision = z.infer<typeof localSwapDecisionSchema>;
+
+/** Type-narrowing helper: is this a universal intent decision? */
+export type UniversalIntentDecision = z.infer<
+  typeof universalIntentDecisionSchema
+>;
 
 // ─────────────────────────────────────────────────────────────────────────────
 //  Vault State Snapshot
