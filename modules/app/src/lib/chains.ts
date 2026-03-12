@@ -1,23 +1,23 @@
 import { defineChain } from "viem";
 
-/** Polkadot Hub Testnet (Paseo) chain definition for wagmi/viem */
+/** Polkadot Hub TestNet chain definition for wagmi/viem */
 export const polkadotHubTestnet = defineChain({
   id: 420420417,
-  name: "Polkadot Hub Testnet",
+  name: "Polkadot Hub TestNet",
   nativeCurrency: {
-    name: "Paseo DOT",
-    symbol: "PAS",
+    name: "DOT",
+    symbol: "DOT",
     decimals: 18,
   },
   rpcUrls: {
     default: {
-      http: ["https://services.polkadothub-rpc.com/testnet"],
+      http: ["https://eth-rpc-testnet.polkadot.io/"],
     },
   },
   blockExplorers: {
     default: {
       name: "Blockscout",
-      url: "https://blockscout-paseo.parity-chains.parity.io",
+      url: "https://blockscout-testnet.polkadot.io",
     },
   },
   testnet: true,

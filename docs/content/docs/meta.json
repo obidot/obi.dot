@@ -7,11 +7,13 @@
     "strategy-execution",
     "policy-engine",
     "oracle",
+    "dex-aggregator",
     "xcm",
     "cross-chain",
     "bifrost",
     "satellite-vault",
     "agent",
+    "dashboard",
     "security",
     "deployment"
   ]

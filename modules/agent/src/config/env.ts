@@ -109,6 +109,38 @@ const envSchema = z.object({
   /** Pyth DOT/USD feed ID (hex). */
   PYTH_DOT_USD_FEED_ID: z.string().optional(),
 
+  // ── DEX Aggregator Configuration (optional) ──────────────────────────
+
+  /** SwapRouter contract address on Polkadot Hub. */
+  SWAP_ROUTER_ADDRESS: z
+    .string()
+    .regex(/^0x[0-9a-fA-F]{40}$/)
+    .optional(),
+
+  /** SwapQuoter contract address on Polkadot Hub. */
+  SWAP_QUOTER_ADDRESS: z
+    .string()
+    .regex(/^0x[0-9a-fA-F]{40}$/)
+    .optional(),
+
+  /** HydrationOmnipoolAdapter contract address on Polkadot Hub. */
+  HYDRATION_ADAPTER_ADDRESS: z
+    .string()
+    .regex(/^0x[0-9a-fA-F]{40}$/)
+    .optional(),
+
+  /** AssetHubPairAdapter contract address on Polkadot Hub. */
+  ASSET_HUB_ADAPTER_ADDRESS: z
+    .string()
+    .regex(/^0x[0-9a-fA-F]{40}$/)
+    .optional(),
+
+  /** BifrostDEXAdapter contract address on Polkadot Hub. */
+  BIFROST_DEX_ADAPTER_ADDRESS: z
+    .string()
+    .regex(/^0x[0-9a-fA-F]{40}$/)
+    .optional(),
+
   // ── Cross-Chain Configuration (optional) ─────────────────────────────
 
   /** CrossChainRouter contract address on Polkadot Hub. */

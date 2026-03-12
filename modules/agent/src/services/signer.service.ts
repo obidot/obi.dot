@@ -30,11 +30,11 @@ import { signerLog } from "../utils/logger.js";
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * Polkadot Hub Testnet (Paseo) chain definition for viem.
+ * Polkadot Hub TestNet chain definition for viem.
  */
 const polkadotHubTestnet: Chain = {
   id: CHAIN_ID,
-  name: "Polkadot Hub Testnet (Paseo)",
+  name: "Polkadot Hub TestNet",
   nativeCurrency: {
     name: "DOT",
     symbol: "DOT",
@@ -434,10 +434,25 @@ export class SignerService {
     });
 
     // Destructure the tuple returned by the contract
-    const [strategist, targetProtocol, targetParachain, amount, minReturn, executedAt, status] =
-      result as [Address, Address, number, bigint, bigint, bigint, number];
+    const [
+      strategist,
+      targetProtocol,
+      targetParachain,
+      amount,
+      minReturn,
+      executedAt,
+      status,
+    ] = result as [Address, Address, number, bigint, bigint, bigint, number];
 
-    return { strategist, targetProtocol, targetParachain, amount, minReturn, executedAt, status };
+    return {
+      strategist,
+      targetProtocol,
+      targetParachain,
+      amount,
+      minReturn,
+      executedAt,
+      status,
+    };
   }
 
   /**

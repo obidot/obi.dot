@@ -1,9 +1,9 @@
 ---
 title: Strategy Execution
-description: Complete guide to the strategy execution pipeline — StrategyIntent struct, EIP-712 signing, permissionless relaying, validation pipeline, and outcome reporting.
+description: Complete guide to the strategy execution pipeline — StrategyIntent struct, EIP-712 signing, permissionless relaying, validation pipeline, and outcome reporting. This is an optional AI agent sub-feature of Obidot.
 ---
 
-Strategy execution is the core mechanism by which the AI strategist deploys capital from the vault to remote parachains. It uses a **sign-then-relay** pattern: the strategist signs an EIP-712 typed data struct off-chain, and any relayer can submit the signed intent on-chain for execution.
+Strategy execution is an optional sub-feature that enables intent-based autonomous capital deployment. It uses a **sign-then-relay** pattern: a strategist (typically an AI agent) signs an EIP-712 typed data struct off-chain, and any relayer can submit the signed intent on-chain for execution. The primary product — the DEX aggregator SwapRouter — operates independently of this sub-feature.
 
 ## StrategyIntent Struct
 
@@ -25,17 +25,17 @@ struct StrategyIntent {
 
 ### Field Details
 
-| Field | Type | Constraints |
-|-------|------|-------------|
-| `asset` | `address` | Must equal `vault.asset()` or the transaction reverts with `AssetMismatch` |
-| `amount` | `uint256` | Must be non-zero (`ZeroAmount`), must not exceed vault idle balance (`InsufficientIdleBalance`) |
-| `minReturn` | `uint256` | Must pass the oracle slippage check (`OracleSlippageCheckFailed`) |
-| `maxSlippageBps` | `uint256` | Must be ≤ 5000 (50%) or reverts with `SlippageTooHigh` |
-| `deadline` | `uint256` | Must be ≥ `block.timestamp` or reverts with `DeadlineExpired` |
-| `nonce` | `uint256` | Must equal the strategist's current nonce (`InvalidNonce`) |
-| `xcmCall` | `bytes` | SCALE-encoded VersionedXcm payload; validated by XCM weight estimation |
-| `targetParachain` | `uint32` | Must be in the parachain whitelist (`ParachainNotAllowed`) |
-| `targetProtocol` | `address` | Must be in the protocol whitelist (`ProtocolNotAllowed`) |
+| Field             | Type      | Constraints                                                                                     |
+| ----------------- | --------- | ----------------------------------------------------------------------------------------------- |
+| `asset`           | `address` | Must equal `vault.asset()` or the transaction reverts with `AssetMismatch`                      |
+| `amount`          | `uint256` | Must be non-zero (`ZeroAmount`), must not exceed vault idle balance (`InsufficientIdleBalance`) |
+| `minReturn`       | `uint256` | Must pass the oracle slippage check (`OracleSlippageCheckFailed`)                               |
+| `maxSlippageBps`  | `uint256` | Must be ≤ 5000 (50%) or reverts with `SlippageTooHigh`                                          |
+| `deadline`        | `uint256` | Must be ≥ `block.timestamp` or reverts with `DeadlineExpired`                                   |
+| `nonce`           | `uint256` | Must equal the strategist's current nonce (`InvalidNonce`)                                      |
+| `xcmCall`         | `bytes`   | SCALE-encoded VersionedXcm payload; validated by XCM weight estimation                          |
+| `targetParachain` | `uint32`  | Must be in the parachain whitelist (`ParachainNotAllowed`)                                      |
+| `targetProtocol`  | `address` | Must be in the protocol whitelist (`ProtocolNotAllowed`)                                        |
 
 ## EIP-712 Signing
 
@@ -62,6 +62,7 @@ DOMAIN_SEPARATOR = keccak256(
 ```
 
 This binds every signature to:
+
 - The contract name (`ObidotVault`)
 - Version `1`
 - The specific chain ID
@@ -157,12 +158,12 @@ The `executeStrategy()` function can be called by **anyone** — it has no acces
 
 This design enables several deployment patterns:
 
-| Pattern | Description |
-|---------|-------------|
-| **Self-relay** | The strategist submits its own transactions |
-| **Dedicated relayer** | A separate service submits on behalf of the strategist |
-| **MEV-protected relay** | Use Flashbots or similar to prevent front-running |
-| **Gasless strategist** | The AI agent doesn't need native tokens for gas |
+| Pattern                 | Description                                            |
+| ----------------------- | ------------------------------------------------------ |
+| **Self-relay**          | The strategist submits its own transactions            |
+| **Dedicated relayer**   | A separate service submits on behalf of the strategist |
+| **MEV-protected relay** | Use Flashbots or similar to prevent front-running      |
+| **Gasless strategist**  | The AI agent doesn't need native tokens for gas        |
 
 ```solidity
 function executeStrategy(
@@ -228,6 +229,7 @@ nonces[strategist] = expectedNonce + 1;
 ```
 
 Each strategist has an independent sequential nonce. This prevents:
+
 - **Replay attacks**: The same intent cannot be executed twice
 - **Out-of-order execution**: Intents must be executed in the order they were signed
 
@@ -369,50 +371,50 @@ event StrategyOutcomeReported(
 
 ## Error Reference
 
-| Error | Condition |
-|-------|-----------|
-| `DeadlineExpired(deadline, currentTime)` | `block.timestamp > intent.deadline` |
-| `ZeroAmount()` | `intent.amount == 0` |
-| `AssetMismatch(expected, provided)` | `intent.asset != vault.asset()` |
-| `SlippageTooHigh(maxSlippageBps)` | `intent.maxSlippageBps > 5000` |
-| `InvalidSignature()` | Recovered address is `address(0)` |
-| `UnauthorizedStrategist(recovered)` | Recovered signer lacks `STRATEGIST_ROLE` |
-| `InvalidNonce(expected, provided)` | `intent.nonce != nonces[strategist]` |
-| `ParachainNotAllowed(parachainId)` | Parachain not in whitelist |
-| `ProtocolNotAllowed(protocol)` | Protocol not in whitelist |
-| `ExposureCapExceeded(protocol, current, amount, cap)` | Exposure would exceed cap |
-| `DailyLossThresholdBreached(current, additional, max)` | Daily losses already exceeded |
-| `OracleDataInvalid(answer, updatedAt)` | Stale or non-positive oracle price |
-| `OracleSlippageCheckFailed(minReturn, oracleMinimum)` | `minReturn` too low vs oracle |
-| `XcmOverweight(refTime, proofSize, maxRef, maxProof)` | XCM message too heavy |
-| `InsufficientIdleBalance(available, requested)` | Vault doesn't hold enough idle assets |
-| `StrategyNotFound(strategyId)` | No strategy record for the given ID |
-| `InvalidStrategyStatus(id, current, expected)` | Strategy not in `Sent` status |
+| Error                                                  | Condition                                |
+| ------------------------------------------------------ | ---------------------------------------- |
+| `DeadlineExpired(deadline, currentTime)`               | `block.timestamp > intent.deadline`      |
+| `ZeroAmount()`                                         | `intent.amount == 0`                     |
+| `AssetMismatch(expected, provided)`                    | `intent.asset != vault.asset()`          |
+| `SlippageTooHigh(maxSlippageBps)`                      | `intent.maxSlippageBps > 5000`           |
+| `InvalidSignature()`                                   | Recovered address is `address(0)`        |
+| `UnauthorizedStrategist(recovered)`                    | Recovered signer lacks `STRATEGIST_ROLE` |
+| `InvalidNonce(expected, provided)`                     | `intent.nonce != nonces[strategist]`     |
+| `ParachainNotAllowed(parachainId)`                     | Parachain not in whitelist               |
+| `ProtocolNotAllowed(protocol)`                         | Protocol not in whitelist                |
+| `ExposureCapExceeded(protocol, current, amount, cap)`  | Exposure would exceed cap                |
+| `DailyLossThresholdBreached(current, additional, max)` | Daily losses already exceeded            |
+| `OracleDataInvalid(answer, updatedAt)`                 | Stale or non-positive oracle price       |
+| `OracleSlippageCheckFailed(minReturn, oracleMinimum)`  | `minReturn` too low vs oracle            |
+| `XcmOverweight(refTime, proofSize, maxRef, maxProof)`  | XCM message too heavy                    |
+| `InsufficientIdleBalance(available, requested)`        | Vault doesn't hold enough idle assets    |
+| `StrategyNotFound(strategyId)`                         | No strategy record for the given ID      |
+| `InvalidStrategyStatus(id, current, expected)`         | Strategy not in `Sent` status            |
 
 ## Event Reference
 
-| Event | Emitted When |
-|-------|-------------|
+| Event                                                                                          | Emitted When                                   |
+| ---------------------------------------------------------------------------------------------- | ---------------------------------------------- |
 | `StrategyExecuted(strategyId, strategist, targetParachain, targetProtocol, amount, minReturn)` | Strategy successfully validated and dispatched |
-| `StrategyOutcomeReported(strategyId, newStatus, returnedAmount, pnl)` | Keeper reports a strategy outcome |
+| `StrategyOutcomeReported(strategyId, newStatus, returnedAmount, pnl)`                          | Keeper reports a strategy outcome              |
 
 ## Example: Full Strategy Lifecycle
 
 ### 1. Strategist Signs Intent
 
-The AI agent analyzes yield opportunities across parachains and constructs a `StrategyIntent` to deploy 1,000 tokens to a DeFi protocol on Moonbeam (parachain 2004), expecting at least 995 tokens back (0.5% slippage tolerance):
+A strategist (e.g. the optional AI agent) analyzes yield opportunities across parachains and constructs a `StrategyIntent` to deploy 1,000 tokens to a DeFi protocol on Moonbeam (parachain 2004), expecting at least 995 tokens back (0.5% slippage tolerance):
 
 ```javascript
 const intent = {
   asset: DOT_ADDRESS,
   amount: parseEther("1000"),
   minReturn: parseEther("995"),
-  maxSlippageBps: 100,       // 1% max slippage
-  deadline: now + 3600,       // 1 hour validity
-  nonce: 0,                   // First intent from this strategist
-  xcmCall: xcmPayload,        // SCALE-encoded XCM instructions
-  targetParachain: 2004,      // Moonbeam
-  targetProtocol: PROTOCOL,   // Target DeFi protocol
+  maxSlippageBps: 100, // 1% max slippage
+  deadline: now + 3600, // 1 hour validity
+  nonce: 0, // First intent from this strategist
+  xcmCall: xcmPayload, // SCALE-encoded XCM instructions
+  targetParachain: 2004, // Moonbeam
+  targetProtocol: PROTOCOL, // Target DeFi protocol
 };
 
 const sig = await strategist.signTypedData(domain, types, intent);
@@ -434,8 +436,8 @@ After observing the remote execution result on Moonbeam:
 // Strategy returned 1,010 tokens (1% profit)
 await vault.reportStrategyOutcome(
   strategyId,
-  true,        // success
-  parseEther("1010")
+  true, // success
+  parseEther("1010"),
 );
 // Emits StrategyOutcomeReported with pnl = +10 tokens
 ```

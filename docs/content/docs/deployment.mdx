@@ -105,7 +105,7 @@ This profile enables `resolc_compile = true` under the `[profile.polkadot.polkad
 | Parameter | Value |
 |-----------|-------|
 | Chain ID | `420420417` |
-| RPC URL | `https://services.polkadothub-rpc.com/testnet` |
+| RPC URL | `https://eth-rpc-testnet.polkadot.io/` |
 | XCM Precompile | `0x00000000000000000000000000000000000a0000` |
 
 ### Other Configured RPCs
@@ -115,9 +115,87 @@ The `foundry.toml` includes additional RPC endpoints:
 | Alias | URL |
 |-------|-----|
 | `local` | `http://127.0.0.1:8545` |
-| `polkadot_hub_testnet` | `https://services.polkadothub-rpc.com/testnet` |
+| `polkadot_hub_testnet` | `https://eth-rpc-testnet.polkadot.io/` |
 | `westend_hub` | `https://westend-asset-hub-eth-rpc.polkadot.io` |
 | `kusama_hub` | `https://kusama-asset-hub-eth-rpc.polkadot.io` |
+
+## Live Deployment
+
+All contracts are deployed on **Polkadot Hub Testnet (Paseo)**, chain ID `420420417`.
+The canonical machine-readable source is [`deployments.json`](https://github.com/obidot/obi.router/blob/main/deployments.json).
+
+### Phase 1 — Core Vault (2026-02-27)
+
+| Contract | Address |
+|----------|---------|
+| `TestDOT` (tDOT ERC-20) | `0x2402C804aD8a6217BF73D8483dA7564065c56083` |
+| `KeeperOracle` | `0xf64d93DC125AC1B366532BBbA165615f6D566C7F` |
+| `OracleRegistry` | `0x8b7C7345d6cF9de45f4aacC61F56F0241d47e88B` |
+| `ObidotVault` | `0x37D7959f5f97D37799E0d04b7684c41CB2Ff878d` |
+| `BifrostAdapter` | `0x265Cb785De0fF2e5BcebDEb53095aDCAE9175527` |
+
+Phase 1 configuration: oracle initial price $7.00 (8 decimals), deposit cap 1,000,000 tDOT,
+max daily loss 50,000 tDOT, 100,000 tDOT minted to deployer, Bifrost parachain ID 2030 whitelisted.
+
+### Phase 2 — Executor + Asset Layer (2026-03-04)
+
+Deployed via `script/DeployNew.s.sol`. Adds XCM and Hyperbridge executors plus native asset proxies.
+
+| Contract | Address |
+|----------|---------|
+| `XCMExecutor` | `0xE8FDc9093395eA02017d5D66899F3E04CFF1CF64` |
+| `NativeAsset` (DOT proxy) | `0xE72453bD8d5ECF56ccdDeF949C8AE0Cea5A41E7d` |
+| `NativeAsset` (USDC proxy) | `0xAf233E9f2ED78022CAdEA58a84144ce6BcDFd63E` |
+
+> **Testnet note:** Both NativeAsset proxies point to `TestDOT` (`0x2402C804...`) since real AssetHub
+> precompiles are not yet deployed on testnet. In production, point each proxy to its actual AssetHub
+> precompile address.
+
+### Phase 3 — DEX Aggregator Router (2026-03-11)
+
+Deployed via `script/Deploy.s.sol` (router + adapters section). Adds the on-hub swap routing layer.
+
+| Contract | Address |
+|----------|---------|
+| `SwapRouter` | `0xeABB7c2C02eD819BDee9336cD12e9668A33ab924` |
+| `SwapQuoter` | `0x81d7aCFEF474DA6c76eC1b5A05a137cB9f3A5Db1` |
+| `HydrationOmnipoolAdapter` | `0xBF9e3ad0818719F0DF26075005A978793248f523` |
+| `AssetHubPairAdapter` | `0x67E0B572A7761C13D7C9A3f737C825A506a85CF4` |
+| `BifrostDEXAdapter` | `0x386FC9514594c589ad7481AFC3eC36216DE91dC0` |
+
+> **Known blocker:** `ObidotVault.setSwapRouter()` cannot be called until the vault is redeployed.
+> The Phase 1 vault bytecode reaches ~30 KB (EIP-170 limit is 24 KB) after DEX aggregator additions
+> and must be refactored (`via_ir=true` or code extraction) before wiring. `SwapRouter` is callable
+> directly in the meantime.
+
+### Phase 4 — Hyperbridge ISMP v1.6.0 Fix (2026-03-11)
+
+Redeployment of `HyperExecutor` and `CrossChainRouter` to fix the broken `IIsmpHost` interface
+(`DispatchPost.gaslimit` → `fee+payer`, `dispatchFee()` → `perByteFee()*max(32,bodyLen)`).
+Deployed via `script/RedeployHyperbridge.s.sol`.
+
+| Contract | Address |
+|----------|---------|
+| `HyperExecutor` | `0x82D7f3CbC0346e3B0aC463230891CB18470A28c7` |
+| `CrossChainRouter` | `0x8903331DfE3dcFd8E23bBA2D716B692f1510491e` |
+
+`vault.setCrossChainRouter(0x8903331D...)` has been called. `vault.setHyperExecutor()` is pending
+vault redeployment (the setter does not exist in the Phase 1 bytecode; `VAULT_ROLE` is pre-granted
+on the new `HyperExecutor`).
+
+**Deprecated (do not use):**
+
+| Contract | Deprecated Address | Replaced by |
+|----------|-------------------|-------------|
+| `CrossChainRouter` (Phase 1) | `0xE65D7B65a1972A82bCF65f6711a43355Faa3f490` | Phase 4 above |
+| `HyperExecutor` (Phase 2) | `0xaEC0009B15449102a39204259d07c2517cf8fC0f` | Phase 4 above |
+
+### Not Yet Deployed
+
+| Contract | Reason |
+|----------|--------|
+| `VaultFactory` | 37 KB initcode exceeds Polkadot Hub EVM blob limit. Deploy components individually with `DeployNew.s.sol`. |
+| `ObidotVaultEVM` | Satellite vault for EVM chains — deploy once per target chain (Ethereum, Arbitrum, Base) using `DeploySatelliteVault`. |
 
 ## Environment Variables
 
@@ -559,7 +637,7 @@ Before going to production, verify the following:
 
 ### Pre-Deployment
 
-- [ ] All 91+ tests pass (`forge test`)
+- [ ] All 562 tests pass (`forge test`)
 - [ ] Invariant tests pass with CI-level depth (`FOUNDRY_PROFILE=ci forge test`)
 - [ ] PolkaVM build compiles cleanly (`FOUNDRY_PROFILE=polkadot forge build`)
 - [ ] Underlying asset contract is verified and audited

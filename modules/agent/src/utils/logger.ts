@@ -31,3 +31,5 @@ export const signerLog = logger.child({ module: "signer" });
 export const agentLog = logger.child({ module: "agent" });
 export const yieldLog = logger.child({ module: "yield" });
 export const loopLog = logger.child({ module: "loop" });
+export const swapLog = logger.child({ module: "swap" });
+export const intentLog = logger.child({ module: "intent" });

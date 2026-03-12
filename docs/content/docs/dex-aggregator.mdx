@@ -1,0 +1,337 @@
+---
+title: DEX Aggregator Router
+description: On-hub swap routing engine — SwapRouter, SwapQuoter, pluggable pool adapters (Hydration Omnipool, AssetHub pairs, Bifrost DEX), transient storage multi-hop, and vault integration.
+---
+
+Obidot includes a **DEX aggregator router** deployed directly on Polkadot Hub. It aggregates liquidity across multiple on-hub and parachain-connected DEX pools, selects the best route, and executes swaps — all in a single transaction. The vault's AI strategist uses it for local swaps when `targetParachain == 0`.
+
+## Architecture
+
+```
+ObidotVault
+    │
+    └── executeLocalSwap(swapParams, intent, sig)
+              │
+              ▼
+        SwapRouter   ◄──── SwapQuoter (read-only, picks best route)
+              │
+        adapters[poolType]
+              │
+    ┌─────────┼──────────────────┐
+    ▼         ▼                  ▼
+HydrationOmnipool   AssetHubPair    BifrostDEX
+(Hydration, 2034)   (AssetHub)      (Bifrost, 2030)
+    via XCM             local           via XCM
+```
+
+| Contract                   | Address                                      | Purpose                                                           |
+| -------------------------- | -------------------------------------------- | ----------------------------------------------------------------- |
+| `SwapRouter`               | `0xeABB7c2C02eD819BDee9336cD12e9668A33ab924` | Execution: single-hop, multi-hop, split-route, multicall          |
+| `SwapQuoter`               | `0x81d7aCFEF474DA6c76eC1b5A05a137cB9f3A5Db1` | Read-only: best quote, all quotes, multi-hop quote, buildBestSwap |
+| `HydrationOmnipoolAdapter` | `0xBF9e3ad0818719F0DF26075005A978793248f523` | Routes swaps to Hydration Omnipool (parachain 2034) via XCM       |
+| `AssetHubPairAdapter`      | `0x67E0B572A7761C13D7C9A3f737C825A506a85CF4` | Routes swaps through AssetHub native asset pairs                  |
+| `BifrostDEXAdapter`        | `0x386FC9514594c589ad7481AFC3eC36216DE91dC0` | Routes swaps to Bifrost DEX (parachain 2030) via XCM              |
+
+## Pool Types
+
+The router defines four pool types via the `PoolType` enum:
+
+| Value | Name                | Target                     | Mechanism                         |
+| ----- | ------------------- | -------------------------- | --------------------------------- |
+| `0`   | `HydrationOmnipool` | Hydration (parachain 2034) | XCM V4 to Omnipool                |
+| `1`   | `AssetHubPair`      | Polkadot Hub / AssetHub    | Direct ERC-20 pair swap           |
+| `2`   | `BifrostDEX`        | Bifrost (parachain 2030)   | XCM V4 to Bifrost DEX             |
+| `3`   | `Custom`            | User-registered            | Extensible — any future pool type |
+
+## Data Types
+
+### `Route`
+
+Describes one hop through a specific pool:
+
+```solidity
+struct Route {
+    PoolType poolType;   // Which DEX/AMM type
+    address  pool;       // Pool or adapter address
+    address  tokenIn;    // Input token
+    address  tokenOut;   // Output token
+    uint256  feeBps;     // Pool fee in basis points (informational)
+    bytes    data;       // Pool-specific calldata (XCM encoding, pool params)
+}
+```
+
+### `SwapParams`
+
+Parameters for a single `swap()` call:
+
+```solidity
+struct SwapParams {
+    Route   route;         // The route to execute
+    uint256 amountIn;      // Exact input amount (0 = use transient balance)
+    uint256 minAmountOut;  // Minimum output (slippage protection)
+    address to;            // Recipient of output tokens
+    uint256 deadline;      // Unix timestamp after which the swap reverts
+}
+```
+
+### `SplitLeg`
+
+One leg of a split-route swap:
+
+```solidity
+struct SplitLeg {
+    Route   route;   // The pool route for this leg
+    uint256 weight;  // Fraction of input in basis points (all legs must sum to 10000)
+}
+```
+
+### `Quote`
+
+Result returned by the quoter:
+
+```solidity
+struct Quote {
+    PoolType source;    // Which pool type produced this quote
+    address  pool;      // Pool address
+    uint256  feeBps;    // Fee tier in basis points
+    uint256  amountIn;  // Input amount
+    uint256  amountOut; // Expected output
+}
+```
+
+## Swap Modes
+
+### Single-Hop Swap
+
+Routes tokens through a single pool in one step:
+
+```solidity
+uint256 amountOut = swapRouter.swap(SwapParams({
+    route: Route({
+        poolType: PoolType.HydrationOmnipool,
+        pool: poolAddress,
+        tokenIn: DOT,
+        tokenOut: USDC,
+        feeBps: 30,
+        data: ""
+    }),
+    amountIn: 1000e18,
+    minAmountOut: 990e6,
+    to: msg.sender,
+    deadline: block.timestamp + 300
+}));
+```
+
+Execution flow:
+
+1. Pull `amountIn` from caller (or consume transient balance first)
+2. Approve the pool adapter
+3. Call `adapter.swap(pool, tokenIn, tokenOut, amountIn, minOut, to, data)`
+4. Verify `amountOut >= minAmountOut`
+5. Deposit output into transient storage for potential chaining
+6. Emit `Swapped` event
+
+### Multi-Hop Swap
+
+Chains multiple hops: output of hop N becomes input of hop N+1.
+
+```solidity
+Route[] memory routes = new Route[](2);
+routes[0] = Route({ poolType: PoolType.AssetHubPair, pool: p1, tokenIn: DOT, tokenOut: WETH, ... });
+routes[1] = Route({ poolType: PoolType.HydrationOmnipool, pool: p2, tokenIn: WETH, tokenOut: USDC, ... });
+
+uint256 amountOut = swapRouter.swapMultiHop(
+    routes,
+    1000e18,   // amountIn
+    990e6,     // minAmountOut (final output)
+    recipient,
+    deadline
+);
+```
+
+For intermediate hops, output tokens are routed to the router itself. The final hop sends to the recipient. Slippage is only enforced on the final output.
+
+### Split-Route Swap
+
+Splits input across multiple pools simultaneously. All legs must share the same `tokenIn` and `tokenOut`. Weights must sum to `10000` (100% in BPS).
+
+```solidity
+SplitLeg[] memory legs = new SplitLeg[](2);
+legs[0] = SplitLeg({ route: Route({ poolType: PoolType.HydrationOmnipool, ... }), weight: 6000 }); // 60%
+legs[1] = SplitLeg({ route: Route({ poolType: PoolType.BifrostDEX, ... }), weight: 4000 });        // 40%
+
+uint256 amountOut = swapRouter.swapSplit(
+    legs, DOT, USDC, 1000e18, 990e6, recipient, deadline
+);
+```
+
+The last leg receives the integer remainder of the input to prevent rounding dust.
+
+### Multicall
+
+Executes multiple encoded swap calls in a single transaction using `delegatecall`. This enables multi-hop assembly by chaining `swap()` calls that read from each other's transient balances.
+
+```solidity
+bytes[] memory calls = new bytes[](2);
+calls[0] = abi.encodeCall(ISwapRouter.swap, (params1));
+calls[1] = abi.encodeCall(ISwapRouter.swap, (params2));
+bytes[] memory results = swapRouter.multicall(calls);
+```
+
+## Transient Storage (EIP-1153)
+
+The router uses **EIP-1153 transient storage** (`tstore`/`tload`) to track intermediate balances within a transaction — a zero-cost pattern for multi-hop chaining inspired by zRouter.
+
+After each `swap()`, the output amount is deposited into a transient slot keyed by `keccak256(recipient, token)`. The next hop's `swap()` first checks this slot before pulling tokens from the caller.
+
+```
+Hop 1: swap DOT → WETH    → deposit WETH into transient[router][WETH]
+Hop 2: swap WETH → USDC   → consume transient[router][WETH], no ERC-20 transferFrom
+```
+
+Transient storage is cleared automatically at the end of the transaction — no cleanup needed.
+
+> **PolkaVM note:** EIP-1153 `tstore`/`tload` compatibility on PolkaVM (pallet-revive) is unverified. This is a known open item.
+
+## SwapQuoter
+
+`SwapQuoter` is a read-only companion contract. It queries the `SwapRouter`'s adapter registry and compares quotes across all registered pool types.
+
+### `getBestQuote`
+
+Returns the single best quote across all adapters:
+
+```solidity
+ISwapRouter.Quote memory best = quoter.getBestQuote(
+    poolAddress, // address(0) to auto-detect
+    DOT,
+    USDC,
+    1000e18
+);
+// best.source     → which pool type won
+// best.amountOut  → expected output
+// best.feeBps     → fee tier
+```
+
+### `getAllQuotes`
+
+Returns quotes from all adapters (non-zero only):
+
+```solidity
+ISwapRouter.Quote[] memory quotes = quoter.getAllQuotes(pool, DOT, USDC, 1000e18);
+```
+
+### `quoteMultiHop`
+
+Estimates output for a chained multi-hop path:
+
+```solidity
+uint256 amountOut = quoter.quoteMultiHop(routes, amountIn);
+// Returns 0 if any adapter is missing or reverts
+```
+
+### `buildBestSwap`
+
+Finds the best quote and returns ready-to-use `SwapParams` with slippage applied:
+
+```solidity
+ISwapRouter.SwapParams memory params = quoter.buildBestSwap(
+    poolAddress,
+    DOT,
+    USDC,
+    1000e18,
+    50,            // 0.5% slippage tolerance in BPS
+    recipient,
+    block.timestamp + 300
+);
+// Forward directly to: swapRouter.swap(params)
+```
+
+## Pool Adapter Interface
+
+All adapters implement `IPoolAdapter`:
+
+```solidity
+interface IPoolAdapter {
+    /// Execute a swap. Router approves amountIn before calling.
+    function swap(
+        address pool,
+        address tokenIn,
+        address tokenOut,
+        uint256 amountIn,
+        uint256 minAmountOut,
+        address to,
+        bytes calldata data
+    ) external returns (uint256 amountOut);
+
+    /// Get the expected output for a swap (view — no state changes).
+    function getAmountOut(
+        address pool,
+        address tokenIn,
+        address tokenOut,
+        uint256 amountIn,
+        bytes calldata data
+    ) external view returns (uint256 amountOut);
+
+    /// Check if the adapter supports a token pair on a given pool.
+    function supportsPair(address pool, address tokenIn, address tokenOut)
+        external view returns (bool);
+}
+```
+
+The router approves each adapter with `forceApprove` immediately before calling `swap()`. Adapters are responsible for transferring `tokenOut` to the `to` address.
+
+## Access Control
+
+| Role                 | Holder              | Capabilities                                                  |
+| -------------------- | ------------------- | ------------------------------------------------------------- |
+| `DEFAULT_ADMIN_ROLE` | Governance/multisig | `setAdapter()`, `pause()`, `unpause()`, `grantVaultRole()`    |
+| `VAULT_ROLE`         | `ObidotVault`       | Call swap functions (no additional restrictions beyond OZ AC) |
+
+Anyone can call `swap()`, `swapMultiHop()`, `swapSplit()`, and `multicall()` — there is no caller restriction beyond `whenNotPaused`. The `VAULT_ROLE` exists for future access-gating if needed.
+
+## Vault Integration
+
+`ObidotVault.executeLocalSwap()` wires the router into the vault's strategy execution flow. It is triggered when the AI strategist's `StrategyIntent` targets no parachain (`targetParachain == 0`):
+
+```solidity
+// AI strategist calls this (via relayer) to execute an on-hub swap
+function executeLocalSwap(
+    ISwapRouter.SwapParams calldata swapParams,
+    StrategyIntent calldata intent,
+    bytes calldata signature
+) external whenNotPaused nonReentrant returns (uint256 strategyId, uint256 amountOut)
+```
+
+The vault:
+
+1. Validates the EIP-712 signed intent (deadline, amount, asset, slippage, nonce)
+2. Checks `STRATEGIST_ROLE` on the recovered signer
+3. Enforces the policy engine (protocol whitelist, exposure caps)
+4. Validates oracle slippage bounds
+5. Calls `IERC20(asset()).forceApprove(swapRouter, intent.amount)`
+6. Calls `ISwapRouter(swapRouter).swap(swapParams)`
+7. Updates `protocolExposure[intent.targetProtocol]`
+
+> **Known blocker:** `vault.setSwapRouter()` cannot be called on the currently deployed `ObidotVault` at `0x37D7959f5f97D37799E0d04b7684c41CB2Ff878d`. That contract is Phase 1 bytecode (~30 KB) which predates this setter. The vault must be redeployed (after code-size reduction via `via_ir=true` or extraction) before the router can be wired in. `SwapRouter` is fully callable directly in the meantime.
+
+## Events
+
+| Event                                                               | When Emitted                          |
+| ------------------------------------------------------------------- | ------------------------------------- |
+| `Swapped(sender, tokenIn, tokenOut, amountIn, amountOut, poolType)` | Every successful swap                 |
+| `AdapterSet(poolType, adapter)`                                     | Admin registers or updates an adapter |
+
+## Errors
+
+| Error                                       | Condition                                    |
+| ------------------------------------------- | -------------------------------------------- |
+| `Expired()`                                 | `block.timestamp > deadline`                 |
+| `SlippageExceeded(amountOut, minAmountOut)` | Output below minimum                         |
+| `ZeroSwapAmount()`                          | `amountIn == 0`                              |
+| `UnsupportedPoolType(poolType)`             | Unknown pool type enum value                 |
+| `NoAdapterRegistered(poolType)`             | No adapter set for this pool type            |
+| `InvalidSplitWeights(totalWeight)`          | Split legs don't sum to 10000 BPS            |
+| `IdenticalTokens()`                         | `tokenIn == tokenOut`                        |
+| `ZeroAddress()`                             | Zero address provided                        |
+| `NoRouteFound(tokenIn, tokenOut)`           | Quoter: no adapter produced a non-zero quote |

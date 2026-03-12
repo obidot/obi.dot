@@ -8,6 +8,8 @@ import { CHAIN_ID, RPC_URL, VAULT_ADDRESS } from "../config/constants.js";
 import { SignerService } from "../services/signer.service.js";
 import { YieldService } from "../services/yield.service.js";
 import { CrossChainService } from "../services/crosschain.service.js";
+import { SwapRouterService } from "../services/swap-router.service.js";
+import { IntentService } from "../services/intent.service.js";
 import { createObidotTools } from "./tools.js";
 import { SYSTEM_PROMPT } from "./systemPrompt.js";
 import { aiDecisionSchema } from "../types/index.js";
@@ -33,6 +35,8 @@ export class AutonomousLoop {
   private readonly signerService: SignerService;
   private readonly yieldService: YieldService;
   private readonly crossChainService: CrossChainService;
+  private readonly swapRouterService: SwapRouterService;
+  private readonly intentService: IntentService;
   private readonly llm: ChatOpenAI;
   private readonly kit: ObiKit;
   private readonly tools: StructuredToolInterface[];
@@ -65,11 +69,13 @@ export class AutonomousLoop {
     this.signerService = new SignerService();
     this.yieldService = new YieldService();
     this.crossChainService = new CrossChainService();
+    this.swapRouterService = new SwapRouterService();
+    this.intentService = new IntentService();
 
     // ── ObiKit SDK ───────────────────────────────────────────────────
     const chainConfig: ChainConfig = {
       endpoint: RPC_URL,
-      name: "Polkadot Hub Testnet (Paseo)",
+      name: "Polkadot Hub TestNet",
       chainId: String(CHAIN_ID),
     };
 
@@ -90,6 +96,8 @@ export class AutonomousLoop {
       this.signerService,
       this.yieldService,
       this.crossChainService,
+      this.swapRouterService,
+      this.intentService,
     );
     for (const tool of customTools) {
       this.kit.addTool(tool);
@@ -130,11 +138,15 @@ export class AutonomousLoop {
     signerService: SignerService;
     yieldService: YieldService;
     crossChainService: CrossChainService;
+    swapRouterService: SwapRouterService;
+    intentService: IntentService;
   } {
     return {
       signerService: this.signerService,
       yieldService: this.yieldService,
       crossChainService: this.crossChainService,
+      swapRouterService: this.swapRouterService,
+      intentService: this.intentService,
     };
   }
 
@@ -304,7 +316,21 @@ export class AutonomousLoop {
                   direction: decision.direction,
                   amount: decision.amount,
                 }
-              : {}),
+              : decision.action === "LOCAL_SWAP"
+                ? {
+                    poolType: decision.poolType,
+                    tokenIn: decision.tokenIn,
+                    tokenOut: decision.tokenOut,
+                    amount: decision.amount,
+                  }
+                : decision.action === "UNIVERSAL_INTENT"
+                  ? {
+                      tokenIn: decision.tokenIn,
+                      tokenOut: decision.tokenOut,
+                      destType: decision.destType,
+                      amount: decision.amount,
+                    }
+                  : {}),
         reasoning: decision.reasoning,
       },
       `Phase 3: Execution — processing ${decision.action} decision`,
@@ -318,6 +344,12 @@ export class AutonomousLoop {
         break;
       case "BIFROST_STRATEGY":
         toolName = "execute_bifrost_strategy";
+        break;
+      case "LOCAL_SWAP":
+        toolName = "execute_local_swap";
+        break;
+      case "UNIVERSAL_INTENT":
+        toolName = "execute_intent";
         break;
       case "CROSS_CHAIN_REBALANCE":
         // Cross-chain rebalance is currently logged but not auto-executed
@@ -369,7 +401,10 @@ export class AutonomousLoop {
         });
 
         loopLog.info(
-          { strategyId: strategyId.toString(), pendingCount: this.pendingOutcomes.size },
+          {
+            strategyId: strategyId.toString(),
+            pendingCount: this.pendingOutcomes.size,
+          },
           "Strategy queued for outcome verification",
         );
       }
@@ -636,9 +671,10 @@ export class AutonomousLoop {
           loopLog.info(
             {
               strategyId: id,
-              status: status === SignerService.StrategyStatus.Executed
-                ? "Executed"
-                : "Failed",
+              status:
+                status === SignerService.StrategyStatus.Executed
+                  ? "Executed"
+                  : "Failed",
             },
             "Strategy outcome already resolved on-chain",
           );

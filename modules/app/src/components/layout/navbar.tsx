@@ -8,6 +8,7 @@ import { cn } from "@/lib/format";
 
 const NAV_ITEMS = [
   { label: "Dashboard", href: "/" },
+  { label: "Swap", href: "/swap" },
   { label: "Strategies", href: "/strategies" },
   { label: "Yields", href: "/yields" },
   { label: "Insights", href: "/insights" },
@@ -34,7 +35,9 @@ export function Navbar() {
         {/* Logo */}
         <Link href="/" className="flex items-center gap-2.5 shrink-0">
           <div className="flex h-7 w-7 items-center justify-center rounded-md bg-primary">
-            <span className="font-mono text-sm font-black text-background">O</span>
+            <span className="font-mono text-sm font-black text-background">
+              O
+            </span>
           </div>
           <span className="text-[15px] font-bold tracking-tight text-text-primary">
             Obidot
@@ -81,7 +84,7 @@ export function Navbar() {
               <span className="relative inline-flex h-2 w-2 rounded-full bg-primary" />
             </span>
             <span className="font-mono text-[11px] text-text-secondary">
-              Paseo
+              TestNet
             </span>
           </div>
 
@@ -111,7 +114,9 @@ export function Navbar() {
                 key={`${i < tickerItems.length ? "a" : "b"}-${item.name}`}
                 className="flex items-center gap-2 px-4 h-full shrink-0"
               >
-                <span className="text-[11px] text-text-secondary">{item.name}</span>
+                <span className="text-[11px] text-text-secondary">
+                  {item.name}
+                </span>
                 <span
                   className={cn(
                     "font-mono text-[11px] font-semibold",

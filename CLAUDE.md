@@ -7,9 +7,9 @@
 
 ## Custom Slash Commands
 - `/review-pr`: Run a comprehensive review against the current diff, checking for type safety, test coverage, and linting errors.
-- `/test-contracts`: Execute `pnpm --filter pvm-core run test:forge`
+- `/test-contracts`: Run `forge test` in the obi.router repo (`cd ../obi.router && forge test`)
 - `/check-agent`: Execute `pnpm --filter @obidot/agent run typecheck && pnpm --filter @obidot/agent run lint`
-- `/format-all`: Run formatting across the workspace (Biome for docs, Forge/Prettier for contracts).
+- `/format-all`: Run formatting across the workspace (Biome for docs; run `forge fmt` in obi.router for contracts).
 
 ## Hooks
 - **Post-edit hook:** After modifying any `.ts` or `.tsx` file, prompt the user to run `pnpm prettier --write <file_path>` and `pnpm lint --filter <project_name>`.

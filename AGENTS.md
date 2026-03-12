@@ -1,19 +1,21 @@
 # Obidot — Agent Guidelines
 
-Obidot is an Autonomous Cross-Chain Finance Layer for Polkadot. An ERC-4626 vault
-on Polkadot Hub EVM lets an off-chain AI agent route funds across parachains via XCM.
+Obidot — the first cross-chain DEX aggregator on Polkadot Hub. An ERC-4626 vault
+on Polkadot Hub (PolkaVM) with cross-chain liquidity aggregation across Polkadot
+parachains (XCM) and EVM chains (Hyperbridge ISMP). An AI-driven autonomous agent
+operates as a sub-feature for intent-based strategy execution.
 
 ## Repository Structure
 
 ```
 obidot/
-├── contracts/          # Solidity (Foundry) — vault, adapters, libraries
-│   ├── src/            # Production contracts
-│   ├── test/           # Forge tests
-│   └── script/         # Deployment & demo scripts
 ├── modules/agent/      # TypeScript — off-chain AI agent (LangChain + viem)
+├── modules/app/        # Next.js 15 — frontend trading terminal
 └── docs/               # Documentation site
 ```
+
+Contracts live in [obi.router](https://github.com/obidot/obi.router).
+SDK lives in [obi-kit](https://github.com/obidot/obi-kit).
 
 Monorepo: pnpm workspaces + Turborepo. See sub-package AGENTS.md files for details.
 
@@ -23,45 +25,21 @@ Monorepo: pnpm workspaces + Turborepo. See sub-package AGENTS.md files for detai
 # Root-level (delegates via turbo)
 pnpm build                        # Build all packages
 pnpm test                         # Run all tests
-pnpm test:forge                   # Forge tests only (contracts)
-
-# Contracts (run from contracts/ or use --filter)
-forge build                       # Compile contracts
-forge test                        # Run all 400 tests
-forge test --match-test <name> -vvv   # Single test, verbose
-forge test --match-contract <Name>    # All tests in a contract
-forge fmt                         # Format Solidity
-FOUNDRY_PROFILE=polkadot forge build  # PVM build (resolc)
-FOUNDRY_PROFILE=ci forge test         # CI profile (5000 fuzz runs)
 
 # Agent module
 pnpm --filter @obidot/agent run typecheck
 pnpm --filter @obidot/agent run lint
 pnpm --filter @obidot/agent run dev       # Dev mode (tsx watch)
+
+# App module
+pnpm --filter @obidot/app run dev         # Dev mode (Next.js + Turbopack, port 3010)
+pnpm --filter @obidot/app run build       # Production build
+
+# Contracts (run from obi.router repo)
+# See https://github.com/obidot/obi.router
+forge build
+forge test
 ```
-
-## Solidity Code Style
-
-- **Pragma:** `pragma solidity ^0.8.28;` — all files
-- **License:** `// SPDX-License-Identifier: MIT`
-- **Imports:** Named imports only (`import {Foo} from "..."`), OpenZeppelin first, then local interfaces, then libraries
-- **Errors:** Custom errors, not `require` strings — `error ZeroAddress();`
-- **NatDoc:** `@title`, `@notice`, `@dev` on contracts; `@notice`/`@dev`/`@param` on functions and state vars
-- **Sections:** `// ─────` bars to separate Constants, Enums, State, Events, Errors, Constructor, External, Internal
-- **Constants:** `UPPER_SNAKE_CASE`, internal constants use `internal constant`
-- **Roles:** `bytes32 public constant ROLE_NAME = keccak256("ROLE_NAME");`
-- **Modifiers order:** `visibility` → `override` → `modifier` (e.g. `external override whenNotPaused nonReentrant`)
-- **Formatting:** `forge fmt` — enforced, no manual overrides
-
-## Solidity Testing Conventions
-
-- Test contract: `ContractName_Category_Test` (e.g. `ObidotVault_Deposit_Test`)
-- Test function: `test_descriptiveName`, `testFuzz_name`, `testRevert_name`
-- Base harness: `ObidotVaultTestBase` with shared `setUp()`, helpers, constants
-- Mocks: defined in test file, prefixed `Mock` (e.g. `MockERC20`, `MockOracle`)
-- Mock oracle API: `setPrice(int256)`, `setStale()`, `setPriceRaw(int256, uint256)`, `setShouldRevert(bool)`
-- Tests start at `vm.warp(10_000)` to avoid oracle staleness underflows
-- Invariant handlers: defined in test file as `Handler` contracts
 
 ## TypeScript Code Style (modules/agent)
 
@@ -86,29 +64,31 @@ pnpm --filter @obidot/agent run dev       # Dev mode (tsx watch)
 
 ## PVM Constraints (Polkadot Hub)
 
-| Constraint               | Limit           | Project Status |
-|--------------------------|-----------------|----------------|
-| Heap buffer              | 64 KB           | OK             |
-| Call stack depth          | 5               | Max 3 (batch → strategy → XCM) |
-| Event topics             | 4 max           | All ≤ 3 indexed |
-| Storage/event data       | 416 bytes       | All structs < 200 B |
-| selfdestruct             | Not supported   | Not used       |
-| EXTCODECOPY              | Not supported   | Not used       |
-| Reentrancy guards        | Required (no gas limits cross-contract) | All entry points |
+| Constraint         | Limit                                   | Project Status                 |
+| ------------------ | --------------------------------------- | ------------------------------ |
+| Heap buffer        | 64 KB                                   | OK                             |
+| Call stack depth   | 5                                       | Max 3 (batch → strategy → XCM) |
+| Event topics       | 4 max                                   | All ≤ 3 indexed                |
+| Storage/event data | 416 bytes                               | All structs < 200 B            |
+| selfdestruct       | Not supported                           | Not used                       |
+| EXTCODECOPY        | Not supported                           | Not used                       |
+| Reentrancy guards  | Required (no gas limits cross-contract) | All entry points               |
 
 ## Foundry Profiles
 
-| Profile    | Fuzz Runs | Invariant Runs/Depth | Usage |
-|------------|-----------|----------------------|-------|
-| default    | 1000      | 256 / 64             | `forge test` |
-| ci         | 5000      | 512 / 128            | `FOUNDRY_PROFILE=ci forge test` |
-| polkadot   | N/A       | N/A                  | `FOUNDRY_PROFILE=polkadot forge build` (resolc) |
+| Profile  | Fuzz Runs | Invariant Runs/Depth | Usage                                           |
+| -------- | --------- | -------------------- | ----------------------------------------------- |
+| default  | 1000      | 256 / 64             | `forge test`                                    |
+| ci       | 5000      | 512 / 128            | `FOUNDRY_PROFILE=ci forge test`                 |
+| polkadot | N/A       | N/A                  | `FOUNDRY_PROFILE=polkadot forge build` (resolc) |
 
 ## Target Network
 
-- **Chain:** Polkadot Hub Testnet (Paseo), chain ID `420420417`
-- **RPC:** `https://services.polkadothub-rpc.com/testnet`
+- **Chain:** Polkadot Hub TestNet, chain ID `420420417`
+- **RPC:** `https://eth-rpc-testnet.polkadot.io/`
+- **Blockscout:** `https://blockscout-testnet.polkadot.io`
 - **XCM Precompile:** `0x00000000000000000000000000000000000a0000`
+- **Network naming:** Always use "Polkadot Hub TestNet" — NOT "Paseo testnet"
 
 ## Dependencies
 

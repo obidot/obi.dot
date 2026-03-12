@@ -6,12 +6,14 @@ import type { StructuredToolInterface } from "@langchain/core/tools";
 import { SignerService } from "../services/signer.service.js";
 import { YieldService } from "../services/yield.service.js";
 import { CrossChainService } from "../services/crosschain.service.js";
+import { SwapRouterService } from "../services/swap-router.service.js";
 import { eventBus } from "../services/event-bus.service.js";
 import { registerVaultRoutes } from "./routes/vault.js";
 import { registerYieldRoutes } from "./routes/yields.js";
 import { registerStrategyRoutes } from "./routes/strategies.js";
 import { registerCrossChainRoutes } from "./routes/crosschain.js";
 import { registerAgentRoutes } from "./routes/agent.js";
+import { registerSwapRoutes } from "./routes/swap.js";
 import { logger } from "../utils/logger.js";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -27,6 +29,7 @@ export interface ApiDependencies {
   signerService: SignerService;
   yieldService: YieldService;
   crossChainService: CrossChainService;
+  swapRouterService: SwapRouterService;
   tools: StructuredToolInterface[];
 }
 
@@ -58,6 +61,7 @@ export async function startApiServer(deps: ApiDependencies): Promise<void> {
   registerStrategyRoutes(app);
   registerCrossChainRoutes(app, deps.crossChainService, deps.signerService);
   registerAgentRoutes(app, deps.tools);
+  registerSwapRoutes(app, deps.swapRouterService);
 
   // ── WebSocket ──────────────────────────────────────────────────────
   app.register(async (fastify) => {

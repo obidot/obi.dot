@@ -1,11 +1,11 @@
 ---
 title: Architecture
-description: High-level architecture of the Obidot autonomous cross-chain finance layer, including system components, data flow, and actor roles.
+description: High-level architecture of the Obidot DEX aggregator on Polkadot Hub — system components, cross-chain data flow, actor roles, and the optional AI agent sub-feature.
 ---
 
 ## System Overview
 
-Obidot is designed as a modular system where each component has a clearly defined responsibility. The core smart contract — `ObidotVault` — acts as the coordination point between depositors, an AI strategist, keepers, and the Polkadot XCM transport layer. The system extends across chains via Hyperbridge ISMP, with satellite vaults on EVM chains and Bifrost DeFi integration on Polkadot.
+Obidot is a modular DEX aggregator on Polkadot Hub where each component has a clearly defined responsibility. The core smart contract — `ObidotVault` — is an ERC-4626 vault that routes swaps through `SwapRouter` across on-hub DEX pools (via pluggable `IPoolAdapter` adapters), Polkadot parachains (XCM), and EVM chains (Hyperbridge ISMP). Satellite vaults on EVM chains sync state back to the hub, and Bifrost DeFi is integrated via parachain 2030. An optional AI agent sub-feature can sign and submit EIP-712 `StrategyIntent` structs for autonomous intent-based strategy execution. A Next.js dashboard provides a real-time operator interface.
 
 ```
                                     Polkadot Hub
@@ -28,11 +28,31 @@ Keeper ─────── reports outcome (P&L) ─────────�
               Ethereum              Arbitrum/Optimism/Base
           ObidotVaultEVM            ObidotVaultEVM
            (Satellite)               (Satellite)
+
+Off-Chain Layer
+──────────────────────────────────────────────────────────
+AI Agent (LangChain + GPT-4o)
+  ├── Phase 1: Perceive   — vault state, balances, oracle prices
+  ├── Phase 2: Reason     — LLM decision (deploy / rebalance / hold)
+  ├── Phase 3: Act        — sign + submit StrategyIntent on-chain
+  └── Phase 4: Record     — write outcome to StrategyStore, emit EventBus
+
+Fastify API (port 3001) ──► WebSocket /ws ──► Next.js Dashboard
+  ├── REST: /api/vault, /api/yields, /api/strategies, /api/crosschain, /api/agent
+  └── Telegram Bot (optional operator notifications)
+
+Next.js Dashboard (port 3000)
+  ├── /           — Vault overview, QuickStats, PnL chart
+  ├── /yields     — Protocol yield grid
+  ├── /strategies — Strategy table with detail side panel
+  ├── /crosschain — Chain topology map, satellite table
+  ├── /agent      — Agent status, decision feed
+  └── /insights   — Financial Intelligence Hub (AI-powered analytics)
 ```
 
 ## Actor Model
 
-The system defines three privileged roles using OpenZeppelin's `AccessControl`, plus unprivileged depositors and relayers.
+The system defines privileged roles using OpenZeppelin's `AccessControl`, plus unprivileged depositors and relayers.
 
 ### Depositors
 
@@ -53,11 +73,12 @@ The governance layer. The admin configures all policy engine parameters and has 
 
 In production, this role should be held by a multisig or governance contract.
 
-### AI Strategist (`STRATEGIST_ROLE`)
+### AI Strategist / Solver (`STRATEGIST_ROLE` / `SOLVER_ROLE`)
 
-The autonomous agent that decides where to deploy capital. The strategist never calls the vault directly — instead, it signs an EIP-712 `StrategyIntent` struct off-chain. This signed intent is then submitted to the vault by a relayer.
+An optional sub-feature. When enabled, an autonomous agent decides where to deploy capital. The strategist never calls the vault directly — instead, it signs an EIP-712 `StrategyIntent` struct off-chain. This signed intent is then submitted to the vault by a relayer.
 
 The strategist's power is bounded by:
+
 - Parachain whitelist (can only target approved chains)
 - Protocol whitelist (can only target approved protocols)
 - Exposure caps (cannot over-allocate to a single protocol)
@@ -82,12 +103,12 @@ Anyone can call `executeStrategy()` with a valid signed intent. This permissionl
 
 `ObidotVault` inherits from four OpenZeppelin v5 base contracts:
 
-| Base Contract | Purpose |
-|--------------|---------|
-| `ERC4626` | Standard yield-bearing vault interface (which itself inherits `ERC20`) |
-| `AccessControl` | Role-based access control for admin, strategist, and keeper |
-| `Pausable` | Emergency pause mechanism for deposits and strategy execution |
-| `ReentrancyGuard` | Protection against reentrancy on all entry/exit points |
+| Base Contract     | Purpose                                                                |
+| ----------------- | ---------------------------------------------------------------------- |
+| `ERC4626`         | Standard yield-bearing vault interface (which itself inherits `ERC20`) |
+| `AccessControl`   | Role-based access control for admin, strategist, and keeper            |
+| `Pausable`        | Emergency pause mechanism for deposits and strategy execution          |
+| `ReentrancyGuard` | Protection against reentrancy on all entry/exit points                 |
 
 ## Data Flow
 
@@ -98,7 +119,7 @@ Anyone can call `executeStrategy()` with a valid signed intent. This permissionl
 3. Assets transferred from user to vault (increases idle balance)
 4. Shares minted to receiver using ERC-4626 conversion math
 
-### Strategy Execution Flow
+### Strategy Execution Flow (AI Agent Sub-Feature)
 
 1. AI strategist constructs a `StrategyIntent` with target parachain, protocol, amount, and XCM payload
 2. Strategist signs the intent using EIP-712 typed data
@@ -135,11 +156,11 @@ Anyone can call `executeStrategy()` with a valid signed intent. This permissionl
 
 The vault tracks three categories of assets:
 
-| Category | Description |
-|----------|-------------|
-| **Idle Assets** | Underlying tokens held directly in the vault contract (`IERC20(asset()).balanceOf(address(this))`) |
-| **Remote Assets** | Value deployed to parachains, tracked via `totalRemoteAssets` state variable |
-| **Satellite Assets** | Value held in satellite vaults on EVM chains, tracked via `totalSatelliteAssets` |
+| Category             | Description                                                                                        |
+| -------------------- | -------------------------------------------------------------------------------------------------- |
+| **Idle Assets**      | Underlying tokens held directly in the vault contract (`IERC20(asset()).balanceOf(address(this))`) |
+| **Remote Assets**    | Value deployed to parachains, tracked via `totalRemoteAssets` state variable                       |
+| **Satellite Assets** | Value held in satellite vaults on EVM chains, tracked via `totalSatelliteAssets`                   |
 
 ```
 totalAssets()       = idle + totalRemoteAssets              (hub, normal mode)
@@ -164,53 +185,147 @@ Obidot employs defense-in-depth with multiple independent security mechanisms:
 
 ## File Organization
 
-```
-contracts/
-├── src/
-│   ├── ObidotVault.sol          # Hub vault (Polkadot Hub EVM)
-│   ├── ObidotVaultEVM.sol       # Satellite vault (Ethereum/L2s)
-│   ├── adapters/
-│   │   ├── HyperbridgeAdapter.sol  # Abstract ISMP base contract
-│   │   ├── CrossChainRouter.sol    # Hub-side ISMP message router
-│   │   └── BifrostAdapter.sol      # Bifrost DeFi strategy adapter
-│   ├── interfaces/
-│   │   ├── IAggregatorV3.sol    # Chainlink-compatible oracle interface
-│   │   ├── IXcm.sol             # XCM precompile interface
-│   │   ├── IIsmpHost.sol        # Hyperbridge ISMP host interface
-│   │   ├── IIsmpModule.sol      # ISMP callback interface
-│   │   ├── IBifrostSLP.sol      # Bifrost Staking Liquidity Protocol
-│   │   ├── IBifrostDEX.sol      # Bifrost Zenlink DEX
-│   │   ├── IBifrostFarming.sol  # Bifrost yield farming
-│   │   └── IBifrostSALP.sol     # Bifrost Slot Auction Liquidity
-│   └── libraries/
-│       ├── MultiLocation.sol    # SCALE-encoding for XCM locations
-│       ├── CrossChainCodec.sol  # ISMP message encoding/decoding
-│       └── BifrostCodec.sol     # Bifrost XCM V4 payload encoding
-├── script/
-│   ├── Deploy.s.sol             # Hub vault deployment
-│   └── DeployCrossChain.s.sol   # Cross-chain infrastructure deployment
-├── test/
-│   ├── ObidotVault.t.sol        # Hub vault tests (91+ tests)
-│   ├── CrossChain.t.sol         # Cross-chain integration tests
-│   ├── CrossChainCodec.t.sol    # Codec roundtrip + fuzz tests
-│   └── BifrostCodec.t.sol       # Bifrost encoding tests
-└── foundry.toml                 # Foundry configuration
+### Smart Contract Layer (`src/`)
 
-modules/agent/
-├── src/
-│   ├── main.ts                  # Entry point
-│   ├── agent/
-│   │   ├── loop.ts              # 3-phase autonomous loop
-│   │   ├── systemPrompt.ts      # LLM system prompt
-│   │   └── tools.ts             # 6 LangChain tools
-│   ├── config/
-│   │   ├── constants.ts         # Addresses, ABIs, protocols
-│   │   └── env.ts               # Environment variables
-│   ├── services/
-│   │   ├── yield.service.ts     # Yield monitoring
-│   │   ├── crosschain.service.ts # Multi-chain state aggregation
-│   │   └── signer.service.ts    # EIP-712 signing + execution
-│   └── types/
-│       └── index.ts             # Schemas, types, decision union
-└── package.json
+```
+src/
+├── intent/
+│   ├── IntentTypes.sol         # UniversalIntent struct + Destination enum
+│   ├── IntentDomain.sol        # EIP-712 typed-data helpers + signature verification
+│   └── IIntentSolver.sol       # AI → Vault handshake interface
+├── executor/
+│   ├── IExecutor.sol           # Single execute/quote interface (all chains)
+│   ├── XCMExecutor.sol         # Native Polkadot XCM (parachains) via 0xA0000
+│   └── HyperExecutor.sol       # Hyperbridge (ETH/Base/Arbitrum) via ISMP host
+├── oracle/
+│   ├── KeeperOracle.sol        # Keeper-updatable price feed (IAggregatorV3)
+│   ├── IOracle.sol             # RedStone + Chainlink CCIP interface
+│   └── SlippageGuard.sol       # 2% max-slippage validation library
+├── asset/
+│   ├── IAsset.sol              # AssetHub precompile interface
+│   └── NativeAsset.sol         # USDC/DOT as ERC-20 proxy over AssetHub precompiles
+├── vault/
+│   ├── ObidotVault.sol         # Core ERC-4626 vault + IIntentSolver + SwapRouter integration
+│   ├── ObidotVaultEVM.sol      # Satellite vault (EVM chains, syncs via Hyperbridge)
+│   └── ERC4626Initializable.sol # Custom OZ ERC4626 with storage-based asset (for clone proxies)
+├── router/
+│   ├── ISwapRouter.sol         # DEX aggregator router interface
+│   ├── IPoolAdapter.sol        # Universal pool adapter interface
+│   ├── SwapRouter.sol          # Core router: single/multi-hop/split swaps, multicall
+│   └── SwapQuoter.sol          # Read-only quoter: getBestQuote, getAllQuotes, quoteMultiHop
+├── adapters/
+│   ├── CrossChainRouter.sol    # Hub ISMP message router (dispatches + receives)
+│   ├── BifrostAdapter.sol      # Bifrost SLP/SALP/DEX/Farming adapter (parachain 2030)
+│   └── HyperbridgeAdapter.sol  # Abstract ISMP dispatch/onAccept/onTimeout base
+├── interfaces/
+│   ├── IIntentSolver.sol       # Canonical solver interface
+│   ├── IAggregatorV3.sol       # Chainlink aggregator interface
+│   ├── IXcm.sol                # XCM precompile (0xA0000) interface
+│   ├── IIsmpHost.sol           # ISMP host interface
+│   ├── IIsmpModule.sol         # ISMP module callback interface
+│   ├── IOracleConsumer.sol     # Oracle consumer interface
+│   └── IBifrost*.sol           # Bifrost protocol interfaces (SLP, SALP, DEX, Farming)
+├── libraries/
+│   ├── MultiLocation.sol       # XCM MultiLocation SCALE encoding
+│   ├── BifrostCodec.sol        # Bifrost pallet call XCM V4 encoding
+│   ├── CrossChainCodec.sol     # ISMP message encode/decode (7 message types)
+│   ├── SafeTransfer.sol        # Universal asset-transfer helpers
+│   └── XCMEncoder.sol          # MultiLocation factory functions
+├── periphery/
+│   ├── VaultFactory.sol        # Multi-strategy vault deploy (EIP-1167 clones — not deployable on PVM)
+│   └── DemoIntent.sol          # Pre-signed intents (library, no state)
+└── OracleRegistry.sol          # Multi-asset oracle registry with staleness checks
+```
+
+### Tests (`test/`)
+
+```
+test/
+├── Abstractions.t.sol          # Intent / executor / oracle / asset unit tests
+├── ObidotVault.t.sol           # Unit + fuzz + invariant tests (631 tests, 97 suites)
+├── OracleRegistry.t.sol        # Oracle registry tests
+├── CrossChain.t.sol            # Satellite + adapter tests
+├── CrossChainCodec.t.sol       # CrossChainCodec library tests
+├── BifrostCodec.t.sol          # BifrostCodec library tests
+├── KeeperOracle.t.sol          # KeeperOracle unit + fuzz tests
+├── Integration.t.sol           # Full hub lifecycle (7 tests)
+├── CrossChainLifecycle.t.sol   # Cross-chain lifecycle (9 tests)
+├── SwapRouter.t.sol            # SwapRouter unit + fuzz tests (42 tests)
+├── SwapQuoter.t.sol            # SwapQuoter unit tests (20 tests)
+└── VaultSwapIntegration.t.sol  # End-to-end vault → router → pool tests (15 tests)
+```
+
+### Deployment Scripts (`script/`)
+
+```
+script/
+├── Deploy.s.sol                # Production hub deploy + DeployWithSetup
+├── DeployTestnet.s.sol         # One-shot testnet (token + oracle + vault)
+├── DeployCrossChain.s.sol      # Router, adapter, satellite deploy
+├── DeployNew.s.sol             # Phase 2 deploy (XCMExecutor, HyperExecutor, NativeAsset×2)
+└── Demo.s.sol                  # Full lifecycle demo script
+```
+
+### Off-Chain Agent (`modules/agent/`)
+
+```
+modules/agent/src/
+├── main.ts                        # Entry point (agent loop + API server)
+├── agent/
+│   ├── loop.ts                    # 4-phase autonomous loop
+│   ├── systemPrompt.ts            # LLM system prompt
+│   └── tools.ts                   # 6 LangChain tools
+├── api/
+│   ├── server.ts                  # Fastify server (port 3001, CORS open)
+│   └── routes/
+│       ├── vault.ts               # GET /api/vault
+│       ├── yields.ts              # GET /api/yields
+│       ├── strategies.ts          # GET /api/strategies, GET /api/strategies/:id
+│       ├── crosschain.ts          # GET /api/crosschain
+│       └── agent.ts               # GET /api/agent, POST /api/agent/trigger
+├── config/
+│   ├── constants.ts               # Addresses, ABIs, protocols
+│   ├── env.ts                     # Environment variables
+│   └── oracle.config.ts           # TWAP oracle source configuration
+├── services/
+│   ├── yield.service.ts           # Yield monitoring (DeFiLlama + oscillator)
+│   ├── crosschain.service.ts      # Multi-chain state aggregation
+│   ├── signer.service.ts          # EIP-712 signing + execution
+│   ├── strategy-store.service.ts  # In-memory strategy records + decision log
+│   ├── event-bus.service.ts       # Node EventEmitter → WebSocket relay
+│   ├── oracle.service.ts          # Multi-source TWAP price aggregation
+│   └── price-aggregator.service.ts # Pyth Hermes, CoinGecko, Binance, Subsquid
+├── telegram/
+│   └── bot.ts                     # Telegram bot (GPT-4o, 6 tools, /start)
+└── types/
+    ├── index.ts                   # Schemas, types, decision union
+    └── oracle.types.ts            # Oracle source types
+```
+
+### Dashboard App (`modules/app/`)
+
+```
+modules/app/src/
+├── app/
+│   ├── layout.tsx                 # Root layout (RainbowKit, TanStack Query)
+│   ├── globals.css                # TailwindCSS v4 + design system utilities
+│   ├── page.tsx                   # / Dashboard
+│   ├── yields/page.tsx            # /yields
+│   ├── strategies/page.tsx        # /strategies
+│   ├── crosschain/page.tsx        # /crosschain
+│   ├── agent/page.tsx             # /agent
+│   ├── insights/page.tsx          # /insights (Financial Intelligence Hub)
+│   └── api/[...path]/route.ts     # Proxy → http://localhost:3001/api/*
+├── components/                    # All UI components per page
+├── hooks/                         # useVaultData, useYields, useStrategies,
+│                                  # useAgentStatus, useWebSocket
+├── lib/
+│   ├── api.ts                     # Typed API client
+│   ├── format.ts                  # Number/date formatters
+│   ├── constants.ts               # Contract addresses, ABIs
+│   ├── yield-opportunity-score.ts # Opportunity scoring engine
+│   ├── risk-analyzer.ts           # Risk matrix computation engine
+│   └── position-simulator.ts      # Position simulation engine
+└── types/
+    └── index.ts                   # Shared TypeScript types
 ```

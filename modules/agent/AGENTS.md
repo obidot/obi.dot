@@ -1,7 +1,8 @@
 # Package: @obidot/agent (modules/agent/)
 
 Off-chain AI agent that autonomously manages the ObidotVault. Built with
-TypeScript, LangChain, viem, and pino logging.
+TypeScript, LangChain, viem, and pino logging. Includes DEX aggregator routing,
+universal intent execution, and a Fastify API server.
 
 ## Build & Test Commands
 
@@ -30,19 +31,30 @@ No unit test suite — validate via `typecheck` and `lint` before committing.
 
 ```
 modules/agent/src/
+├── main.ts                         # Entrypoint — bootstrap & shutdown
 ├── agent/
-│   └── loop.ts             # Autonomous agent loop (LangChain + strategy verification)
+│   ├── loop.ts                     # Autonomous loop orchestrator (LangChain + strategy verification)
+│   ├── systemPrompt.ts             # LangChain system prompt (vault, DEX aggregator, intent sections)
+│   └── tools.ts                    # Custom LangChain tools (6 tools: fetch yields/state/strategy + swap quote/local swap/intent)
 ├── services/
-│   ├── yield.service.ts    # Bifrost + DeFiLlama yield data
-│   ├── signer.service.ts   # EIP-712 signing for strategy intents
-│   └── price-aggregator.service.ts  # Multi-source oracle (Pyth, CoinGecko, Binance, Subsquid)
+│   ├── yield.service.ts            # Bifrost + DeFiLlama yield data
+│   ├── signer.service.ts           # EIP-712 signing for strategy intents
+│   ├── price-aggregator.service.ts # Multi-source oracle (Pyth, CoinGecko, Binance, Subsquid)
+│   ├── swap-router.service.ts      # SwapRouter + SwapQuoter on-chain reads (getBestQuote, getAllQuotes, etc.)
+│   └── intent.service.ts           # Universal intent signing + execution (EIP-712, executeIntent, executeLocalSwap)
+├── api/
+│   ├── server.ts                   # Fastify API server (vault, yields, strategies, swap, agent, chat)
+│   └── routes/
+│       └── swap.ts                 # GET /api/swap/quote, GET /api/swap/routes
 ├── config/
-│   ├── constants.ts        # Chain IDs, API URLs, protocol addresses
-│   └── oracle.config.ts    # Oracle source configuration
+│   ├── env.ts                      # Zod-validated environment variables (including DEX addresses)
+│   ├── constants.ts                # Chain IDs, API URLs, protocol addresses, ABIs, EIP-712 types
+│   └── oracle.config.ts            # Oracle source configuration
 ├── types/
-│   └── index.ts            # Shared type definitions
+│   └── index.ts                    # StrategyIntent, UniversalIntent, PoolType, AI decision schemas (incl. LOCAL_SWAP, UNIVERSAL_INTENT)
+├── telegram/                       # Telegram bot integration
 └── utils/
-    └── logger.ts           # pino logger setup
+    └── logger.ts                   # pino logger setup (vaultLog, yieldLog, swapLog, intentLog)
 ```
 
 ## Code Style
@@ -51,15 +63,15 @@ modules/agent/src/
 
 ```typescript
 // 1. External packages first
-import { ChatOpenAI } from '@langchain/openai';
-import { createPublicClient } from 'viem';
+import { ChatOpenAI } from "@langchain/openai";
+import { createPublicClient } from "viem";
 
 // 2. Type-only imports separate (use `import type`)
-import type { ProtocolYield, BifrostYield } from '../types/index.js';
+import type { ProtocolYield, BifrostYield } from "../types/index.js";
 
 // 3. Local imports with .js extension
-import { KNOWN_PARACHAINS } from '../config/constants.js';
-import { yieldLog } from '../utils/logger.js';
+import { KNOWN_PARACHAINS } from "../config/constants.js";
+import { yieldLog } from "../utils/logger.js";
 ```
 
 ### Naming
@@ -90,6 +102,23 @@ import { yieldLog } from '../utils/logger.js';
 - **obi-kit:** `@obidot-kit/core`, `@obidot-kit/llm`, `@obidot-kit/sdk` (linked locally)
 - **pino:** structured logging
 - **zod:** runtime schema validation
+- **fastify:** API server
+- **grammy:** Telegram bot integration
+
+## API Endpoints
+
+| Method | Path                     | Description                                              |
+| ------ | ------------------------ | -------------------------------------------------------- |
+| GET    | `/api/vault/state`       | Vault state (totalAssets, paused, etc.)                  |
+| GET    | `/api/vault/performance` | Vault PnL, HWM, fees                                     |
+| GET    | `/api/yields`            | All protocol yields                                      |
+| GET    | `/api/yields/bifrost`    | Bifrost-specific yields                                  |
+| GET    | `/api/strategies`        | Strategy execution history                               |
+| GET    | `/api/crosschain/state`  | Satellite vault states                                   |
+| GET    | `/api/agent/log`         | Agent decision log                                       |
+| POST   | `/api/chat`              | Chat with AI agent                                       |
+| GET    | `/api/swap/quote`        | DEX aggregator quote (pool, tokenIn, tokenOut, amountIn) |
+| GET    | `/api/swap/routes`       | Available pool adapters + router status                  |
 
 ## PR Instructions
 
