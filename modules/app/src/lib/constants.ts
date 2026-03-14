@@ -34,9 +34,17 @@ export const CHAIN = {
 /** API base URL — proxied via Next.js rewrites in dev */
 export const API_BASE = "/api";
 
-/** WebSocket URL for real-time events */
+/** WebSocket URL for real-time events (obidot agent API) */
 export const WS_URL =
   process.env.NEXT_PUBLIC_WS_URL ?? "ws://localhost:3001/ws";
+
+/** GraphQL WebSocket URL for obi.index real-time subscriptions */
+export const GRAPHQL_WS_URL =
+  process.env.NEXT_PUBLIC_GRAPHQL_WS_URL ?? "ws://localhost:4350/graphql";
+
+/** GraphQL HTTP URL for obi.index queries */
+export const GRAPHQL_HTTP_URL =
+  process.env.NEXT_PUBLIC_GRAPHQL_HTTP_URL ?? "http://localhost:4350/graphql";
 
 // ── Minimal ABIs (only functions needed by frontend) ──────────────────────
 

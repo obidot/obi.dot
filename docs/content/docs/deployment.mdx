@@ -48,11 +48,11 @@ forge install
 
 The project uses three external dependencies managed via Foundry's `lib/` directory:
 
-| Dependency | Version | Remapping |
-|-----------|---------|-----------|
-| OpenZeppelin Contracts | v5.5.0 | `@openzeppelin/contracts/` → `lib/openzeppelin-contracts/contracts/` |
-| Pyth SDK Solidity | v2.2.0 | `@pythnetwork/pyth-sdk-solidity/` → `lib/pyth-sdk-solidity/` |
-| Forge Std | latest | `forge-std/` → `lib/forge-std/src/` |
+| Dependency             | Version | Remapping                                                            |
+| ---------------------- | ------- | -------------------------------------------------------------------- |
+| OpenZeppelin Contracts | v5.5.0  | `@openzeppelin/contracts/` → `lib/openzeppelin-contracts/contracts/` |
+| Pyth SDK Solidity      | v2.2.0  | `@pythnetwork/pyth-sdk-solidity/` → `lib/pyth-sdk-solidity/`         |
+| Forge Std              | latest  | `forge-std/` → `lib/forge-std/src/`                                  |
 
 ## Foundry Profiles
 
@@ -68,6 +68,7 @@ forge test
 ```
 
 Configuration:
+
 - Solidity `0.8.28`
 - Optimizer enabled (200 runs)
 - Fuzz: 1,000 runs per test
@@ -82,6 +83,7 @@ FOUNDRY_PROFILE=ci forge test
 ```
 
 Configuration:
+
 - Fuzz: 5,000 runs per test
 - Invariant: 512 runs, depth 128
 - Verbosity level 4
@@ -102,22 +104,22 @@ This profile enables `resolc_compile = true` under the `[profile.polkadot.polkad
 
 ### Polkadot Hub Testnet (Paseo)
 
-| Parameter | Value |
-|-----------|-------|
-| Chain ID | `420420417` |
-| RPC URL | `https://eth-rpc-testnet.polkadot.io/` |
+| Parameter      | Value                                        |
+| -------------- | -------------------------------------------- |
+| Chain ID       | `420420417`                                  |
+| RPC URL        | `https://eth-rpc-testnet.polkadot.io/`       |
 | XCM Precompile | `0x00000000000000000000000000000000000a0000` |
 
 ### Other Configured RPCs
 
 The `foundry.toml` includes additional RPC endpoints:
 
-| Alias | URL |
-|-------|-----|
-| `local` | `http://127.0.0.1:8545` |
-| `polkadot_hub_testnet` | `https://eth-rpc-testnet.polkadot.io/` |
-| `westend_hub` | `https://westend-asset-hub-eth-rpc.polkadot.io` |
-| `kusama_hub` | `https://kusama-asset-hub-eth-rpc.polkadot.io` |
+| Alias                  | URL                                             |
+| ---------------------- | ----------------------------------------------- |
+| `local`                | `http://127.0.0.1:8545`                         |
+| `polkadot_hub_testnet` | `https://eth-rpc-testnet.polkadot.io/`          |
+| `westend_hub`          | `https://westend-asset-hub-eth-rpc.polkadot.io` |
+| `kusama_hub`           | `https://kusama-asset-hub-eth-rpc.polkadot.io`  |
 
 ## Live Deployment
 
@@ -126,13 +128,13 @@ The canonical machine-readable source is [`deployments.json`](https://github.com
 
 ### Phase 1 — Core Vault (2026-02-27)
 
-| Contract | Address |
-|----------|---------|
+| Contract                | Address                                      |
+| ----------------------- | -------------------------------------------- |
 | `TestDOT` (tDOT ERC-20) | `0x2402C804aD8a6217BF73D8483dA7564065c56083` |
-| `KeeperOracle` | `0xf64d93DC125AC1B366532BBbA165615f6D566C7F` |
-| `OracleRegistry` | `0x8b7C7345d6cF9de45f4aacC61F56F0241d47e88B` |
-| `ObidotVault` | `0x37D7959f5f97D37799E0d04b7684c41CB2Ff878d` |
-| `BifrostAdapter` | `0x265Cb785De0fF2e5BcebDEb53095aDCAE9175527` |
+| `KeeperOracle`          | `0xf64d93DC125AC1B366532BBbA165615f6D566C7F` |
+| `OracleRegistry`        | `0x8b7C7345d6cF9de45f4aacC61F56F0241d47e88B` |
+| `ObidotVault`           | `0x03473a95971Ba0496786a615e21b1e87bDFf0025` |
+| `BifrostAdapter`        | `0x265Cb785De0fF2e5BcebDEb53095aDCAE9175527` |
 
 Phase 1 configuration: oracle initial price $7.00 (8 decimals), deposit cap 1,000,000 tDOT,
 max daily loss 50,000 tDOT, 100,000 tDOT minted to deployer, Bifrost parachain ID 2030 whitelisted.
@@ -141,10 +143,10 @@ max daily loss 50,000 tDOT, 100,000 tDOT minted to deployer, Bifrost parachain I
 
 Deployed via `script/DeployNew.s.sol`. Adds XCM and Hyperbridge executors plus native asset proxies.
 
-| Contract | Address |
-|----------|---------|
-| `XCMExecutor` | `0xE8FDc9093395eA02017d5D66899F3E04CFF1CF64` |
-| `NativeAsset` (DOT proxy) | `0xE72453bD8d5ECF56ccdDeF949C8AE0Cea5A41E7d` |
+| Contract                   | Address                                      |
+| -------------------------- | -------------------------------------------- |
+| `XCMExecutor`              | `0xE8FDc9093395eA02017d5D66899F3E04CFF1CF64` |
+| `NativeAsset` (DOT proxy)  | `0xE72453bD8d5ECF56ccdDeF949C8AE0Cea5A41E7d` |
 | `NativeAsset` (USDC proxy) | `0xAf233E9f2ED78022CAdEA58a84144ce6BcDFd63E` |
 
 > **Testnet note:** Both NativeAsset proxies point to `TestDOT` (`0x2402C804...`) since real AssetHub
@@ -155,18 +157,13 @@ Deployed via `script/DeployNew.s.sol`. Adds XCM and Hyperbridge executors plus n
 
 Deployed via `script/Deploy.s.sol` (router + adapters section). Adds the on-hub swap routing layer.
 
-| Contract | Address |
-|----------|---------|
-| `SwapRouter` | `0xeABB7c2C02eD819BDee9336cD12e9668A33ab924` |
-| `SwapQuoter` | `0x81d7aCFEF474DA6c76eC1b5A05a137cB9f3A5Db1` |
+| Contract                   | Address                                      |
+| -------------------------- | -------------------------------------------- |
+| `SwapRouter` v3            | `0x0A85A1B0bb893cab3b5fad7312ac241e92C8Badf` |
+| `SwapQuoter`               | `0x81d7aCFEF474DA6c76eC1b5A05a137cB9f3A5Db1` |
 | `HydrationOmnipoolAdapter` | `0xBF9e3ad0818719F0DF26075005A978793248f523` |
-| `AssetHubPairAdapter` | `0x67E0B572A7761C13D7C9A3f737C825A506a85CF4` |
-| `BifrostDEXAdapter` | `0x386FC9514594c589ad7481AFC3eC36216DE91dC0` |
-
-> **Known blocker:** `ObidotVault.setSwapRouter()` cannot be called until the vault is redeployed.
-> The Phase 1 vault bytecode reaches ~30 KB (EIP-170 limit is 24 KB) after DEX aggregator additions
-> and must be refactored (`via_ir=true` or code extraction) before wiring. `SwapRouter` is callable
-> directly in the meantime.
+| `AssetHubPairAdapter`      | `0x67E0B572A7761C13D7C9A3f737C825A506a85CF4` |
+| `BifrostDEXAdapter`        | `0x386FC9514594c589ad7481AFC3eC36216DE91dC0` |
 
 ### Phase 4 — Hyperbridge ISMP v1.6.0 Fix (2026-03-11)
 
@@ -174,27 +171,39 @@ Redeployment of `HyperExecutor` and `CrossChainRouter` to fix the broken `IIsmpH
 (`DispatchPost.gaslimit` → `fee+payer`, `dispatchFee()` → `perByteFee()*max(32,bodyLen)`).
 Deployed via `script/RedeployHyperbridge.s.sol`.
 
-| Contract | Address |
-|----------|---------|
-| `HyperExecutor` | `0x82D7f3CbC0346e3B0aC463230891CB18470A28c7` |
-| `CrossChainRouter` | `0x8903331DfE3dcFd8E23bBA2D716B692f1510491e` |
+| Contract           | Address                                      |
+| ------------------ | -------------------------------------------- |
+| `HyperExecutor`    | `0x62919Cb6416Cb919fC4A30c5707a7867Ca874ca6` |
+| `CrossChainRouter` | `0xE2fFfb3B5C72f99811bC20D857035611bFCe5b5d` |
+| `XCMExecutor`      | `0x011b6FAf32370dCF92a452374FfCfCdbfA20278c` |
 
-`vault.setCrossChainRouter(0x8903331D...)` has been called. `vault.setHyperExecutor()` is pending
-vault redeployment (the setter does not exist in the Phase 1 bytecode; `VAULT_ROLE` is pre-granted
-on the new `HyperExecutor`).
+`vault.setCrossChainRouter()` has been called. `VAULT_ROLE` is pre-granted on `HyperExecutor` and `XCMExecutor`.
+
+### Phase 5 — Hydration Adapter Fix + Adapter Registration (2026-03-15)
+
+Redeployment of `HydrationOmnipoolAdapter` with corrected `PALLET_OMNIPOOL = 59` (was 68).
+All three adapter slots (0–2) registered in `SwapRouter` via `RegisterAdapters.s.sol`.
+
+| Contract                        | Address                                      |
+| ------------------------------- | -------------------------------------------- |
+| `HydrationOmnipoolAdapter` (v2) | `0xF0E1c10f97446C032A86C9643258Bb26d6129933` |
 
 **Deprecated (do not use):**
 
-| Contract | Deprecated Address | Replaced by |
-|----------|-------------------|-------------|
-| `CrossChainRouter` (Phase 1) | `0xE65D7B65a1972A82bCF65f6711a43355Faa3f490` | Phase 4 above |
-| `HyperExecutor` (Phase 2) | `0xaEC0009B15449102a39204259d07c2517cf8fC0f` | Phase 4 above |
+| Contract                       | Deprecated Address                           | Replaced by   |
+| ------------------------------ | -------------------------------------------- | ------------- |
+| `CrossChainRouter` (Ph 1)      | `0xE65D7B65a1972A82bCF65f6711a43355Faa3f490` | Phase 4 above |
+| `HyperExecutor` (Ph 2)         | `0xaEC0009B15449102a39204259d07c2517cf8fC0f` | Phase 4 above |
+| `HyperExecutor` (Ph 4 prev)    | `0x82D7f3CbC0346e3B0aC463230891CB18470A28c7` | Phase 4 above |
+| `CrossChainRouter` (Ph 4 prev) | `0x8903331DfE3dcFd8E23bBA2D716B692f1510491e` | Phase 4 above |
+| `HydrationOmnipoolAdapter` v1  | `0xBF9e3ad0818719F0DF26075005A978793248f523` | Phase 5 above |
+| `SwapRouter` v1                | `0xeABB7c2C02eD819BDee9336cD12e9668A33ab924` | Phase 3 v3    |
 
 ### Not Yet Deployed
 
-| Contract | Reason |
-|----------|--------|
-| `VaultFactory` | 37 KB initcode exceeds Polkadot Hub EVM blob limit. Deploy components individually with `DeployNew.s.sol`. |
+| Contract         | Reason                                                                                                                 |
+| ---------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| `VaultFactory`   | 37 KB initcode exceeds Polkadot Hub EVM blob limit. Deploy components individually with `DeployNew.s.sol`.             |
 | `ObidotVaultEVM` | Satellite vault for EVM chains — deploy once per target chain (Ethereum, Arbitrum, Base) using `DeploySatelliteVault`. |
 
 ## Environment Variables
@@ -203,28 +212,28 @@ on the new `HyperExecutor`).
 
 These must be set before running either deployment script:
 
-| Variable | Description | Example |
-|----------|-------------|---------|
-| `PRIVATE_KEY` | Deployer's private key (hex, without `0x` prefix) | `abcdef1234...` |
-| `UNDERLYING_ASSET` | Address of the ERC-20 token used as the vault's underlying asset | `0x1234...abcd` |
-| `PYTH_ORACLE` | Address of the Pyth AggregatorV3 price feed adapter | `0x5678...ef01` |
-| `ADMIN_ADDRESS` | Admin address that receives `DEFAULT_ADMIN_ROLE` and `KEEPER_ROLE` | `0x9abc...2345` |
+| Variable           | Description                                                        | Example         |
+| ------------------ | ------------------------------------------------------------------ | --------------- |
+| `PRIVATE_KEY`      | Deployer's private key (hex, without `0x` prefix)                  | `abcdef1234...` |
+| `UNDERLYING_ASSET` | Address of the ERC-20 token used as the vault's underlying asset   | `0x1234...abcd` |
+| `PYTH_ORACLE`      | Address of the Pyth AggregatorV3 price feed adapter                | `0x5678...ef01` |
+| `ADMIN_ADDRESS`    | Admin address that receives `DEFAULT_ADMIN_ROLE` and `KEEPER_ROLE` | `0x9abc...2345` |
 
 ### Optional (with Defaults)
 
 These can be overridden via environment variables. If not set, sensible defaults are used:
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `DEPOSIT_CAP` | `1000000000000000000000000` (1M tokens, 18 decimals) | Maximum total deposits the vault accepts |
-| `MAX_DAILY_LOSS` | `50000000000000000000000` (50K tokens) | Daily loss threshold for circuit breaker |
-| `MAX_XCM_REF_TIME` | `1000000000000` (1T picoseconds = 1 second) | Maximum XCM execution time |
-| `MAX_XCM_PROOF_SIZE` | `1048576` (1 MB) | Maximum XCM proof-of-validity size |
+| Variable             | Default                                              | Description                              |
+| -------------------- | ---------------------------------------------------- | ---------------------------------------- |
+| `DEPOSIT_CAP`        | `1000000000000000000000000` (1M tokens, 18 decimals) | Maximum total deposits the vault accepts |
+| `MAX_DAILY_LOSS`     | `50000000000000000000000` (50K tokens)               | Daily loss threshold for circuit breaker |
+| `MAX_XCM_REF_TIME`   | `1000000000000` (1T picoseconds = 1 second)          | Maximum XCM execution time               |
+| `MAX_XCM_PROOF_SIZE` | `1048576` (1 MB)                                     | Maximum XCM proof-of-validity size       |
 
 ### DeployWithSetup Only
 
-| Variable | Description | Example |
-|----------|-------------|---------|
+| Variable             | Description                                   | Example         |
+| -------------------- | --------------------------------------------- | --------------- |
 | `STRATEGIST_ADDRESS` | AI agent address to receive `STRATEGIST_ROLE` | `0xdef0...6789` |
 
 ## Deployment Scripts
@@ -244,22 +253,22 @@ forge script script/DeployTestnet.s.sol:DeployTestnet \
 
 #### What It Deploys
 
-| Contract | Description |
-|----------|-------------|
-| `TestDOT` (tDOT) | Mintable ERC-20 token (anyone can mint for testing) |
-| `KeeperOracle` | Push oracle implementing `IAggregatorV3`, initial price $7.00 |
-| `ObidotVault` | Fully wired vault, ready for deposits |
+| Contract         | Description                                                   |
+| ---------------- | ------------------------------------------------------------- |
+| `TestDOT` (tDOT) | Mintable ERC-20 token (anyone can mint for testing)           |
+| `KeeperOracle`   | Push oracle implementing `IAggregatorV3`, initial price $7.00 |
+| `ObidotVault`    | Fully wired vault, ready for deposits                         |
 
 #### Environment Variables
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `PRIVATE_KEY` | *required* | Deployer private key |
-| `ADMIN_ADDRESS` | deployer | Admin address (receives all roles) |
-| `INITIAL_PRICE` | `700000000` ($7.00, 8 decimals) | Initial DOT/USD price |
-| `DEPOSIT_CAP` | 1M tokens | Maximum total deposits |
-| `MAX_DAILY_LOSS` | 50K tokens | Circuit breaker threshold |
-| `MINT_AMOUNT` | 100K tokens | tDOT minted to deployer |
+| Variable         | Default                         | Description                        |
+| ---------------- | ------------------------------- | ---------------------------------- |
+| `PRIVATE_KEY`    | _required_                      | Deployer private key               |
+| `ADMIN_ADDRESS`  | deployer                        | Admin address (receives all roles) |
+| `INITIAL_PRICE`  | `700000000` ($7.00, 8 decimals) | Initial DOT/USD price              |
+| `DEPOSIT_CAP`    | 1M tokens                       | Maximum total deposits             |
+| `MAX_DAILY_LOSS` | 50K tokens                      | Circuit breaker threshold          |
+| `MINT_AMOUNT`    | 100K tokens                     | tDOT minted to deployer            |
 
 #### Post-Deploy Usage
 
@@ -314,20 +323,20 @@ forge script script/Deploy.s.sol:Deploy \
 
 The script automatically verifies the deployed contract state:
 
-| Check | Expected |
-|-------|----------|
-| `vault.asset()` | Matches `UNDERLYING_ASSET` |
-| `vault.priceOracle()` | Matches `PYTH_ORACLE` |
-| `vault.hasRole(DEFAULT_ADMIN_ROLE, admin)` | `true` |
-| `vault.hasRole(KEEPER_ROLE, admin)` | `true` |
-| `vault.depositCap()` | Matches configured cap |
-| `vault.maxDailyLoss()` | Matches configured threshold |
-| `vault.maxXcmRefTime()` | Matches configured limit |
-| `vault.maxXcmProofSize()` | Matches configured limit |
-| `vault.totalAssets()` | `0` |
-| `vault.totalSupply()` | `0` |
-| `vault.paused()` | `false` |
-| `vault.emergencyMode()` | `false` |
+| Check                                      | Expected                     |
+| ------------------------------------------ | ---------------------------- |
+| `vault.asset()`                            | Matches `UNDERLYING_ASSET`   |
+| `vault.priceOracle()`                      | Matches `PYTH_ORACLE`        |
+| `vault.hasRole(DEFAULT_ADMIN_ROLE, admin)` | `true`                       |
+| `vault.hasRole(KEEPER_ROLE, admin)`        | `true`                       |
+| `vault.depositCap()`                       | Matches configured cap       |
+| `vault.maxDailyLoss()`                     | Matches configured threshold |
+| `vault.maxXcmRefTime()`                    | Matches configured limit     |
+| `vault.maxXcmProofSize()`                  | Matches configured limit     |
+| `vault.totalAssets()`                      | `0`                          |
+| `vault.totalSupply()`                      | `0`                          |
+| `vault.paused()`                           | `false`                      |
+| `vault.emergencyMode()`                    | `false`                      |
 
 If any check fails, the script reverts with a descriptive error message.
 
@@ -356,13 +365,13 @@ forge script script/Deploy.s.sol:DeployWithSetup \
 2. Grants `STRATEGIST_ROLE` to the configured strategist address
 3. Whitelists five initial parachains:
 
-| Parachain | ID |
-|-----------|------|
-| Astar | `2006` |
-| Moonbeam | `2004` |
-| Acala | `2000` |
-| HydraDX | `2034` |
-| Bifrost | `2030` |
+| Parachain | ID     |
+| --------- | ------ |
+| Astar     | `2006` |
+| Moonbeam  | `2004` |
+| Acala     | `2000` |
+| HydraDX   | `2034` |
+| Bifrost   | `2030` |
 
 #### Remaining Manual Steps
 
@@ -378,13 +387,13 @@ Deploys the `CrossChainRouter` and `BifrostAdapter` on the Polkadot Hub, then wi
 
 #### Environment Variables
 
-| Variable | Required | Description |
-|----------|----------|-------------|
-| `PRIVATE_KEY` | Yes | Deployer's private key |
-| `UNDERLYING_ASSET` | Yes | ERC-20 token address on the hub |
-| `ISMP_HOST` | Yes | Hyperbridge ISMP host contract on the hub |
-| `MASTER_VAULT` | Yes | Already-deployed `ObidotVault` address |
-| `ADMIN_ADDRESS` | Yes | Admin that receives roles on the new contracts |
+| Variable           | Required | Description                                    |
+| ------------------ | -------- | ---------------------------------------------- |
+| `PRIVATE_KEY`      | Yes      | Deployer's private key                         |
+| `UNDERLYING_ASSET` | Yes      | ERC-20 token address on the hub                |
+| `ISMP_HOST`        | Yes      | Hyperbridge ISMP host contract on the hub      |
+| `MASTER_VAULT`     | Yes      | Already-deployed `ObidotVault` address         |
+| `ADMIN_ADDRESS`    | Yes      | Admin that receives roles on the new contracts |
 
 ```bash
 export PRIVATE_KEY=<deployer-private-key>
@@ -407,16 +416,16 @@ forge script script/DeployCrossChain.s.sol:DeployCrossChain \
 4. Whitelists the Bifrost parachain (ID `2030`)
 5. Runs post-deployment verification:
 
-| Check | Expected |
-|-------|----------|
-| `router.asset()` | Matches `UNDERLYING_ASSET` |
-| `router.ismpHost()` | Matches `ISMP_HOST` |
-| `router.masterVault()` | Matches `MASTER_VAULT` |
-| `router.hasRole(DEFAULT_ADMIN_ROLE, admin)` | `true` |
-| `router.hasRole(VAULT_ROLE, masterVault)` | `true` |
-| `router.paused()` | `false` |
-| `bifrostAdapter.hasRole(DEFAULT_ADMIN_ROLE, admin)` | `true` |
-| `bifrostAdapter.hasRole(STRATEGY_EXECUTOR_ROLE, masterVault)` | `true` |
+| Check                                                         | Expected                   |
+| ------------------------------------------------------------- | -------------------------- |
+| `router.asset()`                                              | Matches `UNDERLYING_ASSET` |
+| `router.ismpHost()`                                           | Matches `ISMP_HOST`        |
+| `router.masterVault()`                                        | Matches `MASTER_VAULT`     |
+| `router.hasRole(DEFAULT_ADMIN_ROLE, admin)`                   | `true`                     |
+| `router.hasRole(VAULT_ROLE, masterVault)`                     | `true`                     |
+| `router.paused()`                                             | `false`                    |
+| `bifrostAdapter.hasRole(DEFAULT_ADMIN_ROLE, admin)`           | `true`                     |
+| `bifrostAdapter.hasRole(STRATEGY_EXECUTOR_ROLE, masterVault)` | `true`                     |
 
 ### `DeploySatelliteVault` — Satellite EVM Chain
 
@@ -424,17 +433,17 @@ Deploys an `ObidotVaultEVM` on Ethereum, Arbitrum, Optimism, Base, or any other 
 
 #### Environment Variables
 
-| Variable | Required | Default | Description |
-|----------|----------|---------|-------------|
-| `PRIVATE_KEY` | Yes | — | Deployer's private key |
-| `UNDERLYING_ASSET` | Yes | — | ERC-20 address on the target chain |
-| `ISMP_HOST` | Yes | — | Hyperbridge ISMP host on the target chain |
-| `HUB_ROUTER_MODULE` | Yes | — | `abi.encode(routerAddress)` of the hub router |
-| `CHAIN_IDENTIFIER` | Yes | — | Human-readable chain ID (e.g. `"ETHEREUM"`) |
-| `ADMIN_ADDRESS` | Yes | — | Admin address |
-| `HUB_CHAIN_ID` | No | `"POLKADOT-HUB"` | ISMP chain identifier for the hub |
-| `DEPOSIT_CAP` | No | `1_000_000 ether` | Maximum deposits |
-| `MAX_SYNC_AGE` | No | `3600` (1 hour) | Max age (seconds) before synced state is stale |
+| Variable            | Required | Default           | Description                                    |
+| ------------------- | -------- | ----------------- | ---------------------------------------------- |
+| `PRIVATE_KEY`       | Yes      | —                 | Deployer's private key                         |
+| `UNDERLYING_ASSET`  | Yes      | —                 | ERC-20 address on the target chain             |
+| `ISMP_HOST`         | Yes      | —                 | Hyperbridge ISMP host on the target chain      |
+| `HUB_ROUTER_MODULE` | Yes      | —                 | `abi.encode(routerAddress)` of the hub router  |
+| `CHAIN_IDENTIFIER`  | Yes      | —                 | Human-readable chain ID (e.g. `"ETHEREUM"`)    |
+| `ADMIN_ADDRESS`     | Yes      | —                 | Admin address                                  |
+| `HUB_CHAIN_ID`      | No       | `"POLKADOT-HUB"`  | ISMP chain identifier for the hub              |
+| `DEPOSIT_CAP`       | No       | `1_000_000 ether` | Maximum deposits                               |
+| `MAX_SYNC_AGE`      | No       | `3600` (1 hour)   | Max age (seconds) before synced state is stale |
 
 ```bash
 export PRIVATE_KEY=<deployer-private-key>
@@ -453,15 +462,15 @@ forge script script/DeployCrossChain.s.sol:DeploySatelliteVault \
 
 #### Post-Deploy Verification
 
-| Check | Expected |
-|-------|----------|
-| `satellite.asset()` | Matches `UNDERLYING_ASSET` |
-| `satellite.ismpHost()` | Matches `ISMP_HOST` |
-| `satellite.depositCap()` | Matches configured cap |
-| `satellite.maxSyncAge()` | Matches configured age |
-| `satellite.hasRole(DEFAULT_ADMIN_ROLE, admin)` | `true` |
-| `satellite.paused()` | `false` |
-| `satellite.emergencyMode()` | `false` |
+| Check                                          | Expected                   |
+| ---------------------------------------------- | -------------------------- |
+| `satellite.asset()`                            | Matches `UNDERLYING_ASSET` |
+| `satellite.ismpHost()`                         | Matches `ISMP_HOST`        |
+| `satellite.depositCap()`                       | Matches configured cap     |
+| `satellite.maxSyncAge()`                       | Matches configured age     |
+| `satellite.hasRole(DEFAULT_ADMIN_ROLE, admin)` | `true`                     |
+| `satellite.paused()`                           | `false`                    |
+| `satellite.emergencyMode()`                    | `false`                    |
 
 ### `RegisterSatellitePeers` — Peer Registration
 
@@ -469,14 +478,14 @@ After deploying all satellites, run this on the **hub** to register each satelli
 
 #### Environment Variables
 
-| Variable | Required | Default | Description |
-|----------|----------|---------|-------------|
-| `PRIVATE_KEY` | Yes | — | Admin private key (must hold `DEFAULT_ADMIN_ROLE` on router) |
-| `ROUTER_ADDRESS` | Yes | — | `CrossChainRouter` address on the hub |
-| `ETH_SATELLITE_MODULE` | No | `address(0)` | `ObidotVaultEVM` address on Ethereum (skip if `0`) |
-| `ARB_SATELLITE_MODULE` | No | `address(0)` | `ObidotVaultEVM` address on Arbitrum |
-| `OP_SATELLITE_MODULE` | No | `address(0)` | `ObidotVaultEVM` address on Optimism |
-| `BASE_SATELLITE_MODULE` | No | `address(0)` | `ObidotVaultEVM` address on Base |
+| Variable                | Required | Default      | Description                                                  |
+| ----------------------- | -------- | ------------ | ------------------------------------------------------------ |
+| `PRIVATE_KEY`           | Yes      | —            | Admin private key (must hold `DEFAULT_ADMIN_ROLE` on router) |
+| `ROUTER_ADDRESS`        | Yes      | —            | `CrossChainRouter` address on the hub                        |
+| `ETH_SATELLITE_MODULE`  | No       | `address(0)` | `ObidotVaultEVM` address on Ethereum (skip if `0`)           |
+| `ARB_SATELLITE_MODULE`  | No       | `address(0)` | `ObidotVaultEVM` address on Arbitrum                         |
+| `OP_SATELLITE_MODULE`   | No       | `address(0)` | `ObidotVaultEVM` address on Optimism                         |
+| `BASE_SATELLITE_MODULE` | No       | `address(0)` | `ObidotVaultEVM` address on Base                             |
 
 ```bash
 export PRIVATE_KEY=<admin-private-key>

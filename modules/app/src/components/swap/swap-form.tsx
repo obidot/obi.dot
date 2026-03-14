@@ -74,7 +74,7 @@ export function SwapForm() {
   const routerPaused = routes?.routerPaused ?? false;
   const routerAddress = CONTRACTS.SWAP_ROUTER;
   const routerReady =
-    routerDeployed && !routerPaused && routerAddress !== ZERO_ADDRESS;
+    routerDeployed && !routerPaused && (routerAddress as string) !== ZERO_ADDRESS;
 
   // ── Quote ───────────────────────────────────────────────────────────────
   const parsedAmountIn = useMemo(() => {
@@ -177,8 +177,8 @@ export function SwapForm() {
             pool: quote.pool as Address,
             tokenIn: tokenIn.address as Address,
             tokenOut: tokenOut.address as Address,
-            feeBps: quote.feeBps,
-            data: "0x" as `0x${string}`,
+            feeBps: BigInt(quote.feeBps),
+            data: "0x0000000000000000000000000000000000000000000000000000000000000000" as `0x${string}`,
           },
           amountIn: BigInt(parsedAmountIn),
           minAmountOut: minAmountOut,
@@ -218,7 +218,7 @@ export function SwapForm() {
   const sourceLabel = quote ? POOL_TYPE_LABELS[quote.source as PoolType] : "";
 
   // ── Not-deployed banner ─────────────────────────────────────────────────
-  const showNotDeployed = routerAddress === ZERO_ADDRESS;
+  const showNotDeployed = (routerAddress as string) === ZERO_ADDRESS;
 
   return (
     <div className="p-4">

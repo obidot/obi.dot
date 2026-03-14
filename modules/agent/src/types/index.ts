@@ -471,6 +471,14 @@ export interface BifrostYield extends ProtocolYield {
 /**
  * Aggregated market data passed to the LLM for decision-making.
  */
+/** Live swap quote from the DEX aggregator for a specific token pair. */
+export interface SwapQuoteSnapshot {
+  amountIn: string;
+  amountOut: string;
+  feeBps: string;
+  source: number; // ISwapRouter.PoolType
+}
+
 export interface MarketSnapshot {
   /** APY data for all tracked protocols. */
   yields: ProtocolYield[];
@@ -480,6 +488,14 @@ export interface MarketSnapshot {
   vaultState: VaultState;
   /** Cross-chain vault state (if available). */
   crossChainState?: CrossChainVaultState;
+  /**
+   * Live SwapQuoter snapshots for key pairs.
+   * Populated when SwapQuoter is deployed and router is not paused.
+   */
+  swapQuotes?: {
+    dotToUsdc?: SwapQuoteSnapshot;
+    [pair: string]: SwapQuoteSnapshot | undefined;
+  };
   /** ISO timestamp of this snapshot. */
   timestamp: string;
 }

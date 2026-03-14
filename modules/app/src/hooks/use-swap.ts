@@ -119,21 +119,22 @@ export function useSwapRoutes() {
   ] as const;
 
   const result = useReadContracts({
-    contracts,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    contracts: contracts as any,
     query: { staleTime: 30_000 },
   });
 
   const data: SwapRoutesResponse | undefined = result.data
     ? (() => {
-        const routerPaused =
-          (result.data[0].result as boolean | undefined) ?? false;
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const anyData = result.data as any[];
+        const routerPaused = (anyData[0]?.result as boolean | undefined) ?? false;
         const adapters: PoolAdapterInfo[] = ADAPTER_REGISTRY.map(
           ({ poolType, adapter }, i) => ({
             poolType,
             label: POOL_TYPE_LABELS[poolType],
             adapter,
-            deployed:
-              (result.data[i + 1].result as boolean | undefined) ?? false,
+            deployed: (anyData[i + 1]?.result as boolean | undefined) ?? false,
           }),
         );
         return {

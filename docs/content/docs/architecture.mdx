@@ -18,7 +18,7 @@ Depositors ──► ObidotVault (ERC-4626) ──► XCM Precompile ──► P
                   ├── Remote Asset Accounting      │           │
                   └── CrossChainRouter ◄───────────┘           ▼
                          │                              Bifrost (2030)
-AI Strategist ─── signs StrategyIntent ────────┘        SLP / DEX / Farm / SALP
+AI Strategist ─── signs UniversalIntent ───────┘        SLP / DEX / Farm / SALP
                          │
 Keeper ─────── reports outcome (P&L) ──────────┘
                          │
@@ -31,23 +31,21 @@ Keeper ─────── reports outcome (P&L) ─────────�
 
 Off-Chain Layer
 ──────────────────────────────────────────────────────────
-AI Agent (LangChain + GPT-4o)
-  ├── Phase 1: Perceive   — vault state, balances, oracle prices
-  ├── Phase 2: Reason     — LLM decision (deploy / rebalance / hold)
-  ├── Phase 3: Act        — sign + submit StrategyIntent on-chain
-  └── Phase 4: Record     — write outcome to StrategyStore, emit EventBus
+obi.index — GraphQL Indexer (port 4350)
+  ├── Blockscout poller (60s) — fetches logs for all contracts
+  ├── Event handlers — vault, oracle, router → PostgreSQL via Prisma
+  ├── GraphQL API — queries + real-time subscriptions (graphql-ws)
+  └── AI Agent sub-process
+        ├── Perceive   — reads live vault state + oracle prices via RPC
+        ├── Reason     — LLM decision (deploy / rebalance / hold)
+        ├── Act        — signs + submits UniversalIntent / StrategyIntent on-chain
+        └── Record     — Prisma writes indexed by strategyId
 
-Fastify API (port 3001) ──► WebSocket /ws ──► Next.js Dashboard
-  ├── REST: /api/vault, /api/yields, /api/strategies, /api/crosschain, /api/agent
-  └── Telegram Bot (optional operator notifications)
-
-Next.js Dashboard (port 3000)
-  ├── /           — Vault overview, QuickStats, PnL chart
-  ├── /yields     — Protocol yield grid
-  ├── /strategies — Strategy table with detail side panel
-  ├── /crosschain — Chain topology map, satellite table
-  ├── /agent      — Agent status, decision feed
-  └── /insights   — Financial Intelligence Hub (AI-powered analytics)
+Next.js Dashboard (port 3000) — obidot/app
+  ├── /           — Vault overview, deposits, swaps
+  ├── /strategies — Strategy table + intent history
+  ├── /crosschain — Chain topology, satellite table
+  └── /agent      — Agent status, decision feed
 ```
 
 ## Actor Model
@@ -121,9 +119,9 @@ Anyone can call `executeStrategy()` with a valid signed intent. This permissionl
 
 ### Strategy Execution Flow (AI Agent Sub-Feature)
 
-1. AI strategist constructs a `StrategyIntent` with target parachain, protocol, amount, and XCM payload
+1. AI strategist constructs a `UniversalIntent` with target destination (XCM parachain or EVM chain via Hyperbridge), amount, and encoded calldata
 2. Strategist signs the intent using EIP-712 typed data
-3. Relayer submits `executeStrategy(intent, signature)` to the vault
+3. Relayer submits `executeIntent(intent, signature)` to the vault
 4. Vault runs the full validation pipeline:
    - Deadline check
    - Basic validation (non-zero amount, asset match, slippage bounds)
@@ -242,7 +240,7 @@ src/
 ```
 test/
 ├── Abstractions.t.sol          # Intent / executor / oracle / asset unit tests
-├── ObidotVault.t.sol           # Unit + fuzz + invariant tests (631 tests, 97 suites)
+├── ObidotVault.t.sol           # Unit + fuzz + invariant tests (87 K, largest file)
 ├── OracleRegistry.t.sol        # Oracle registry tests
 ├── CrossChain.t.sol            # Satellite + adapter tests
 ├── CrossChainCodec.t.sol       # CrossChainCodec library tests
@@ -252,7 +250,9 @@ test/
 ├── CrossChainLifecycle.t.sol   # Cross-chain lifecycle (9 tests)
 ├── SwapRouter.t.sol            # SwapRouter unit + fuzz tests (42 tests)
 ├── SwapQuoter.t.sol            # SwapQuoter unit tests (20 tests)
-└── VaultSwapIntegration.t.sol  # End-to-end vault → router → pool tests (15 tests)
+├── VaultSwapIntegration.t.sol  # End-to-end vault → router → pool tests (15 tests)
+├── IntentSolver.t.sol          # Hyperbridge intent execution tests (16 tests)
+└── PoolAdapters.t.sol          # UniswapV2PoolAdapter + MockBridgeAdapter tests (46 tests)
 ```
 
 ### Deployment Scripts (`script/`)
@@ -266,40 +266,45 @@ script/
 └── Demo.s.sol                  # Full lifecycle demo script
 ```
 
-### Off-Chain Agent (`modules/agent/`)
+### Off-Chain Indexer (`obi.index`)
 
 ```
-modules/agent/src/
-├── main.ts                        # Entry point (agent loop + API server)
-├── agent/
-│   ├── loop.ts                    # 4-phase autonomous loop
-│   ├── systemPrompt.ts            # LLM system prompt
-│   └── tools.ts                   # 6 LangChain tools
-├── api/
-│   ├── server.ts                  # Fastify server (port 3001, CORS open)
-│   └── routes/
-│       ├── vault.ts               # GET /api/vault
-│       ├── yields.ts              # GET /api/yields
-│       ├── strategies.ts          # GET /api/strategies, GET /api/strategies/:id
-│       ├── crosschain.ts          # GET /api/crosschain
-│       └── agent.ts               # GET /api/agent, POST /api/agent/trigger
-├── config/
-│   ├── constants.ts               # Addresses, ABIs, protocols
-│   ├── env.ts                     # Environment variables
-│   └── oracle.config.ts           # TWAP oracle source configuration
-├── services/
-│   ├── yield.service.ts           # Yield monitoring (DeFiLlama + oscillator)
-│   ├── crosschain.service.ts      # Multi-chain state aggregation
-│   ├── signer.service.ts          # EIP-712 signing + execution
-│   ├── strategy-store.service.ts  # In-memory strategy records + decision log
-│   ├── event-bus.service.ts       # Node EventEmitter → WebSocket relay
-│   ├── oracle.service.ts          # Multi-source TWAP price aggregation
-│   └── price-aggregator.service.ts # Pyth Hermes, CoinGecko, Binance, Subsquid
-├── telegram/
-│   └── bot.ts                     # Telegram bot (GPT-4o, 6 tools, /start)
-└── types/
-    ├── index.ts                   # Schemas, types, decision union
-    └── oracle.types.ts            # Oracle source types
+obi.index/
+├── src/
+│   ├── config/
+│   │   ├── contracts.ts           # Canonical contract addresses (all deployed phases)
+│   │   └── constants.ts           # Chain ID, RPC, poll interval, agent slippage
+│   ├── graphql/
+│   │   ├── typeDefs.ts            # GraphQL schema (queries + Subscription type)
+│   │   ├── resolvers.ts           # Query + Subscription resolvers (graphql-ws)
+│   │   └── pubsub.ts              # ObiPubSub — async iterator pub/sub (topic-keyed)
+│   ├── sync/
+│   │   ├── blockscout.ts          # Blockscout log poller (paginated, fromBlock cursor)
+│   │   ├── decoder.ts             # ABI log decoder (ObidotVault, SwapRouter, KeeperOracle)
+│   │   └── handlers/
+│   │       ├── vault.ts           # Deposit, Withdraw, StrategyExecuted, StrategyOutcomeReported, IntentExecuted
+│   │       ├── oracle.ts          # PriceUpdated, FeedSet → publishes ORACLE_UPDATED
+│   │       └── router.ts          # Swapped → publishes SWAP_EXECUTED
+│   ├── agent/
+│   │   ├── orchestrator.ts        # Main loop: health check → evaluate → sign → execute
+│   │   ├── strategy/
+│   │   │   ├── evaluator.ts       # Vault state health check
+│   │   │   └── arbitrage.ts       # Arbitrage opportunity detector
+│   │   ├── intent/
+│   │   │   ├── builder.ts         # UniversalIntent + StrategyIntent structs (mirrors IntentTypes.sol)
+│   │   │   └── signer.ts          # EIP-712 sign (signUniversalIntent, signStrategyIntent)
+│   │   ├── executor/
+│   │   │   └── transaction.ts     # Submits signed intents on-chain via viem
+│   │   └── llm/
+│   │       ├── analyzer.ts        # LLM decision-making (OpenRouter / OpenAI / Anthropic)
+│   │       └── provider.ts        # LLM provider factory
+│   └── server.ts                  # Express + WebSocketServer + Apollo (port 4350)
+├── prisma/schema.prisma           # PostgreSQL schema (Deposit, Withdrawal, StrategyExecution, …)
+└── test/
+    ├── pubsub.test.ts             # 12 tests — ObiPubSub delivery, isolation, cleanup
+    ├── decoder.test.ts            # 8 tests — ABI log decoding
+    ├── handlers.test.ts           # 9 tests — vault/oracle/router handlers (mock Prisma)
+    └── blockscout.test.ts         # 5 tests — Blockscout poller (mock fetch)
 ```
 
 ### Dashboard App (`modules/app/`)
@@ -314,18 +319,10 @@ modules/app/src/
 │   ├── strategies/page.tsx        # /strategies
 │   ├── crosschain/page.tsx        # /crosschain
 │   ├── agent/page.tsx             # /agent
-│   ├── insights/page.tsx          # /insights (Financial Intelligence Hub)
-│   └── api/[...path]/route.ts     # Proxy → http://localhost:3001/api/*
+│   └── api/[...path]/route.ts     # Proxy → GraphQL / obi.index
 ├── components/                    # All UI components per page
-├── hooks/                         # useVaultData, useYields, useStrategies,
-│                                  # useAgentStatus, useWebSocket
-├── lib/
-│   ├── api.ts                     # Typed API client
-│   ├── format.ts                  # Number/date formatters
-│   ├── constants.ts               # Contract addresses, ABIs
-│   ├── yield-opportunity-score.ts # Opportunity scoring engine
-│   ├── risk-analyzer.ts           # Risk matrix computation engine
-│   └── position-simulator.ts      # Position simulation engine
-└── types/
-    └── index.ts                   # Shared TypeScript types
+├── hooks/                         # useVaultData, useStrategies, useSubscription
+└── lib/
+    ├── api.ts                     # Typed GraphQL client (obi-kit)
+    └── constants.ts               # Contract addresses, ABIs
 ```
