@@ -1,17 +1,47 @@
 "use client";
 
+import { useMemo } from "react";
 import { useStrategies } from "@/hooks/use-strategies";
 import { StrategyTable } from "@/components/strategies/strategy-table";
 import { PanelSkeleton } from "@/components/ui/skeleton";
 import { PageHero, HeroStat } from "@/components/ui/page-hero";
-import { Activity, TrendingUp, CheckCircle2, XCircle, RefreshCw } from "lucide-react";
+import {
+  Activity,
+  TrendingUp,
+  CheckCircle2,
+  XCircle,
+  RefreshCw,
+} from "lucide-react";
+import type { StrategyRecord } from "@/types";
+import type { IndexedStrategyExecution } from "@/lib/graphql";
+
+/** Map obi.index IndexedStrategyExecution → the StrategyRecord shape used by StrategyTable. */
+function toStrategyRecord(s: IndexedStrategyExecution): StrategyRecord {
+  return {
+    id: s.id,
+    action: s.destination, // destination = "Native"/"Hyper"
+    target: s.protocol,
+    amount: s.amount,
+    reasoning: `${s.targetChain} via ${s.executor}`,
+    status: s.success ? "executed" : "failed",
+    timestamp: new Date(s.timestamp).getTime(),
+    txHash: s.txHash,
+  };
+}
 
 export default function StrategiesPage() {
-  const { data: strategies, isLoading, error, refetch } = useStrategies();
+  const { data: indexed, isLoading, error, refetch } = useStrategies();
 
-  const executed = strategies?.filter((s) => s.status === "executed").length ?? 0;
-  const failed = strategies?.filter((s) => s.status === "failed" || s.status === "timeout").length ?? 0;
-  const total = strategies?.length ?? 0;
+  const strategies: StrategyRecord[] = useMemo(
+    () => (indexed ?? []).map(toStrategyRecord),
+    [indexed],
+  );
+
+  const executed = strategies.filter((s) => s.status === "executed").length;
+  const failed = strategies.filter(
+    (s) => s.status === "failed" || s.status === "timeout",
+  ).length;
+  const total = strategies.length;
   const successRate = total > 0 ? ((executed / total) * 100).toFixed(1) : "0.0";
 
   return (
@@ -50,7 +80,9 @@ export default function StrategiesPage() {
         <PanelSkeleton rows={8} />
       ) : error ? (
         <div className="panel rounded-lg p-8 text-center">
-          <p className="font-mono text-sm text-danger">Failed to load strategies</p>
+          <p className="font-mono text-sm text-danger">
+            Failed to load strategies
+          </p>
           <button
             type="button"
             onClick={() => refetch()}
@@ -61,7 +93,7 @@ export default function StrategiesPage() {
           </button>
         </div>
       ) : (
-        <StrategyTable strategies={strategies ?? []} />
+        <StrategyTable strategies={strategies} />
       )}
     </div>
   );

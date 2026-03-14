@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useCallback } from "react";
+import { useState, useMemo, useCallback, useEffect } from "react";
 import {
   useAccount,
   useBalance,
@@ -46,6 +46,18 @@ const SLIPPAGE_OPTIONS = [
 ];
 
 const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
+const ZERO_BYTES32 =
+  "0x0000000000000000000000000000000000000000000000000000000000000000" as `0x${string}`;
+
+// ── Swap step state machine ────────────────────────────────────────────────
+// idle → approving → approve-confirming → swapping → swap-confirming → done
+type SwapStep =
+  | "idle"
+  | "approving"
+  | "approve-confirming"
+  | "swapping"
+  | "swap-confirming"
+  | "done";
 
 // ── Component ─────────────────────────────────────────────────────────────
 
@@ -56,6 +68,7 @@ export function SwapForm() {
   const [amountIn, setAmountIn] = useState("");
   const [slippageBps, setSlippageBps] = useState(200); // 2% default (matches SlippageGuard)
   const [showSettings, setShowSettings] = useState(false);
+  const [swapStep, setSwapStep] = useState<SwapStep>("idle");
 
   const tokenIn = TOKENS[tokenInIdx];
   const tokenOut = TOKENS[tokenOutIdx];
@@ -74,7 +87,9 @@ export function SwapForm() {
   const routerPaused = routes?.routerPaused ?? false;
   const routerAddress = CONTRACTS.SWAP_ROUTER;
   const routerReady =
-    routerDeployed && !routerPaused && (routerAddress as string) !== ZERO_ADDRESS;
+    routerDeployed &&
+    !routerPaused &&
+    (routerAddress as string) !== ZERO_ADDRESS;
 
   // ── Quote ───────────────────────────────────────────────────────────────
   const parsedAmountIn = useMemo(() => {
@@ -108,29 +123,91 @@ export function SwapForm() {
   // ── Token approval ──────────────────────────────────────────────────────
   const {
     data: approveTxHash,
-    writeContract: approve,
-    isPending: approving,
+    writeContract: writeApprove,
+    isPending: approveWalletPending,
+    error: approveError,
   } = useWriteContract();
 
-  const { isLoading: approveConfirming } = useWaitForTransactionReceipt({
-    hash: approveTxHash,
-  });
+  const { isLoading: approveConfirming, isSuccess: approveConfirmed } =
+    useWaitForTransactionReceipt({ hash: approveTxHash });
 
   // ── Swap execution ─────────────────────────────────────────────────────
   const {
     data: swapTxHash,
-    writeContract: executeSwap,
-    isPending: swapping,
+    writeContract: writeSwap,
+    isPending: swapWalletPending,
     error: swapError,
   } = useWriteContract();
 
   const { isLoading: swapConfirming, isSuccess: swapConfirmed } =
-    useWaitForTransactionReceipt({
-      hash: swapTxHash,
-    });
+    useWaitForTransactionReceipt({ hash: swapTxHash });
 
-  const isExecuting =
-    approving || approveConfirming || swapping || swapConfirming;
+  // ── Step progression ───────────────────────────────────────────────────
+  // When the approval is confirmed on-chain, fire the actual swap.
+  useEffect(() => {
+    if (
+      swapStep === "approve-confirming" &&
+      approveConfirmed &&
+      quote &&
+      parsedAmountIn &&
+      address
+    ) {
+      setSwapStep("swapping");
+      const deadline = BigInt(Math.floor(Date.now() / 1000) + 300); // 5 min
+      // Use swapFlat() — flat args, PolkaVM-compatible (no nested struct calldata)
+      writeSwap({
+        address: routerAddress as Address,
+        abi: SWAP_ROUTER_ABI,
+        functionName: "swapFlat",
+        args: [
+          quote.source, // poolType: uint8
+          quote.pool as Address, // pool: address
+          tokenIn.address as Address, // tokenIn: address
+          tokenOut.address as Address, // tokenOut: address
+          BigInt(quote.feeBps), // feeBps: uint256
+          ZERO_BYTES32, // data: bytes32
+          BigInt(parsedAmountIn), // amountIn: uint256
+          minAmountOut, // minAmountOut: uint256
+          address, // to: address
+          deadline, // deadline: uint256
+        ],
+      });
+    }
+  }, [
+    swapStep,
+    approveConfirmed,
+    quote,
+    parsedAmountIn,
+    address,
+    routerAddress,
+    tokenIn,
+    tokenOut,
+    minAmountOut,
+    writeSwap,
+  ]);
+
+  // Track swap wallet-pending → confirming → done transitions
+  useEffect(() => {
+    if (swapStep === "swapping" && swapWalletPending) {
+      // wallet prompt accepted — tx is in mempool, wait for receipt
+      setSwapStep("swap-confirming");
+    }
+  }, [swapStep, swapWalletPending]);
+
+  useEffect(() => {
+    if (swapStep === "swap-confirming" && swapConfirmed) {
+      setSwapStep("done");
+    }
+  }, [swapStep, swapConfirmed]);
+
+  // Reset step on errors
+  useEffect(() => {
+    if (approveError || swapError) {
+      setSwapStep("idle");
+    }
+  }, [approveError, swapError]);
+
+  const isExecuting = swapStep !== "idle" && swapStep !== "done";
 
   // ── Handlers ────────────────────────────────────────────────────────────
   const handleAmountChange = (raw: string) => {
@@ -155,50 +232,38 @@ export function SwapForm() {
 
   const handleSwap = useCallback(() => {
     if (!routerReady || !quote || !parsedAmountIn || !address) return;
+    if (swapStep !== "idle" && swapStep !== "done") return;
 
-    // Step 1: Approve token spend
-    approve({
+    setSwapStep("approving");
+    // Step 1: approve router to spend tokenIn
+    writeApprove({
       address: tokenIn.address as Address,
       abi: ERC20_APPROVE_ABI,
       functionName: "approve",
       args: [routerAddress as Address, BigInt(parsedAmountIn)],
-    });
-
-    // Step 2: Execute swap (after approval — simplified; in production use multicall or sequential)
-    const deadline = BigInt(Math.floor(Date.now() / 1000) + 300); // 5 min
-    executeSwap({
-      address: routerAddress as Address,
-      abi: SWAP_ROUTER_ABI,
-      functionName: "swap",
-      args: [
-        {
-          route: {
-            poolType: quote.source,
-            pool: quote.pool as Address,
-            tokenIn: tokenIn.address as Address,
-            tokenOut: tokenOut.address as Address,
-            feeBps: BigInt(quote.feeBps),
-            data: "0x0000000000000000000000000000000000000000000000000000000000000000" as `0x${string}`,
-          },
-          amountIn: BigInt(parsedAmountIn),
-          minAmountOut: minAmountOut,
-          to: address,
-          deadline,
-        },
-      ],
     });
   }, [
     routerReady,
     quote,
     parsedAmountIn,
     address,
-    approve,
-    executeSwap,
+    swapStep,
+    writeApprove,
     tokenIn,
-    tokenOut,
     routerAddress,
-    minAmountOut,
   ]);
+
+  // After wallet confirms the approve tx, advance to approve-confirming state
+  useEffect(() => {
+    if (swapStep === "approving" && approveWalletPending) {
+      setSwapStep("approve-confirming");
+    }
+  }, [swapStep, approveWalletPending]);
+
+  // Reset to idle when user changes tokens/amount so they can re-swap
+  useEffect(() => {
+    setSwapStep("idle");
+  }, [tokenInIdx, tokenOutIdx, amountIn]);
 
   // ── Derived display values ──────────────────────────────────────────────
   const displayBalance =
@@ -219,6 +284,28 @@ export function SwapForm() {
 
   // ── Not-deployed banner ─────────────────────────────────────────────────
   const showNotDeployed = (routerAddress as string) === ZERO_ADDRESS;
+
+  // ── Button label ────────────────────────────────────────────────────────
+  const buttonLabel = () => {
+    if (!isConnected) return "CONNECT WALLET";
+    if (!routerReady) return "ROUTER UNAVAILABLE";
+    if (!parsedAmountIn) return "ENTER AMOUNT";
+    if (!quote) return "FETCHING QUOTE...";
+    switch (swapStep) {
+      case "approving":
+        return "APPROVING...";
+      case "approve-confirming":
+        return "CONFIRMING APPROVAL...";
+      case "swapping":
+        return "SWAPPING...";
+      case "swap-confirming":
+        return "CONFIRMING SWAP...";
+      case "done":
+        return "SWAP AGAIN";
+      default:
+        return `SWAP ${tokenIn.symbol} \u2192 ${tokenOut.symbol}`;
+    }
+  };
 
   return (
     <div className="p-4">
@@ -387,7 +474,7 @@ export function SwapForm() {
       )}
 
       {/* Swap confirmation */}
-      {swapConfirmed && swapTxHash && (
+      {swapStep === "done" && swapTxHash && (
         <div className="mb-3 rounded-md border border-primary/30 bg-primary/5 px-3 py-2">
           <p className="text-[11px] text-primary font-medium">
             Swap confirmed!
@@ -398,11 +485,13 @@ export function SwapForm() {
         </div>
       )}
 
-      {/* Swap error */}
-      {swapError && (
+      {/* Approval / swap errors */}
+      {(approveError || swapError) && (
         <div className="mb-3 rounded-md border border-danger/30 bg-danger/5 px-3 py-2">
           <p className="text-[11px] text-danger">
-            Swap failed — {swapError.message.slice(0, 100)}
+            {approveError
+              ? `Approval failed — ${approveError.message.slice(0, 100)}`
+              : `Swap failed — ${swapError?.message.slice(0, 100)}`}
           </p>
         </div>
       )}
@@ -421,17 +510,7 @@ export function SwapForm() {
         className="btn-primary"
       >
         {isExecuting && <Loader2 className="h-4 w-4 animate-spin" />}
-        {!isConnected
-          ? "CONNECT WALLET"
-          : !routerReady
-            ? "ROUTER UNAVAILABLE"
-            : !parsedAmountIn
-              ? "ENTER AMOUNT"
-              : !quote
-                ? "FETCHING QUOTE..."
-                : isExecuting
-                  ? "SWAPPING..."
-                  : `SWAP ${tokenIn.symbol} → ${tokenOut.symbol}`}
+        {buttonLabel()}
       </button>
 
       {!isConnected && (

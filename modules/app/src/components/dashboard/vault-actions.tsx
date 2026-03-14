@@ -1,12 +1,30 @@
 "use client";
 
-import { useState } from "react";
-import { useAccount, useBalance } from "wagmi";
+import { useState, useEffect } from "react";
+import {
+  useAccount,
+  useBalance,
+  useWriteContract,
+  useWaitForTransactionReceipt,
+} from "wagmi";
+import { parseUnits, type Address } from "viem";
 import { cn, formatTokenAmount } from "@/lib/format";
 import { Loader2 } from "lucide-react";
-import { CONTRACTS } from "@/lib/constants";
+import { CONTRACTS, VAULT_ABI, ERC20_APPROVE_ABI } from "@/lib/constants";
 
 type Action = "deposit" | "withdraw";
+
+// Deposit flow: approve(VAULT, amount) on TestDOT → vault.deposit(amount, receiver)
+// Withdraw flow: vault.withdraw(assets, receiver, owner) directly (no approval needed)
+type DepositStep =
+  | "idle"
+  | "approving"
+  | "approve-confirming"
+  | "depositing"
+  | "deposit-confirming"
+  | "done";
+
+type WithdrawStep = "idle" | "withdrawing" | "withdraw-confirming" | "done";
 
 const PCT_OPTIONS = [
   { label: "25%", value: 0.25 },
@@ -15,29 +33,136 @@ const PCT_OPTIONS = [
   { label: "100%", value: 1.0 },
 ];
 
+const VAULT_ADDRESS = CONTRACTS.VAULT as Address;
+const TEST_DOT_ADDRESS = CONTRACTS.TEST_DOT as Address;
+const TOKEN_DECIMALS = 18;
+
 export function VaultActions() {
   const [action, setAction] = useState<Action>("deposit");
   const [amount, setAmount] = useState("");
-  const [loading, setLoading] = useState(false);
+
+  // ── Step state machines ─────────────────────────────────────────────────
+  const [depositStep, setDepositStep] = useState<DepositStep>("idle");
+  const [withdrawStep, setWithdrawStep] = useState<WithdrawStep>("idle");
 
   const { address, isConnected } = useAccount();
   const { data: balanceData } = useBalance({
     address,
-    token: CONTRACTS.TEST_DOT as `0x${string}`,
+    token: TEST_DOT_ADDRESS,
     query: { enabled: isConnected && !!address },
   });
 
-  // Formatted balance as a plain number for percentage math
-  const balanceFormatted = balanceData
-    ? Number(formatTokenAmount(balanceData.value.toString(), balanceData.decimals, 6))
-    : 0;
+  // ── Approval (deposit flow only) ────────────────────────────────────────
+  const {
+    data: approveTxHash,
+    writeContract: writeApprove,
+    isPending: approveWalletPending,
+    error: approveError,
+  } = useWriteContract();
 
-  const handleAmountChange = (raw: string) => {
-    // Allow only digits and a single decimal point
-    if (raw === "" || /^\d*\.?\d*$/.test(raw)) {
-      setAmount(raw);
+  const { isLoading: approveConfirming, isSuccess: approveConfirmed } =
+    useWaitForTransactionReceipt({ hash: approveTxHash });
+
+  // ── Deposit ─────────────────────────────────────────────────────────────
+  const {
+    data: depositTxHash,
+    writeContract: writeDeposit,
+    isPending: depositWalletPending,
+    error: depositError,
+  } = useWriteContract();
+
+  const { isLoading: depositConfirming, isSuccess: depositConfirmed } =
+    useWaitForTransactionReceipt({ hash: depositTxHash });
+
+  // ── Withdraw ────────────────────────────────────────────────────────────
+  const {
+    data: withdrawTxHash,
+    writeContract: writeWithdraw,
+    isPending: withdrawWalletPending,
+    error: withdrawError,
+  } = useWriteContract();
+
+  const { isLoading: withdrawConfirming, isSuccess: withdrawConfirmed } =
+    useWaitForTransactionReceipt({ hash: withdrawTxHash });
+
+  // ── Deposit step machine ────────────────────────────────────────────────
+  // approving → wallet opens → approve-confirming → wait on-chain → depositing → ...
+  useEffect(() => {
+    if (depositStep === "approving" && approveWalletPending) {
+      setDepositStep("approve-confirming");
     }
+  }, [depositStep, approveWalletPending]);
+
+  useEffect(() => {
+    if (depositStep === "approve-confirming" && approveConfirmed && address) {
+      setDepositStep("depositing");
+      const assets = parseUnits(amount, TOKEN_DECIMALS);
+      writeDeposit({
+        address: VAULT_ADDRESS,
+        abi: VAULT_ABI,
+        functionName: "deposit",
+        args: [assets, address],
+      });
+    }
+  }, [depositStep, approveConfirmed, address, amount, writeDeposit]);
+
+  useEffect(() => {
+    if (depositStep === "depositing" && depositWalletPending) {
+      setDepositStep("deposit-confirming");
+    }
+  }, [depositStep, depositWalletPending]);
+
+  useEffect(() => {
+    if (depositStep === "deposit-confirming" && depositConfirmed) {
+      setDepositStep("done");
+      setAmount("");
+    }
+  }, [depositStep, depositConfirmed]);
+
+  // Reset on errors
+  useEffect(() => {
+    if (approveError || depositError) setDepositStep("idle");
+  }, [approveError, depositError]);
+
+  // ── Withdraw step machine ───────────────────────────────────────────────
+  useEffect(() => {
+    if (withdrawStep === "withdrawing" && withdrawWalletPending) {
+      setWithdrawStep("withdraw-confirming");
+    }
+  }, [withdrawStep, withdrawWalletPending]);
+
+  useEffect(() => {
+    if (withdrawStep === "withdraw-confirming" && withdrawConfirmed) {
+      setWithdrawStep("done");
+      setAmount("");
+    }
+  }, [withdrawStep, withdrawConfirmed]);
+
+  useEffect(() => {
+    if (withdrawError) setWithdrawStep("idle");
+  }, [withdrawError]);
+
+  // Reset steps when switching action
+  useEffect(() => {
+    setDepositStep("idle");
+    setWithdrawStep("idle");
+    setAmount("");
+  }, [action]);
+
+  // ── Handlers ────────────────────────────────────────────────────────────
+  const handleAmountChange = (raw: string) => {
+    if (raw === "" || /^\d*\.?\d*$/.test(raw)) setAmount(raw);
   };
+
+  const balanceFormatted = balanceData
+    ? Number(
+        formatTokenAmount(
+          balanceData.value.toString(),
+          balanceData.decimals,
+          6,
+        ),
+      )
+    : 0;
 
   const handlePct = (fraction: number) => {
     if (!isConnected || balanceFormatted <= 0) return;
@@ -46,15 +171,82 @@ export function VaultActions() {
   };
 
   const handleSubmit = () => {
-    if (!amount || loading) return;
-    // UI-only: simulate a brief loading flash
-    setLoading(true);
-    setTimeout(() => setLoading(false), 1500);
+    if (!amount || !address || !isConnected) return;
+
+    if (action === "deposit") {
+      if (depositStep !== "idle" && depositStep !== "done") return;
+      setDepositStep("approving");
+      const assets = parseUnits(amount, TOKEN_DECIMALS);
+      writeApprove({
+        address: TEST_DOT_ADDRESS,
+        abi: ERC20_APPROVE_ABI,
+        functionName: "approve",
+        args: [VAULT_ADDRESS, assets],
+      });
+    } else {
+      if (withdrawStep !== "idle" && withdrawStep !== "done") return;
+      setWithdrawStep("withdrawing");
+      const assets = parseUnits(amount, TOKEN_DECIMALS);
+      writeWithdraw({
+        address: VAULT_ADDRESS,
+        abi: VAULT_ABI,
+        functionName: "withdraw",
+        args: [assets, address, address],
+      });
+    }
   };
 
-  const displayBalance = isConnected && balanceData
-    ? `${formatTokenAmount(balanceData.value.toString(), balanceData.decimals, 4)} tDOT`
-    : "—";
+  // ── Derived UI ──────────────────────────────────────────────────────────
+  const isDepositExecuting = depositStep !== "idle" && depositStep !== "done";
+  const isWithdrawExecuting =
+    withdrawStep !== "idle" && withdrawStep !== "done";
+  const loading =
+    action === "deposit" ? isDepositExecuting : isWithdrawExecuting;
+
+  const depositTxConfirmed = depositStep === "done" && !!depositTxHash;
+  const withdrawTxConfirmed = withdrawStep === "done" && !!withdrawTxHash;
+
+  const txHash = action === "deposit" ? depositTxHash : withdrawTxHash;
+  const txConfirmed =
+    action === "deposit" ? depositTxConfirmed : withdrawTxConfirmed;
+
+  const error =
+    action === "deposit" ? (approveError ?? depositError) : withdrawError;
+
+  const buttonLabel = () => {
+    if (action === "deposit") {
+      switch (depositStep) {
+        case "approving":
+          return "APPROVING...";
+        case "approve-confirming":
+          return "CONFIRMING APPROVAL...";
+        case "depositing":
+          return "DEPOSITING...";
+        case "deposit-confirming":
+          return "CONFIRMING DEPOSIT...";
+        case "done":
+          return "DEPOSIT AGAIN";
+        default:
+          return "DEPOSIT tDOT";
+      }
+    } else {
+      switch (withdrawStep) {
+        case "withdrawing":
+          return "WITHDRAWING...";
+        case "withdraw-confirming":
+          return "CONFIRMING WITHDRAWAL...";
+        case "done":
+          return "WITHDRAW AGAIN";
+        default:
+          return "WITHDRAW tDOT";
+      }
+    }
+  };
+
+  const displayBalance =
+    isConnected && balanceData
+      ? `${formatTokenAmount(balanceData.value.toString(), balanceData.decimals, 4)} tDOT`
+      : "—";
 
   return (
     <div className="p-4">
@@ -145,17 +337,38 @@ export function VaultActions() {
         </div>
       </div>
 
+      {/* Transaction confirmed */}
+      {txConfirmed && txHash && (
+        <div className="mb-3 rounded-md border border-primary/30 bg-primary/5 px-3 py-2">
+          <p className="text-[11px] text-primary font-medium">
+            {action === "deposit"
+              ? "Deposit confirmed!"
+              : "Withdrawal confirmed!"}
+          </p>
+          <p className="text-[10px] text-text-muted font-mono mt-0.5 break-all">
+            {txHash}
+          </p>
+        </div>
+      )}
+
+      {/* Error */}
+      {error && (
+        <div className="mb-3 rounded-md border border-danger/30 bg-danger/5 px-3 py-2">
+          <p className="text-[11px] text-danger">
+            {error.message.slice(0, 120)}
+          </p>
+        </div>
+      )}
+
       {/* Submit button */}
       <button
         type="button"
         disabled={!isConnected || !amount || loading}
         onClick={handleSubmit}
-        className={cn(
-          action === "deposit" ? "btn-primary" : "btn-danger",
-        )}
+        className={cn(action === "deposit" ? "btn-primary" : "btn-danger")}
       >
         {loading && <Loader2 className="h-4 w-4 animate-spin" />}
-        {action === "deposit" ? "DEPOSIT tDOT" : "WITHDRAW tDOT"}
+        {buttonLabel()}
       </button>
 
       {!isConnected && (
