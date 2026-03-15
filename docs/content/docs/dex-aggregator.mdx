@@ -26,24 +26,32 @@ HydrationOmnipool   AssetHubPair    BifrostDEX
 
 | Contract                   | Address                                      | Purpose                                                                      |
 | -------------------------- | -------------------------------------------- | ---------------------------------------------------------------------------- |
-| `SwapRouter`               | `0x0A85A1B0bb893cab3b5fad7312ac241e92C8Badf` | Execution: single-hop, multi-hop, split-route, multicall                     |
+| `SwapRouter`               | `0x60a72d1e20c5dc40Bb5a24394f0583d863201A3c` | Execution: single-hop, multi-hop, split-route, multicall                     |
 | `SwapQuoter`               | `0x81d7aCFEF474DA6c76eC1b5A05a137cB9f3A5Db1` | Read-only: best quote, all quotes, multi-hop quote, buildBestSwap            |
 | `HydrationOmnipoolAdapter` | `0xF0E1c10f97446C032A86C9643258Bb26d6129933` | Routes swaps to Hydration Omnipool (parachain 2034) via XCM                  |
 | `AssetHubPairAdapter`      | `0x67E0B572A7761C13D7C9A3f737C825A506a85CF4` | Routes swaps through AssetHub native asset pairs                             |
 | `BifrostDEXAdapter`        | `0x386FC9514594c589ad7481AFC3eC36216DE91dC0` | Routes swaps to Bifrost DEX (parachain 2030) via XCM                         |
 | `UniswapV2PoolAdapter`     | `0xF06Af9a8fcdf56d69E356A58d4dC5217395918c3` | Routes swaps through any UniswapV2-compatible pair (PoolType.Custom, slot 3) |
+| `RelayTeleportAdapter`     | `0x9eF954F520B1f4F316eaaCE971848D1F8dd0616A` | XCM InitiateTeleport to relay chain (DOT/PAS, slot 5)                        |
+| `KaruraAdapter`            | `0xd5352f2363b8f6cd8B3719170B4Cb395846F3DB1` | Karura DEX via XCM Transact (parachain 2000, slot 6)                         |
+| `MoonbeamAdapter`          | `0x4a6573c6EDc817bFd7eaFf23D892F429A87E1aB8` | Moonbeam EVM call via XCM Transact (parachain 2004, slot 7)                  |
+| `InterlayAdapter`          | `0x226337160C62EC00c2EEdB23BD5Ed54b576c32B1` | Interlay Loans.mint via XCM Transact (parachain 2032, slot 8)                |
 
 ## Pool Types
 
-The router defines four pool types via the `PoolType` enum:
+The router defines nine pool types via the `PoolType` enum:
 
-| Value | Name                | Target                     | Mechanism                         |
-| ----- | ------------------- | -------------------------- | --------------------------------- |
-| `0`   | `HydrationOmnipool` | Hydration (parachain 2034) | XCM V5 to Omnipool                |
-| `1`   | `AssetHubPair`      | Polkadot Hub / AssetHub    | Direct ERC-20 pair swap           |
-| `2`   | `BifrostDEX`        | Bifrost (parachain 2030)   | XCM V4 to Bifrost DEX             |
-| `3`   | `Custom`            | User-registered            | Extensible — any future pool type |
-| `4`   | `Bridge`            | Test/cross-chain sim       | Lock-and-mint bridge simulation   |
+| Value | Name                | Target                     | Mechanism                             |
+| ----- | ------------------- | -------------------------- | ------------------------------------- |
+| `0`   | `HydrationOmnipool` | Hydration (parachain 2034) | XCM V5 to Omnipool                    |
+| `1`   | `AssetHubPair`      | Polkadot Hub / AssetHub    | Direct ERC-20 pair swap               |
+| `2`   | `BifrostDEX`        | Bifrost (parachain 2030)   | XCM V4 to Bifrost DEX                 |
+| `3`   | `Custom`            | User-registered            | Extensible — any UniswapV2-compat AMM |
+| `4`   | `Bridge`            | Test/cross-chain sim       | Lock-and-mint bridge simulation       |
+| `5`   | `RelayTeleport`     | Relay chain (DOT/PAS)      | XCM InitiateTeleport                  |
+| `6`   | `Karura`            | Karura (parachain 2000)    | XCM Transact → Dex pallet 56          |
+| `7`   | `Moonbeam`          | Moonbeam (parachain 2004)  | XCM Transact → Ethereum pallet 4      |
+| `8`   | `Interlay`          | Interlay (parachain 2032)  | XCM Transact → Loans pallet 59        |
 
 ## Data Types
 
@@ -350,7 +358,7 @@ The vault:
 6. Calls `ISwapRouter(swapRouter).swap(swapParams)`
 7. Updates `protocolExposure[intent.targetProtocol]`
 
-> The currently deployed `ObidotVault` v3 at `0x03473a95971Ba0496786a615e21b1e87bDFf0025` supports `setSwapRouter()`. The SwapRouter (`0x0A85A1B0bb893cab3b5fad7312ac241e92C8Badf`) is wired in and all three production adapters (slots 0–2) are registered.
+> The currently deployed `ObidotVault` v3 at `0x03473a95971Ba0496786a615e21b1e87bDFf0025` supports `setSwapRouter()`. The SwapRouter (`0x60a72d1e20c5dc40Bb5a24394f0583d863201A3c`) is wired in and all 9 production adapter slots (0–8) are registered.
 
 ## Events
 

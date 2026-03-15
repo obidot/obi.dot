@@ -155,15 +155,13 @@ Deployed via `script/DeployNew.s.sol`. Adds XCM and Hyperbridge executors plus n
 
 ### Phase 3 — DEX Aggregator Router (2026-03-11)
 
-Deployed via `script/Deploy.s.sol` (router + adapters section). Adds the on-hub swap routing layer.
+Initial deploy of the on-hub swap routing layer. **Superseded by Phase 6 below.**
 
-| Contract                   | Address                                      |
-| -------------------------- | -------------------------------------------- |
-| `SwapRouter` v3            | `0x0A85A1B0bb893cab3b5fad7312ac241e92C8Badf` |
-| `SwapQuoter`               | `0x81d7aCFEF474DA6c76eC1b5A05a137cB9f3A5Db1` |
-| `HydrationOmnipoolAdapter` | `0xBF9e3ad0818719F0DF26075005A978793248f523` |
-| `AssetHubPairAdapter`      | `0x67E0B572A7761C13D7C9A3f737C825A506a85CF4` |
-| `BifrostDEXAdapter`        | `0x386FC9514594c589ad7481AFC3eC36216DE91dC0` |
+| Contract              | Address                                      |
+| --------------------- | -------------------------------------------- |
+| `SwapQuoter`          | `0x81d7aCFEF474DA6c76eC1b5A05a137cB9f3A5Db1` |
+| `AssetHubPairAdapter` | `0x67E0B572A7761C13D7C9A3f737C825A506a85CF4` |
+| `BifrostDEXAdapter`   | `0x386FC9514594c589ad7481AFC3eC36216DE91dC0` |
 
 ### Phase 4 — Hyperbridge ISMP v1.6.0 Fix (2026-03-11)
 
@@ -198,6 +196,32 @@ All three adapter slots (0–2) registered in `SwapRouter` via `RegisterAdapters
 | `CrossChainRouter` (Ph 4 prev) | `0x8903331DfE3dcFd8E23bBA2D716B692f1510491e` | Phase 4 above |
 | `HydrationOmnipoolAdapter` v1  | `0xBF9e3ad0818719F0DF26075005A978793248f523` | Phase 5 above |
 | `SwapRouter` v1                | `0xeABB7c2C02eD819BDee9336cD12e9668A33ab924` | Phase 3 v3    |
+
+### Phase 6 — Full Adapter Suite (2026-03-15)
+
+Redeployment of `SwapRouter` with all 9 adapter slots populated — adding `RelayTeleportAdapter`,
+`KaruraAdapter`, `MoonbeamAdapter`, and `InterlayAdapter`. `VAULT_ROLE` granted on the new router
+to `ObidotVault`; `ROUTER_ROLE` granted on all 9 adapters. `vault.setSwapRouter()` called to
+point vault at Phase 6 router.
+
+| Contract                   | Address                                      | Slot | PoolType          |
+| -------------------------- | -------------------------------------------- | ---- | ----------------- |
+| `SwapRouter` (**ACTIVE**)  | `0x60a72d1e20c5dc40Bb5a24394f0583d863201A3c` | —    | —                 |
+| `HydrationOmnipoolAdapter` | `0xF0E1c10f97446C032A86C9643258Bb26d6129933` | 0    | HydrationOmnipool |
+| `AssetHubPairAdapter`      | `0x67E0B572A7761C13D7C9A3f737C825A506a85CF4` | 1    | AssetHubPair      |
+| `BifrostDEXAdapter`        | `0x386FC9514594c589ad7481AFC3eC36216DE91dC0` | 2    | BifrostDEX        |
+| `UniswapV2PoolAdapter`     | `0xF06Af9a8fcdf56d69E356A58d4dC5217395918c3` | 3    | Custom            |
+| `MockBridgeAdapter`        | `0x515e3d05c72F0E3a6599d7383D575AF22dee830f` | 4    | Bridge            |
+| `RelayTeleportAdapter`     | `0x9eF954F520B1f4F316eaaCE971848D1F8dd0616A` | 5    | RelayTeleport     |
+| `KaruraAdapter`            | `0xd5352f2363b8f6cd8B3719170B4Cb395846F3DB1` | 6    | Karura            |
+| `MoonbeamAdapter`          | `0x4a6573c6EDc817bFd7eaFf23D892F429A87E1aB8` | 7    | Moonbeam          |
+| `InterlayAdapter`          | `0x226337160C62EC00c2EEdB23BD5Ed54b576c32B1` | 8    | Interlay          |
+
+**Deprecated (Phase 3/6 swap routers):**
+
+| Contract              | Deprecated Address                           | Replaced by   |
+| --------------------- | -------------------------------------------- | ------------- |
+| `SwapRouter` Ph3 (v3) | `0x0A85A1B0bb893cab3b5fad7312ac241e92C8Badf` | Phase 6 above |
 
 ### Not Yet Deployed
 
@@ -646,7 +670,7 @@ Before going to production, verify the following:
 
 ### Pre-Deployment
 
-- [ ] All 562 tests pass (`forge test`)
+- [ ] All 737 tests pass (`forge test`)
 - [ ] Invariant tests pass with CI-level depth (`FOUNDRY_PROFILE=ci forge test`)
 - [ ] PolkaVM build compiles cleanly (`FOUNDRY_PROFILE=polkadot forge build`)
 - [ ] Underlying asset contract is verified and audited

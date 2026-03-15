@@ -14,9 +14,9 @@ export const CONTRACTS = {
   SWAP_QUOTER: "0x81d7aCFEF474DA6c76eC1b5A05a137cB9f3A5Db1",
   ASSET_HUB_ADAPTER: "0x67E0B572A7761C13D7C9A3f737C825A506a85CF4",
   BIFROST_DEX_ADAPTER: "0x386FC9514594c589ad7481AFC3eC36216DE91dC0",
-  // Phase 6 redeployments — PolkaVM bytes32 fix (2026-03-12)
-  // Phase 12 SwapRouter v3 + Phase 15 HydrationOmnipoolAdapter v2 (PALLET_OMNIPOOL=59 fix)
-  SWAP_ROUTER: "0x0A85A1B0bb893cab3b5fad7312ac241e92C8Badf",
+  // Phase 17 SwapRouter — 9 adapter slots (HydrationOmnipool, AssetHubPair, BifrostDEX,
+  // UniswapV2, Bridge, RelayTeleport, Karura, Moonbeam, Interlay)
+  SWAP_ROUTER: "0x60a72d1e20c5dc40Bb5a24394f0583d863201A3c",
   HYDRATION_ADAPTER: "0xF0E1c10f97446C032A86C9643258Bb26d6129933",
   // Phase 7 redeployments (2026-03-12)
   CROSS_CHAIN_ROUTER: "0xE2fFfb3B5C72f99811bC20D857035611bFCe5b5d",
