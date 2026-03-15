@@ -1,45 +1,45 @@
-# docs
+# docs — Obidot Documentation Site
 
-This is a Next.js application generated with
-[Create Fumadocs](https://github.com/fuma-nama/fumadocs).
+Next.js 15 documentation site built with [Fumadocs](https://fumadocs.dev). Covers the Obidot protocol — smart contracts, SDK, indexer, and agent.
 
-Run development server:
+## Quick Start
 
 ```bash
-npm run dev
-# or
-pnpm dev
-# or
-yarn dev
+pnpm install
+pnpm dev    # http://localhost:3001
 ```
 
-Open http://localhost:3000 with your browser to see the result.
+## Structure
 
-## Explore
+```
+docs/
+├── app/
+│   ├── (home)/          # Landing page
+│   └── docs/            # Documentation layout + pages
+├── content/docs/        # MDX documentation files
+├── lib/
+│   ├── source.ts        # Fumadocs content source adapter
+│   └── layout.shared.tsx
+└── source.config.ts     # Fumadocs MDX config (frontmatter schema)
+```
 
-In the project, you can see:
+## Writing Docs
 
-- `lib/source.ts`: Code for content source adapter, [`loader()`](https://fumadocs.dev/docs/headless/source-api) provides the interface to access your content.
-- `lib/layout.shared.tsx`: Shared options for layouts, optional but preferred to keep.
+Add `.mdx` files to `content/docs/`. Frontmatter:
 
-| Route                     | Description                                            |
-| ------------------------- | ------------------------------------------------------ |
-| `app/(home)`              | The route group for your landing page and other pages. |
-| `app/docs`                | The documentation layout and pages.                    |
-| `app/api/search/route.ts` | The Route Handler for search.                          |
+```mdx
+---
+title: My Page
+description: A short description
+---
 
-### Fumadocs MDX
+Content here.
+```
 
-A `source.config.ts` config file has been included, you can customise different options like frontmatter schema.
+Fumadocs automatically generates navigation and search from the file structure.
 
-Read the [Introduction](https://fumadocs.dev/docs/mdx) for further details.
+## Related
 
-## Learn More
-
-To learn more about Next.js and Fumadocs, take a look at the following
-resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js
-  features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-- [Fumadocs](https://fumadocs.dev) - learn about Fumadocs
+- Smart contracts: [obi.router](https://github.com/obidot/obi.router)
+- Agent SDK: [obi-kit](https://github.com/obidot/obi-kit)
+- Indexer: [obi.index](https://github.com/obidot/obi.index)
