@@ -1,24 +1,34 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname } from "next/navigation";
-import { ConnectButton } from "@rainbow-me/rainbowkit";
+import { useAccount } from "wagmi";
 import { useYields } from "@/hooks/use-yields";
 import { cn } from "@/lib/format";
+import { NAV_ITEMS } from "@/shared/navbar";
+import { isTradeActionType, type TradeActionType } from "@/shared/trade";
+import CustomConnectButton from "./custom-connect-button";
 
-const NAV_ITEMS = [
-  { label: "Dashboard", href: "/" },
-  { label: "Swap", href: "/swap" },
-  { label: "Strategies", href: "/strategies" },
-  { label: "Yields", href: "/yields" },
-  { label: "Insights", href: "/insights" },
-  { label: "Cross-Chain", href: "/crosschain" },
-  { label: "Agent", href: "/agent" },
-];
+function toChainSlug(value: string): string {
+  return value.trim().toLowerCase().replace(/\s+/g, "-");
+}
 
 export function Navbar() {
   const pathname = usePathname();
+  const { chain } = useAccount();
   const { data: yields } = useYields();
+
+  const pathSegments = pathname.split("/").filter(Boolean);
+  const tradeFromPath = pathSegments[0];
+  const isTradeRoute = isTradeActionType(tradeFromPath ?? "");
+  const currentTradeAction: TradeActionType =
+    tradeFromPath && isTradeActionType(tradeFromPath) ? tradeFromPath : "swap";
+  const currentChain = chain?.name
+    ? toChainSlug(chain.name)
+    : isTradeRoute && pathSegments[1]
+      ? pathSegments[1]
+      : "polkadot-hub-testnet";
 
   const tickerItems = (yields ?? []).slice(0, 12).map((y) => ({
     name: y.name,
@@ -32,14 +42,18 @@ export function Navbar() {
         aria-label="Main navigation"
         className="flex h-14 items-center gap-6 px-5"
       >
-        {/* Logo */}
-        <Link href="/" className="flex items-center gap-2.5 shrink-0">
-          <div className="flex h-7 w-7 items-center justify-center rounded-md bg-primary">
-            <span className="font-mono text-sm font-black text-background">
-              O
-            </span>
-          </div>
-          <span className="text-[15px] font-bold tracking-tight text-text-primary">
+        <Link
+          href="/swap/polkadot-hub-testnet"
+          className="flex items-center gap-2.5 shrink-0"
+        >
+          <Image
+            src="/images/logo.png"
+            width={32}
+            height={32}
+            alt="Obidot Logo"
+            className="rounded-sm"
+          />
+          <span className="text-[15px] font-semibold tracking-tight text-text-primary">
             Obidot
           </span>
         </Link>
@@ -47,29 +61,35 @@ export function Navbar() {
         {/* Divider */}
         <div className="h-5 w-px bg-border shrink-0" />
 
-        {/* Nav links */}
-        <div className="flex items-center gap-0.5">
+        {/* Nav links — bordered tab group */}
+        <div className="flex items-center rounded-md border border-border p-0.5 gap-0.5">
           {NAV_ITEMS.map((item) => {
-            const isActive =
-              pathname === item.href ||
-              (item.href !== "/" && pathname.startsWith(item.href));
+            const href =
+              typeof item.href === "function"
+                ? item.href({
+                    tradeAction: currentTradeAction,
+                    currentChain,
+                  })
+                : item.href;
+            const isTradeItem = item.label === "Trade";
+            const isActive = isTradeItem
+              ? isTradeRoute
+              : pathname === href ||
+                (href !== "/" && pathname.startsWith(href));
 
             return (
               <Link
-                key={item.href}
-                href={item.href}
+                key={item.label}
+                href={href}
                 aria-current={isActive ? "page" : undefined}
                 className={cn(
-                  "relative px-3.5 py-1.5 text-[13px] font-medium rounded-md transition-colors duration-150",
+                  "px-3 py-1 text-[13px] font-medium rounded-[5px] transition-colors duration-150 select-none",
                   isActive
-                    ? "text-primary"
+                    ? "bg-text-primary text-white shadow-sm"
                     : "text-text-secondary hover:text-text-primary hover:bg-surface-hover",
                 )}
               >
                 {item.label}
-                {isActive && (
-                  <span className="absolute bottom-[-1px] left-1/2 -translate-x-1/2 h-[2px] w-5 rounded-full bg-primary" />
-                )}
               </Link>
             );
           })}
@@ -77,31 +97,10 @@ export function Navbar() {
 
         {/* Right side */}
         <div className="ml-auto flex items-center gap-3 shrink-0">
-          {/* Live agent pulse */}
-          <div className="hidden items-center gap-1.5 sm:flex">
-            <span className="relative flex h-2 w-2">
-              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-primary opacity-40" />
-              <span className="relative inline-flex h-2 w-2 rounded-full bg-primary" />
-            </span>
-            <span className="font-mono text-[11px] text-text-secondary">
-              TestNet
-            </span>
-          </div>
-
-          <div className="hidden h-4 w-px bg-border sm:block" />
-
-          {/* Connect Wallet — styled via CSS overrides in globals.css */}
-          <div className="connect-wallet-wrap">
-            <ConnectButton
-              chainStatus="none"
-              accountStatus="address"
-              showBalance={false}
-            />
-          </div>
+          <CustomConnectButton />
         </div>
       </nav>
 
-      {/* ── Ticker strip ───────────────────────────────────────────────── */}
       <div
         className="h-7 overflow-hidden border-t border-border-subtle bg-background/60"
         aria-label="Live yield ticker"

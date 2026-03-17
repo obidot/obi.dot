@@ -1,5 +1,6 @@
 "use client";
 
+import { useState, useEffect } from "react";
 import { useReadContract, useReadContracts } from "wagmi";
 import {
   CONTRACTS,
@@ -11,6 +12,7 @@ import type {
   SwapQuoteResult,
   SwapRoutesResponse,
   PoolAdapterInfo,
+  SwapRouteResult,
 } from "@/types";
 import { PoolType, POOL_TYPE_LABELS } from "@/types";
 
@@ -128,7 +130,8 @@ export function useSwapRoutes() {
     ? (() => {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const anyData = result.data as any[];
-        const routerPaused = (anyData[0]?.result as boolean | undefined) ?? false;
+        const routerPaused =
+          (anyData[0]?.result as boolean | undefined) ?? false;
         const adapters: PoolAdapterInfo[] = ADAPTER_REGISTRY.map(
           ({ poolType, adapter }, i) => ({
             poolType,
@@ -146,4 +149,66 @@ export function useSwapRoutes() {
     : undefined;
 
   return { ...result, data };
+}
+
+// ── useRouteFinder ────────────────────────────────────────────────────────
+
+/**
+ * Fetch all available swap routes from the agent's /api/routes endpoint.
+ * Debounces 600ms to avoid hammering the API on every keystroke.
+ */
+export function useRouteFinder(params: {
+  tokenIn: string;
+  tokenOut: string;
+  amountIn: string; // wei string
+}) {
+  const [routes, setRoutes] = useState<SwapRouteResult[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (
+      !params.tokenIn ||
+      !params.tokenOut ||
+      !params.amountIn ||
+      params.amountIn === "0"
+    ) {
+      setRoutes([]);
+      setIsLoading(false);
+      setError(null);
+      return;
+    }
+
+    setIsLoading(true);
+    setError(null);
+
+    const controller = new AbortController();
+
+    const timer = setTimeout(async () => {
+      try {
+        const url = `/api/routes?tokenIn=${encodeURIComponent(params.tokenIn)}&tokenOut=${encodeURIComponent(params.tokenOut)}&amountIn=${encodeURIComponent(params.amountIn)}`;
+        const res = await fetch(url, { signal: controller.signal });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const json = (await res.json()) as {
+          success: boolean;
+          data?: { routes: SwapRouteResult[]; timestamp: string };
+        };
+        setRoutes(json.data?.routes ?? []);
+        setError(null);
+      } catch (err) {
+        if ((err as { name?: string }).name === "AbortError") return;
+        setError(err instanceof Error ? err.message : "Failed to fetch routes");
+        setRoutes([]);
+      } finally {
+        setIsLoading(false);
+      }
+    }, 600);
+
+    return () => {
+      clearTimeout(timer);
+      controller.abort();
+    };
+  }, [params.tokenIn, params.tokenOut, params.amountIn]);
+
+  return { routes, isLoading, error };
 }

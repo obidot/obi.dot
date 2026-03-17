@@ -4,10 +4,6 @@ import { AutonomousLoop } from "./agent/loop.js";
 import { startTelegramBot } from "./telegram/bot.js";
 import { startApiServer } from "./api/server.js";
 
-// ─────────────────────────────────────────────────────────────────────────────
-//  Main Entrypoint — Obidot Autonomous CFO
-// ─────────────────────────────────────────────────────────────────────────────
-
 /**
  * Bootstrap and run the Obidot AI agent.
  *
@@ -20,10 +16,6 @@ import { startApiServer } from "./api/server.js";
  *   6. Start the infinite perception → reasoning → execution loop
  */
 async function main(): Promise<void> {
-  logger.info("════════════════════════════════════════════════════════════");
-  logger.info("  Obidot Autonomous CFO — Starting Up");
-  logger.info("════════════════════════════════════════════════════════════");
-
   const loop = new AutonomousLoop();
   const tools = loop.getTools();
   const services = loop.getServices();

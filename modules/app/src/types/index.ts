@@ -106,6 +106,11 @@ export enum PoolType {
   AssetHubPair = 1,
   BifrostDEX = 2,
   Custom = 3,
+  MockBridge = 4,
+  RelayTeleport = 5,
+  Karura = 6,
+  Moonbeam = 7,
+  Interlay = 8,
 }
 
 /** Human-readable pool type labels */
@@ -113,7 +118,12 @@ export const POOL_TYPE_LABELS: Record<PoolType, string> = {
   [PoolType.HydrationOmnipool]: "Hydration Omnipool",
   [PoolType.AssetHubPair]: "AssetHub Pair",
   [PoolType.BifrostDEX]: "Bifrost DEX",
-  [PoolType.Custom]: "Custom",
+  [PoolType.Custom]: "UniswapV2",
+  [PoolType.MockBridge]: "Mock Bridge",
+  [PoolType.RelayTeleport]: "Relay Teleport",
+  [PoolType.Karura]: "Karura DEX",
+  [PoolType.Moonbeam]: "Moonbeam EVM",
+  [PoolType.Interlay]: "Interlay Loans",
 };
 
 /** Swap quote result from agent API */
@@ -146,6 +156,38 @@ export interface SwapToken {
   symbol: string;
   name: string;
   decimals: number;
+}
+
+// ── Route Finder Types ────────────────────────────────────────────────────
+
+/** A single hop within a multi-hop swap route (from /api/routes). */
+export interface RouteHop {
+  pool: string;
+  poolLabel: string;
+  poolType: string;
+  tokenIn: string;
+  tokenInSymbol: string;
+  tokenOut: string;
+  tokenOutSymbol: string;
+  amountIn: string;
+  amountOut: string;
+  feeBps: string;
+  priceImpactBps: string;
+}
+
+/** A complete swap route result from /api/routes. */
+export interface SwapRouteResult {
+  id: string;
+  tokenIn: string;
+  tokenOut: string;
+  amountIn: string;
+  amountOut: string;
+  minAmountOut: string;
+  hops: RouteHop[];
+  totalFeeBps: string;
+  totalPriceImpactBps: string;
+  routeType: "local" | "xcm" | "bridge";
+  status: "live" | "mainnet_only" | "coming_soon";
 }
 
 // ── WebSocket Event Types ─────────────────────────────────────────────────

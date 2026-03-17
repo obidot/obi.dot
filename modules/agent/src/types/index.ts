@@ -87,6 +87,11 @@ export enum PoolType {
   AssetHubPair = 1,
   BifrostDEX = 2,
   Custom = 3,
+  MockBridge = 4,
+  RelayTeleport = 5,
+  Karura = 6,
+  Moonbeam = 7,
+  Interlay = 8,
 }
 
 /**
@@ -96,7 +101,12 @@ export const POOL_TYPE_LABELS: Record<PoolType, string> = {
   [PoolType.HydrationOmnipool]: "Hydration Omnipool",
   [PoolType.AssetHubPair]: "AssetHub Pair",
   [PoolType.BifrostDEX]: "Bifrost DEX",
-  [PoolType.Custom]: "Custom",
+  [PoolType.Custom]: "UniswapV2",
+  [PoolType.MockBridge]: "Mock Bridge",
+  [PoolType.RelayTeleport]: "Relay Teleport",
+  [PoolType.Karura]: "Karura DEX",
+  [PoolType.Moonbeam]: "Moonbeam EVM",
+  [PoolType.Interlay]: "Interlay Loans",
 };
 
 /**
@@ -200,6 +210,67 @@ export interface SwapQuoteResult {
   feeBps: string;
   amountIn: string;
   amountOut: string;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  Route Finder Types — Route graph path-finder results
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * A single hop within a multi-hop swap route.
+ */
+export interface RouteHop {
+  /** Pool pair contract address. */
+  pool: string;
+  /** Human-readable pool label, e.g. "tDOT/tUSDC". */
+  poolLabel: string;
+  /** Pool type string, e.g. "UniswapV2". */
+  poolType: string;
+  /** Input token address (checksummed). */
+  tokenIn: string;
+  /** Human-readable input token symbol. */
+  tokenInSymbol: string;
+  /** Output token address (checksummed). */
+  tokenOut: string;
+  /** Human-readable output token symbol. */
+  tokenOutSymbol: string;
+  /** Amount of tokenIn consumed by this hop (wei string). */
+  amountIn: string;
+  /** Amount of tokenOut produced by this hop (wei string). */
+  amountOut: string;
+  /** Pool fee in basis points, e.g. "30" for 0.3%. */
+  feeBps: string;
+  /** Approximate price impact in basis points. */
+  priceImpactBps: string;
+}
+
+/**
+ * A complete swap route from tokenIn to tokenOut, possibly multi-hop.
+ * Returned by the /api/routes endpoint.
+ */
+export interface SwapRouteResult {
+  /** Unique route identifier, e.g. "tDOT→TKB→tUSDC". */
+  id: string;
+  /** Input token address. */
+  tokenIn: string;
+  /** Output token address. */
+  tokenOut: string;
+  /** Total input amount (wei string). */
+  amountIn: string;
+  /** Estimated total output amount (wei string). */
+  amountOut: string;
+  /** Minimum output after 50 bps slippage (wei string). */
+  minAmountOut: string;
+  /** Ordered list of swap hops. */
+  hops: RouteHop[];
+  /** Aggregate fee in basis points across all hops. */
+  totalFeeBps: string;
+  /** Aggregate price impact in basis points across all hops. */
+  totalPriceImpactBps: string;
+  /** Route category. */
+  routeType: "local" | "xcm" | "bridge";
+  /** Execution availability. */
+  status: "live" | "mainnet_only" | "coming_soon";
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

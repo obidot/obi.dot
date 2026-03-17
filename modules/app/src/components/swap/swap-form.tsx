@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useCallback, useEffect } from "react";
+import { useState, useMemo, useCallback, useEffect, useRef } from "react";
 import {
   useAccount,
   useBalance,
@@ -12,8 +12,15 @@ import { cn, formatTokenAmount } from "@/lib/format";
 import { CONTRACTS, SWAP_ROUTER_ABI, ERC20_APPROVE_ABI } from "@/lib/constants";
 import { useSwapQuote, useSwapRoutes } from "@/hooks/use-swap";
 import { QuoteDisplay } from "./quote-display";
-import { Loader2, ArrowDownUp, AlertTriangle, Settings2 } from "lucide-react";
-import type { SwapToken } from "@/types";
+import {
+  Loader2,
+  ArrowDownUp,
+  AlertTriangle,
+  ChevronDown,
+  Check,
+  Wallet,
+} from "lucide-react";
+import type { SwapToken, SwapRouteResult } from "@/types";
 import { PoolType, POOL_TYPE_LABELS } from "@/types";
 
 // ── Available tokens on Polkadot Hub TestNet ──────────────────────────────
@@ -26,18 +33,34 @@ const TOKENS: SwapToken[] = [
     decimals: 18,
   },
   {
-    address: CONTRACTS.NATIVE_DOT,
-    symbol: "DOT",
-    name: "Polkadot DOT",
-    decimals: 10,
-  },
-  {
-    address: CONTRACTS.NATIVE_USDC,
-    symbol: "USDC",
-    name: "USD Coin",
+    address: CONTRACTS.TEST_USDC,
+    symbol: "tUSDC",
+    name: "Test USDC",
     decimals: 6,
   },
+  {
+    address: CONTRACTS.TEST_ETH,
+    symbol: "tETH",
+    name: "Test ETH",
+    decimals: 18,
+  },
 ];
+
+// Token color map for colored-circle initials
+const TOKEN_COLORS: Record<string, { circle: string; text: string }> = {
+  tDOT: { circle: "bg-primary/20", text: "text-primary" },
+  tUSDC: { circle: "bg-accent/20", text: "text-accent" },
+  tETH: { circle: "bg-secondary/20", text: "text-secondary" },
+};
+
+function tokenColor(symbol: string) {
+  return (
+    TOKEN_COLORS[symbol] ?? {
+      circle: "bg-surface-hover",
+      text: "text-text-secondary",
+    }
+  );
+}
 
 const SLIPPAGE_OPTIONS = [
   { label: "0.5%", bps: 50 },
@@ -59,15 +82,147 @@ type SwapStep =
   | "swap-confirming"
   | "done";
 
+// ── Token Picker Dropdown ─────────────────────────────────────────────────
+
+interface TokenPickerProps {
+  selectedIdx: number;
+  onSelect: (idx: number) => void;
+  disabledIdx?: number;
+}
+
+function TokenPicker({
+  selectedIdx,
+  onSelect,
+  disabledIdx,
+}: TokenPickerProps) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  const token = TOKENS[selectedIdx];
+  const colors = tokenColor(token.symbol);
+
+  // Close on outside click
+  useEffect(() => {
+    function handler(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    }
+    if (open) document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [open]);
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className={cn(
+          "flex items-center gap-2 rounded-lg border border-border bg-surface-hover px-3 py-2",
+          "hover:border-primary/40 transition-colors min-w-[110px]",
+        )}
+      >
+        {/* Colored circle with initials */}
+        <span
+          className={cn(
+            "flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[11px] font-bold",
+            colors.circle,
+            colors.text,
+          )}
+        >
+          {token.symbol.slice(0, 2)}
+        </span>
+        <span className="font-mono text-[13px] font-semibold text-text-primary flex-1 text-left">
+          {token.symbol}
+        </span>
+        <ChevronDown
+          className={cn(
+            "h-3.5 w-3.5 text-text-muted transition-transform duration-150",
+            open && "rotate-180",
+          )}
+        />
+      </button>
+
+      {/* Dropdown */}
+      {open && (
+        <div className="absolute top-full mt-1 left-0 z-50 min-w-[160px] rounded-lg border border-border bg-surface shadow-lg overflow-hidden">
+          {TOKENS.map((t, i) => {
+            const c = tokenColor(t.symbol);
+            const isSelected = i === selectedIdx;
+            const isDisabled = i === disabledIdx;
+            return (
+              <button
+                key={t.address}
+                type="button"
+                disabled={isDisabled}
+                onClick={() => {
+                  if (!isDisabled) {
+                    onSelect(i);
+                    setOpen(false);
+                  }
+                }}
+                className={cn(
+                  "flex w-full items-center gap-2.5 px-3 py-2.5 text-left transition-colors",
+                  isSelected ? "bg-primary/10" : "hover:bg-surface-hover",
+                  isDisabled && "opacity-40 cursor-not-allowed",
+                )}
+              >
+                <span
+                  className={cn(
+                    "flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[11px] font-bold",
+                    c.circle,
+                    c.text,
+                  )}
+                >
+                  {t.symbol.slice(0, 2)}
+                </span>
+                <div className="flex-1 min-w-0">
+                  <p className="font-mono text-[12px] font-semibold text-text-primary">
+                    {t.symbol}
+                  </p>
+                  <p className="text-[10px] text-text-muted truncate">
+                    {t.name}
+                  </p>
+                </div>
+                {isSelected && (
+                  <Check className="h-3.5 w-3.5 text-primary shrink-0" />
+                )}
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Component ─────────────────────────────────────────────────────────────
 
-export function SwapForm() {
+interface SwapFormProps {
+  /** Called whenever tokenIn, tokenOut, or amountIn (wei) changes. */
+  onInputChange?: (params: {
+    tokenIn: string;
+    tokenOut: string;
+    amountIn: string;
+  }) => void;
+  /** Route selected in the RouteDiagram — uses swapMultiHop when hops > 1 */
+  selectedRoute?: SwapRouteResult | null;
+  /** Pre-select token in by index (from URL router param) */
+  initialTokenInIdx?: number;
+  /** Pre-select token out by index (from URL router param) */
+  initialTokenOutIdx?: number;
+}
+
+export function SwapForm({
+  onInputChange,
+  selectedRoute,
+  initialTokenInIdx = 0,
+  initialTokenOutIdx = 1,
+}: SwapFormProps) {
   // ── State ───────────────────────────────────────────────────────────────
-  const [tokenInIdx, setTokenInIdx] = useState(0);
-  const [tokenOutIdx, setTokenOutIdx] = useState(1);
+  const [tokenInIdx, setTokenInIdx] = useState(initialTokenInIdx);
+  const [tokenOutIdx, setTokenOutIdx] = useState(initialTokenOutIdx);
   const [amountIn, setAmountIn] = useState("");
   const [slippageBps, setSlippageBps] = useState(200); // 2% default (matches SlippageGuard)
-  const [showSettings, setShowSettings] = useState(false);
   const [swapStep, setSwapStep] = useState<SwapStep>("idle");
 
   const tokenIn = TOKENS[tokenInIdx];
@@ -113,6 +268,15 @@ export function SwapForm() {
     amountIn: parsedAmountIn,
   });
 
+  // ── Notify parent of input changes (for route diagram) ─────────────────
+  useEffect(() => {
+    onInputChange?.({
+      tokenIn: tokenIn.address,
+      tokenOut: tokenOut.address,
+      amountIn: parsedAmountIn,
+    });
+  }, [tokenIn.address, tokenOut.address, parsedAmountIn, onInputChange]);
+
   // ── Min output (with slippage) ──────────────────────────────────────────
   const minAmountOut = useMemo(() => {
     if (!quote) return BigInt(0);
@@ -154,24 +318,51 @@ export function SwapForm() {
     ) {
       setSwapStep("swapping");
       const deadline = BigInt(Math.floor(Date.now() / 1000) + 300); // 5 min
-      // Use swapFlat() — flat args, PolkaVM-compatible (no nested struct calldata)
-      writeSwap({
-        address: routerAddress as Address,
-        abi: SWAP_ROUTER_ABI,
-        functionName: "swapFlat",
-        args: [
-          quote.source, // poolType: uint8
-          quote.pool as Address, // pool: address
-          tokenIn.address as Address, // tokenIn: address
-          tokenOut.address as Address, // tokenOut: address
-          BigInt(quote.feeBps), // feeBps: uint256
-          ZERO_BYTES32, // data: bytes32
-          BigInt(parsedAmountIn), // amountIn: uint256
-          minAmountOut, // minAmountOut: uint256
-          address, // to: address
-          deadline, // deadline: uint256
-        ],
-      });
+
+      const isMultiHop = selectedRoute && selectedRoute.hops.length > 1;
+
+      if (isMultiHop) {
+        // Build Route[] from the selected route's hops
+        const routes = selectedRoute.hops.map((hop) => ({
+          poolType: Number(hop.poolType) as unknown as number,
+          pool: hop.pool as Address,
+          tokenIn: hop.tokenIn as Address,
+          tokenOut: hop.tokenOut as Address,
+          feeBps: BigInt(hop.feeBps),
+          data: ZERO_BYTES32,
+        }));
+        writeSwap({
+          address: routerAddress as Address,
+          abi: SWAP_ROUTER_ABI,
+          functionName: "swapMultiHop",
+          args: [
+            routes,
+            BigInt(parsedAmountIn),
+            minAmountOut,
+            address,
+            deadline,
+          ],
+        });
+      } else {
+        // Single-hop via swapFlat() — PolkaVM-compatible (no nested struct calldata)
+        writeSwap({
+          address: routerAddress as Address,
+          abi: SWAP_ROUTER_ABI,
+          functionName: "swapFlat",
+          args: [
+            quote.source, // poolType: uint8
+            quote.pool as Address, // pool: address
+            tokenIn.address as Address, // tokenIn: address
+            tokenOut.address as Address, // tokenOut: address
+            BigInt(quote.feeBps), // feeBps: uint256
+            ZERO_BYTES32, // data: bytes32
+            BigInt(parsedAmountIn), // amountIn: uint256
+            minAmountOut, // minAmountOut: uint256
+            address, // to: address
+            deadline, // deadline: uint256
+          ],
+        });
+      }
     }
   }, [
     swapStep,
@@ -183,6 +374,7 @@ export function SwapForm() {
     tokenIn,
     tokenOut,
     minAmountOut,
+    selectedRoute,
     writeSwap,
   ]);
 
@@ -269,7 +461,7 @@ export function SwapForm() {
   const displayBalance =
     isConnected && balanceData
       ? `${formatTokenAmount(balanceData.value.toString(), balanceData.decimals, 4)} ${tokenIn.symbol}`
-      : "\u2014";
+      : null;
 
   const amountOutDisplay = quote
     ? formatUnits(BigInt(quote.amountOut), tokenOut.decimals)
@@ -302,51 +494,41 @@ export function SwapForm() {
         return "CONFIRMING SWAP...";
       case "done":
         return "SWAP AGAIN";
-      default:
-        return `SWAP ${tokenIn.symbol} \u2192 ${tokenOut.symbol}`;
+      default: {
+        const isMultiHop = selectedRoute && selectedRoute.hops.length > 1;
+        const suffix = isMultiHop ? ` (${selectedRoute.hops.length}-HOP)` : "";
+        return `SWAP ${tokenIn.symbol} \u2192 ${tokenOut.symbol}${suffix}`;
+      }
     }
   };
 
   return (
-    <div className="p-4">
-      {/* Header */}
-      <div className="flex items-center justify-between mb-3">
-        <h3 className="text-[13px] font-semibold text-text-primary">Swap</h3>
-        <button
-          type="button"
-          onClick={() => setShowSettings(!showSettings)}
-          className="btn-ghost p-1.5"
-          aria-label="Swap settings"
-        >
-          <Settings2 className="h-3.5 w-3.5" />
-        </button>
-      </div>
-
-      {/* Slippage settings */}
-      {showSettings && (
-        <div className="mb-4 rounded-md border border-border bg-background/60 p-3">
-          <p className="text-[11px] text-text-muted mb-2">Slippage Tolerance</p>
-          <div className="flex gap-1.5">
-            {SLIPPAGE_OPTIONS.map(({ label, bps }) => (
-              <button
-                key={bps}
-                type="button"
-                onClick={() => setSlippageBps(bps)}
-                className={cn(
-                  "btn-ghost flex-1 py-1 text-[11px] font-mono",
-                  slippageBps === bps && "ring-1 ring-primary text-primary",
-                )}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
+    <div className="p-4 space-y-3">
+      {/* ── Inline slippage selector ──────────────────────────────────── */}
+      <div className="flex items-center justify-between">
+        <span className="text-[11px] text-text-muted">Max Slippage</span>
+        <div className="flex gap-1">
+          {SLIPPAGE_OPTIONS.map(({ label, bps }) => (
+            <button
+              key={bps}
+              type="button"
+              onClick={() => setSlippageBps(bps)}
+              className={cn(
+                "px-2.5 py-1 rounded-md text-[11px] font-mono transition-colors border",
+                slippageBps === bps
+                  ? "bg-primary/15 text-primary border-primary/30"
+                  : "btn-ghost border-transparent",
+              )}
+            >
+              {label}
+            </button>
+          ))}
         </div>
-      )}
+      </div>
 
       {/* Not-deployed banner */}
       {showNotDeployed && (
-        <div className="mb-3 flex items-start gap-2 rounded-md border border-warning/30 bg-warning/5 px-3 py-2">
+        <div className="flex items-start gap-2 rounded-lg border border-warning/30 bg-warning/5 px-3 py-2.5">
           <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-warning mt-0.5" />
           <p className="text-[11px] text-text-secondary">
             SwapRouter is not yet deployed. Quotes are unavailable until
@@ -355,102 +537,111 @@ export function SwapForm() {
         </div>
       )}
 
-      {/* Token In selector + amount */}
-      <div className="mb-1">
-        <div className="flex items-center justify-between mb-1.5">
-          <span className="text-[11px] text-text-muted">You Pay</span>
-          <span className="font-mono text-[11px] text-text-secondary">
-            {displayBalance}
-          </span>
+      {/* ── Token In box ─────────────────────────────────────────────── */}
+      <div className="rounded-xl border border-border bg-background/60 p-4">
+        {/* Header row: label left, wallet icon + balance right */}
+        <div className="flex items-center justify-between mb-3">
+          <p className="text-[11px] text-text-muted">You Pay</p>
+          {displayBalance && (
+            <div className="flex items-center gap-1 text-[11px] text-text-muted font-mono">
+              <Wallet className="h-3 w-3" />
+              <span>{displayBalance}</span>
+            </div>
+          )}
         </div>
-        <div className="relative">
-          <input
-            type="text"
-            inputMode="decimal"
-            value={amountIn}
-            onChange={(e) => handleAmountChange(e.target.value)}
-            placeholder="0.00"
-            aria-label="Amount to swap"
-            className="input-trading pr-24 text-right text-lg"
+
+        {/* Amount LEFT, token picker RIGHT */}
+        <div className="flex items-start gap-3">
+          <div className="flex-1 min-w-0">
+            <input
+              type="text"
+              inputMode="decimal"
+              value={amountIn}
+              onChange={(e) => handleAmountChange(e.target.value)}
+              placeholder="0.00"
+              aria-label="Amount to swap"
+              className="input-trading text-left text-2xl font-semibold w-full bg-transparent border-0 focus:ring-0 p-0"
+            />
+            <p className="text-left text-[11px] text-text-muted mt-1 font-mono">
+              {amountIn && Number(amountIn) > 0 ? "≈ —" : ""}
+            </p>
+          </div>
+
+          <TokenPicker
+            selectedIdx={tokenInIdx}
+            onSelect={setTokenInIdx}
+            disabledIdx={tokenOutIdx}
           />
-          <select
-            value={tokenInIdx}
-            onChange={(e) => {
-              const idx = Number(e.target.value);
-              if (idx === tokenOutIdx) handleFlipTokens();
-              else setTokenInIdx(idx);
-            }}
-            className="absolute right-2 top-1/2 -translate-y-1/2 bg-surface-hover rounded px-2 py-0.5 font-mono text-[12px] text-text-primary border border-border cursor-pointer"
-          >
-            {TOKENS.map((t, i) => (
-              <option key={t.address} value={i}>
-                {t.symbol}
-              </option>
-            ))}
-          </select>
+        </div>
+
+        {/* Percentage buttons */}
+        <div className="flex gap-1.5 mt-3">
+          {[
+            { label: "25%", frac: 0.25 },
+            { label: "50%", frac: 0.5 },
+            { label: "75%", frac: 0.75 },
+            { label: "MAX", frac: 1.0 },
+          ].map(({ label, frac }) => (
+            <button
+              key={label}
+              type="button"
+              onClick={() => handlePct(frac)}
+              className="btn-ghost flex-1 py-1 text-[11px] font-mono"
+            >
+              {label}
+            </button>
+          ))}
         </div>
       </div>
 
-      {/* Percentage buttons */}
-      <div className="flex gap-1.5 mb-2">
-        {[0.25, 0.5, 0.75, 1.0].map((frac) => (
-          <button
-            key={frac}
-            type="button"
-            onClick={() => handlePct(frac)}
-            className="btn-ghost flex-1 py-1 text-[11px] font-mono"
-          >
-            {frac * 100}%
-          </button>
-        ))}
-      </div>
-
-      {/* Flip button */}
-      <div className="flex justify-center my-1">
+      {/* ── Flip button ──────────────────────────────────────────────── */}
+      <div className="flex justify-center -my-1 relative z-10">
         <button
           type="button"
           onClick={handleFlipTokens}
-          className="btn-ghost p-1.5 rounded-full border border-border hover:border-primary transition-colors"
+          className={cn(
+            "rounded-full border border-border bg-surface p-2",
+            "hover:border-primary hover:bg-primary/10 hover:text-primary",
+            "transition-all duration-150",
+          )}
           aria-label="Flip tokens"
         >
           <ArrowDownUp className="h-4 w-4" />
         </button>
       </div>
 
-      {/* Token Out display */}
-      <div className="mb-3 mt-1">
-        <div className="flex items-center justify-between mb-1.5">
-          <span className="text-[11px] text-text-muted">You Receive</span>
+      {/* ── Token Out box ─────────────────────────────────────────────── */}
+      <div className="rounded-xl border border-border bg-background/60 p-4">
+        <div className="flex items-center justify-between mb-3">
+          <p className="text-[11px] text-text-muted">You Receive</p>
           {sourceLabel && (
             <span className="font-mono text-[10px] text-accent">
               via {sourceLabel}
             </span>
           )}
         </div>
-        <div className="relative">
-          <input
-            type="text"
-            readOnly
-            value={quoteLoading ? "..." : amountOutDisplay}
-            placeholder="0.00"
-            aria-label="Amount to receive"
-            className="input-trading pr-24 text-right text-lg text-text-secondary"
+
+        {/* Amount LEFT, token picker RIGHT */}
+        <div className="flex items-start gap-3">
+          <div className="flex-1 min-w-0">
+            <input
+              type="text"
+              readOnly
+              value={quoteLoading ? "..." : amountOutDisplay}
+              placeholder="0.00"
+              aria-label="Amount to receive"
+              className="input-trading text-left text-2xl font-semibold w-full bg-transparent border-0 focus:ring-0 p-0 text-text-secondary"
+            />
+            <p className="text-left text-[11px] text-text-muted mt-1 font-mono">
+              {amountOutDisplay && Number(amountOutDisplay) > 0 ? "≈ —" : ""}
+            </p>
+          </div>
+
+          <TokenPicker
+            selectedIdx={tokenOutIdx}
+            onSelect={setTokenOutIdx}
+            disabledIdx={tokenInIdx}
           />
-          <select
-            value={tokenOutIdx}
-            onChange={(e) => {
-              const idx = Number(e.target.value);
-              if (idx === tokenInIdx) handleFlipTokens();
-              else setTokenOutIdx(idx);
-            }}
-            className="absolute right-2 top-1/2 -translate-y-1/2 bg-surface-hover rounded px-2 py-0.5 font-mono text-[12px] text-text-primary border border-border cursor-pointer"
-          >
-            {TOKENS.map((t, i) => (
-              <option key={t.address} value={i}>
-                {t.symbol}
-              </option>
-            ))}
-          </select>
         </div>
       </div>
 
@@ -458,6 +649,7 @@ export function SwapForm() {
       {quote && parsedAmountIn && (
         <QuoteDisplay
           quote={quote}
+          tokenIn={tokenIn}
           tokenOut={tokenOut}
           slippageBps={slippageBps}
           minAmountOut={minOutDisplay}
@@ -466,7 +658,7 @@ export function SwapForm() {
 
       {/* Quote error */}
       {quoteError && parsedAmountIn && (
-        <div className="mb-3 text-center">
+        <div className="text-center">
           <p className="text-[11px] text-danger">
             Quote unavailable — {quoteError.message.slice(0, 80)}
           </p>
@@ -475,8 +667,8 @@ export function SwapForm() {
 
       {/* Swap confirmation */}
       {swapStep === "done" && swapTxHash && (
-        <div className="mb-3 rounded-md border border-primary/30 bg-primary/5 px-3 py-2">
-          <p className="text-[11px] text-primary font-medium">
+        <div className="rounded-lg border border-primary/30 bg-primary/5 px-3 py-2.5">
+          <p className="text-[11px] text-primary font-semibold">
             Swap confirmed!
           </p>
           <p className="text-[10px] text-text-muted font-mono mt-0.5 break-all">
@@ -487,11 +679,21 @@ export function SwapForm() {
 
       {/* Approval / swap errors */}
       {(approveError || swapError) && (
-        <div className="mb-3 rounded-md border border-danger/30 bg-danger/5 px-3 py-2">
+        <div className="rounded-lg border border-danger/30 bg-danger/5 px-3 py-2.5">
           <p className="text-[11px] text-danger">
             {approveError
               ? `Approval failed — ${approveError.message.slice(0, 100)}`
               : `Swap failed — ${swapError?.message.slice(0, 100)}`}
+          </p>
+        </div>
+      )}
+
+      {/* Multi-hop route hint */}
+      {selectedRoute && selectedRoute.hops.length > 1 && (
+        <div className="rounded-lg border border-primary/20 bg-primary/5 px-3 py-2">
+          <p className="text-[11px] text-primary">
+            {selectedRoute.hops.length}-hop route selected via{" "}
+            {selectedRoute.hops.map((h) => h.poolLabel).join(" → ")}
           </p>
         </div>
       )}
@@ -514,7 +716,7 @@ export function SwapForm() {
       </button>
 
       {!isConnected && (
-        <p className="mt-2 text-center text-[10px] text-text-muted">
+        <p className="text-center text-[10px] text-text-muted">
           Connect wallet to enable swaps
         </p>
       )}

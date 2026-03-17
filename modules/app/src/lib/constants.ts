@@ -23,6 +23,9 @@ export const CONTRACTS = {
   HYPER_EXECUTOR: "0x62919Cb6416Cb919fC4A30c5707a7867Ca874ca6",
   // Phase 8 redeployment (2026-03-12)
   VAULT: "0x03473a95971Ba0496786a615e21b1e87bDFf0025",
+  // Phase 18 test tokens (live in UV2 pair registry)
+  TEST_USDC: "0x5298FDe9E288371ECA21db04Ac5Ddba00C1ea626",
+  TEST_ETH: "0xd92a5325fB3A56f5012F1EBD1bd37573d981144e",
 } as const;
 
 export const CHAIN = {
@@ -90,6 +93,30 @@ export const SWAP_ROUTER_ABI = [
       { name: "tokenOut", type: "address" },
       { name: "feeBps", type: "uint256" },
       { name: "data", type: "bytes32" },
+      { name: "amountIn", type: "uint256" },
+      { name: "minAmountOut", type: "uint256" },
+      { name: "to", type: "address" },
+      { name: "deadline", type: "uint256" },
+    ],
+    outputs: [{ name: "amountOut", type: "uint256" }],
+    stateMutability: "nonpayable",
+  },
+  {
+    type: "function",
+    name: "swapMultiHop",
+    inputs: [
+      {
+        name: "routes",
+        type: "tuple[]",
+        components: [
+          { name: "poolType", type: "uint8" },
+          { name: "pool", type: "address" },
+          { name: "tokenIn", type: "address" },
+          { name: "tokenOut", type: "address" },
+          { name: "feeBps", type: "uint256" },
+          { name: "data", type: "bytes32" },
+        ],
+      },
       { name: "amountIn", type: "uint256" },
       { name: "minAmountOut", type: "uint256" },
       { name: "to", type: "address" },

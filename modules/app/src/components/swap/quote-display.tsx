@@ -1,9 +1,11 @@
 import { formatUnits } from "viem";
+import { RefreshCw } from "lucide-react";
 import { PoolType, POOL_TYPE_LABELS } from "@/types";
 import type { SwapQuoteResult, SwapToken } from "@/types";
 
 interface QuoteDisplayProps {
   quote: SwapQuoteResult;
+  tokenIn: SwapToken;
   tokenOut: SwapToken;
   slippageBps: number;
   minAmountOut: string;
@@ -12,6 +14,7 @@ interface QuoteDisplayProps {
 /** Compact swap-quote summary shown below the output field */
 export function QuoteDisplay({
   quote,
+  tokenIn,
   tokenOut,
   slippageBps,
   minAmountOut,
@@ -20,8 +23,36 @@ export function QuoteDisplay({
   const sourceLabel = POOL_TYPE_LABELS[quote.source as PoolType] ?? "Unknown";
   const slippagePercent = (slippageBps / 100).toFixed(1);
 
+  // Rate: 1 tokenIn = X tokenOut
+  const rateDisplay = (() => {
+    try {
+      const amountInFloat = Number(
+        formatUnits(BigInt(quote.amountIn), tokenIn.decimals),
+      );
+      const amountOutFloat = Number(
+        formatUnits(BigInt(quote.amountOut), tokenOut.decimals),
+      );
+      if (amountInFloat <= 0) return null;
+      const rate = amountOutFloat / amountInFloat;
+      return `1 ${tokenIn.symbol} = ${rate.toFixed(6)} ${tokenOut.symbol}`;
+    } catch {
+      return null;
+    }
+  })();
+
   return (
     <div className="space-y-1.5 mb-4 pb-3 border-b border-border">
+      {/* Rate */}
+      {rateDisplay && (
+        <div className="flex justify-between items-center">
+          <span className="text-[11px] text-text-muted">Rate</span>
+          <span className="flex items-center gap-1 font-mono text-[12px] text-text-primary">
+            {rateDisplay}
+            <RefreshCw className="h-3 w-3 text-text-muted" />
+          </span>
+        </div>
+      )}
+
       {/* Source */}
       <div className="flex justify-between">
         <span className="text-[11px] text-text-muted">Route</span>
