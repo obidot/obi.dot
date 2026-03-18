@@ -2,12 +2,12 @@
 
 import { useState, useEffect } from "react";
 import { useReadContract, useReadContracts } from "wagmi";
+import { CONTRACTS } from "@/lib/constants";
 import {
-  CONTRACTS,
   SWAP_QUOTER_ABI,
   SWAP_ROUTER_ABI,
   POOL_ADAPTER_ABI,
-} from "@/lib/constants";
+} from "@/lib/abi";
 import type {
   SwapQuoteResult,
   SwapRoutesResponse,
@@ -15,13 +15,8 @@ import type {
   SwapRouteResult,
 } from "@/types";
 import { PoolType, POOL_TYPE_LABELS } from "@/types";
+import { ZERO_ADDRESS } from "@/lib/constants";
 
-// ── useSwapQuote ──────────────────────────────────────────────────────────
-
-/**
- * Fetch the best swap quote directly from SwapQuoter.getBestQuote (on-chain view).
- * Only fires when all four params are truthy and amountIn is non-zero.
- */
 export function useSwapQuote(params: {
   pool: string;
   tokenIn: string;
@@ -41,11 +36,11 @@ export function useSwapQuote(params: {
     functionName: "getBestQuote",
     args: enabled
       ? [
-          params.pool as `0x${string}`,
-          params.tokenIn as `0x${string}`,
-          params.tokenOut as `0x${string}`,
-          BigInt(params.amountIn),
-        ]
+        params.pool as `0x${string}`,
+        params.tokenIn as `0x${string}`,
+        params.tokenOut as `0x${string}`,
+        BigInt(params.amountIn),
+      ]
       : undefined,
     query: {
       enabled,
@@ -57,47 +52,35 @@ export function useSwapQuote(params: {
   // Map on-chain tuple (bigint fields) to the serialized SwapQuoteResult shape
   const data: SwapQuoteResult | undefined = result.data
     ? {
-        source: result.data.source as PoolType,
-        pool: result.data.pool,
-        feeBps: result.data.feeBps,
-        amountIn: result.data.amountIn.toString(),
-        amountOut: result.data.amountOut.toString(),
-      }
+      source: result.data.source as PoolType,
+      pool: result.data.pool,
+      feeBps: Number(result.data.feeBps),
+      amountIn: result.data.amountIn.toString(),
+      amountOut: result.data.amountOut.toString(),
+    }
     : undefined;
 
   return { ...result, data };
 }
 
-// ── useSwapRoutes ─────────────────────────────────────────────────────────
-
-/** Adapter registry entries — pool type, label, deployed address */
 const ADAPTER_REGISTRY: Array<{
   poolType: PoolType;
   adapter: `0x${string}`;
 }> = [
-  {
-    poolType: PoolType.HydrationOmnipool,
-    adapter: CONTRACTS.HYDRATION_ADAPTER as `0x${string}`,
-  },
-  {
-    poolType: PoolType.AssetHubPair,
-    adapter: CONTRACTS.ASSET_HUB_ADAPTER as `0x${string}`,
-  },
-  {
-    poolType: PoolType.BifrostDEX,
-    adapter: CONTRACTS.BIFROST_DEX_ADAPTER as `0x${string}`,
-  },
-];
+    {
+      poolType: PoolType.HydrationOmnipool,
+      adapter: CONTRACTS.HYDRATION_ADAPTER as `0x${string}`,
+    },
+    {
+      poolType: PoolType.AssetHubPair,
+      adapter: CONTRACTS.ASSET_HUB_ADAPTER as `0x${string}`,
+    },
+    {
+      poolType: PoolType.BifrostDEX,
+      adapter: CONTRACTS.BIFROST_DEX_ADAPTER as `0x${string}`,
+    },
+  ];
 
-/**
- * Check available swap routes directly on-chain:
- *   - SwapRouter.paused()
- *   - IPoolAdapter.supportsPair(address(0), tokenIn=address(0), tokenOut=address(0))
- *     for each registered adapter (address(0) = generic / any pair)
- *
- * The supportsPair call with zero-addresses returns the general "is this adapter
- * registered and functional?" flag, matching the pattern used in on-chain tests.
- */
 export function useSwapRoutes() {
   const contracts = [
     // [0] Router paused?
@@ -128,35 +111,79 @@ export function useSwapRoutes() {
 
   const data: SwapRoutesResponse | undefined = result.data
     ? (() => {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const anyData = result.data as any[];
-        const routerPaused =
-          (anyData[0]?.result as boolean | undefined) ?? false;
-        const adapters: PoolAdapterInfo[] = ADAPTER_REGISTRY.map(
-          ({ poolType, adapter }, i) => ({
-            poolType,
-            label: POOL_TYPE_LABELS[poolType],
-            adapter,
-            deployed: (anyData[i + 1]?.result as boolean | undefined) ?? false,
-          }),
-        );
-        return {
-          adapters,
-          routerDeployed: true,
-          routerPaused,
-        };
-      })()
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const anyData = result.data as any[];
+      const routerPaused =
+        (anyData[0]?.result as boolean | undefined) ?? false;
+      const adapters: PoolAdapterInfo[] = ADAPTER_REGISTRY.map(
+        ({ poolType, adapter }, i) => ({
+          poolType,
+          label: POOL_TYPE_LABELS[poolType],
+          adapter,
+          deployed: (anyData[i + 1]?.result as boolean | undefined) ?? false,
+        }),
+      );
+      return {
+        adapters,
+        routerDeployed: true,
+        routerPaused,
+      };
+    })()
     : undefined;
 
   return { ...result, data };
 }
 
-// ── useRouteFinder ────────────────────────────────────────────────────────
+/** Fetch all adapter quotes from SwapQuoter.getAllQuotes() */
+export function useAllQuotes(params: {
+  tokenIn: string;
+  tokenOut: string;
+  amountIn: string;
+}) {
+  const enabled =
+    !!params.tokenIn &&
+    !!params.tokenOut &&
+    !!params.amountIn &&
+    params.amountIn !== "0";
 
-/**
- * Fetch all available swap routes from the agent's /api/routes endpoint.
- * Debounces 600ms to avoid hammering the API on every keystroke.
- */
+  const result = useReadContract({
+    address: CONTRACTS.SWAP_QUOTER as `0x${string}`,
+    abi: SWAP_QUOTER_ABI,
+    functionName: "getAllQuotes",
+    args: enabled
+      ? [
+          ZERO_ADDRESS as `0x${string}`,
+          params.tokenIn as `0x${string}`,
+          params.tokenOut as `0x${string}`,
+          BigInt(params.amountIn),
+        ]
+      : undefined,
+    query: {
+      enabled,
+      staleTime: 12_000,
+      retry: 1,
+    },
+  });
+
+  const data: SwapQuoteResult[] | undefined = result.data
+    ? (result.data as Array<{
+        source: number;
+        pool: string;
+        feeBps: bigint;
+        amountIn: bigint;
+        amountOut: bigint;
+      }>).map((q) => ({
+        source: q.source as PoolType,
+        pool: q.pool,
+        feeBps: Number(q.feeBps),
+        amountIn: q.amountIn.toString(),
+        amountOut: q.amountOut.toString(),
+      }))
+    : undefined;
+
+  return { ...result, data };
+}
+
 export function useRouteFinder(params: {
   tokenIn: string;
   tokenOut: string;

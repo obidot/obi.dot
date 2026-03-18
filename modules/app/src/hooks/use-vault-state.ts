@@ -3,7 +3,8 @@
 import { useReadContracts } from "wagmi";
 import { useQuery } from "@tanstack/react-query";
 import { formatUnits, type Address } from "viem";
-import { CONTRACTS, VAULT_ABI } from "@/lib/constants";
+import { CONTRACTS } from "@/lib/constants";
+import { VAULT_ABI } from "@/lib/abi";
 import {
   getIndexedVaultState,
   getIndexedVaultStats,
@@ -12,9 +13,6 @@ import {
 } from "@/lib/graphql";
 
 const VAULT_ADDRESS = CONTRACTS.VAULT as Address;
-
-// ── On-chain reads via wagmi ────────────────────────────────────────────────
-// Reads live state directly from ObidotVault on Polkadot Hub TestNet.
 
 export function useVaultOnChain() {
   return useReadContracts({
