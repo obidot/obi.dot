@@ -1,0 +1,562 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Trade Page Layout</title>
+<script src="http://localhost:65403/helper.js"></script>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: 'Inter', system-ui, sans-serif;
+  background: #f1f5f9;
+  color: #0f172a;
+  padding: 24px 28px 40px;
+}
+
+h1 { font-size: 17px; font-weight: 700; color: #0f172a; margin-bottom: 4px; }
+.sub { font-size: 13px; color: #64748b; margin-bottom: 24px; }
+
+/* ── Card wrapper ── */
+.option-card {
+  background: white;
+  border: 2px solid #e2e8f0;
+  margin-bottom: 20px;
+  cursor: pointer;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.option-card:hover { border-color: #94a3b8; }
+.option-card.selected { border-color: #0f172a; box-shadow: 0 0 0 3px #0f172a1a; }
+
+.card-header {
+  padding: 12px 16px 10px;
+  border-bottom: 1px solid #e2e8f0;
+  background: #f8fafc;
+  display: flex; align-items: center; justify-content: space-between;
+}
+.card-title { font-size: 13px; font-weight: 700; color: #0f172a; }
+.card-badge {
+  font-size: 10px; font-weight: 600; padding: 2px 10px;
+  border: 1px solid; letter-spacing: 0.04em; text-transform: uppercase;
+}
+.badge-rec { border-color: #0f172a; color: #0f172a; background: #0f172a12; }
+.badge-kyber { border-color: #16a34a; color: #16a34a; background: #16a34a10; }
+.badge-full { border-color: #7c3aed; color: #7c3aed; background: #7c3aed10; }
+.card-desc { font-size: 11px; color: #64748b; margin-top: 3px; }
+
+/* ── SHARED MOCK PARTS ── */
+:root {
+  --nav-h: 32px;
+  --border: #dbe3ee;
+  --surface: #fff;
+  --bg: #f8fafc;
+  --text: #0f172a;
+  --muted: #94a3b8;
+  --primary: #e6007a;
+  --accent: #06b6d4;
+}
+
+.mock-wrap { padding: 0; overflow: hidden; }
+
+/* fake navbar */
+.mock-nav {
+  height: var(--nav-h);
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+  display: flex; align-items: center; padding: 0 14px; gap: 12px;
+}
+.mock-logo { width: 14px; height: 14px; background: var(--primary); flex-shrink: 0; }
+.mock-nav-sep { width: 1px; height: 12px; background: var(--border); }
+.mock-nav-link {
+  font-size: 9px; font-weight: 600; color: var(--text);
+  padding: 2px 6px; border: 1px solid var(--text); background: var(--text);
+  color: white;
+}
+.mock-nav-link-dim { font-size: 9px; font-weight: 500; color: var(--muted); }
+.mock-nav-right { margin-left: auto; display: flex; align-items: center; gap: 5px; }
+.mock-chip {
+  font-size: 8px; padding: 1px 6px; border: 1px solid var(--border);
+  color: var(--muted); white-space: nowrap;
+}
+.mock-connect {
+  font-size: 8px; padding: 2px 8px; border: 1px solid var(--text);
+  background: var(--text); color: white; font-weight: 600;
+}
+
+/* token box */
+.token-box {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  padding: 8px 10px;
+}
+.token-box-label { font-size: 8px; color: var(--muted); margin-bottom: 5px; }
+.token-box-row { display: flex; align-items: center; justify-content: space-between; }
+.token-amount { font-size: 18px; font-weight: 700; color: var(--text); }
+.token-pill {
+  font-size: 9px; font-weight: 600; padding: 2px 8px;
+  border: 1px solid var(--border); background: white;
+  display: flex; align-items: center; gap: 3px;
+}
+.token-dot { width: 8px; height: 8px; border-radius: 50%; }
+.flip-btn {
+  width: 20px; height: 20px; border: 1px solid var(--border);
+  background: white; display: flex; align-items: center; justify-content: center;
+  font-size: 8px; color: var(--muted); margin: 4px auto;
+}
+.swap-btn {
+  background: var(--text); color: white;
+  font-size: 9px; font-weight: 700; padding: 6px 0;
+  text-align: center; letter-spacing: 0.04em; margin-top: 6px;
+  width: 100%;
+}
+.tab-row {
+  border-bottom: 1px solid var(--border);
+  display: flex; align-items: stretch;
+  padding: 0 8px;
+}
+.mock-tab {
+  font-size: 9px; font-weight: 600; padding: 6px 8px 5px;
+  color: var(--muted); border-bottom: 2px solid transparent;
+  display: flex; align-items: center; gap: 3px;
+}
+.mock-tab.active { color: var(--primary); border-bottom-color: var(--primary); }
+
+/* route diagram */
+.route-area {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  padding: 8px 10px;
+}
+.route-label { font-size: 8px; color: var(--muted); margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.06em; }
+.route-row { display: flex; align-items: center; gap: 4px; margin-bottom: 4px; }
+.route-node {
+  width: 24px; height: 24px; border: 1px solid var(--border);
+  background: white; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 6px; font-weight: 700; flex-shrink: 0;
+}
+.route-line { flex: 1; height: 1px; background: var(--border); }
+.route-pool {
+  font-size: 7px; padding: 2px 5px; border: 1px solid var(--border);
+  background: white; white-space: nowrap; flex-shrink: 0;
+}
+.route-card {
+  border: 1px solid var(--border); padding: 6px 8px; margin-bottom: 4px;
+  background: white;
+}
+.route-card.best { border-color: #e6007a40; background: #e6007a05; }
+.route-badge {
+  font-size: 7px; padding: 1px 4px; border: 1px solid;
+  display: inline-block; margin-bottom: 3px;
+}
+.badge-live { border-color: #e6007a40; color: var(--primary); }
+.badge-best { border-color: var(--text); background: var(--text); color: white; }
+
+/* info banners */
+.info-banner {
+  border: 1px solid var(--border); padding: 5px 8px; margin-bottom: 4px;
+  display: flex; align-items: center; gap: 6px; background: white;
+}
+.info-dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
+.info-text { font-size: 8px; color: var(--muted); }
+
+/* ── LAYOUT A: KyberSwap-style 2-col ── */
+.layout-a { display: flex; height: 340px; }
+.layout-a .swap-col {
+  width: 200px; flex-shrink: 0;
+  border-right: 1px solid var(--border);
+  display: flex; flex-direction: column; overflow: hidden;
+}
+.layout-a .swap-body { padding: 8px; flex: 1; overflow: hidden; }
+.layout-a .route-col {
+  flex: 1; display: flex; flex-direction: column; overflow: hidden;
+}
+.layout-a .info-strip {
+  border-bottom: 1px solid var(--border); padding: 6px 8px;
+  display: flex; gap: 6px;
+}
+.layout-a .route-body { flex: 1; padding: 8px; overflow: hidden; }
+
+/* ── LAYOUT B: Centered card + route below ── */
+.layout-b { display: flex; flex-direction: column; min-height: 340px; }
+.layout-b .top-row {
+  display: flex; gap: 0; border-bottom: 1px solid var(--border);
+}
+.layout-b .swap-center {
+  width: 220px; flex-shrink: 0;
+  border-right: 1px solid var(--border);
+}
+.layout-b .swap-body { padding: 8px; }
+.layout-b .meta-col {
+  flex: 1; padding: 10px 10px; display: flex; flex-direction: column; gap: 8px;
+}
+.layout-b .route-strip {
+  padding: 8px 10px; flex: 1;
+}
+
+/* ── LAYOUT C: 3-column explorer ── */
+.layout-c { display: flex; height: 340px; }
+.layout-c .swap-col {
+  width: 185px; flex-shrink: 0;
+  border-right: 1px solid var(--border);
+  display: flex; flex-direction: column;
+}
+.layout-c .swap-body { padding: 8px; flex: 1; }
+.layout-c .route-col {
+  flex: 1; border-right: 1px solid var(--border);
+  display: flex; flex-direction: column;
+}
+.layout-c .route-body { padding: 8px; flex: 1; }
+.layout-c .info-col {
+  width: 130px; flex-shrink: 0; display: flex; flex-direction: column;
+}
+.layout-c .info-body { padding: 8px; flex: 1; }
+
+/* section headings inside mock */
+.section-head {
+  font-size: 8px; font-weight: 700; color: var(--muted);
+  text-transform: uppercase; letter-spacing: 0.07em;
+  padding-bottom: 5px; border-bottom: 1px solid var(--border); margin-bottom: 6px;
+}
+.slippage-row {
+  display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px;
+}
+.slippage-label { font-size: 7px; color: var(--muted); }
+.slippage-btns { display: flex; gap: 2px; }
+.slippage-btn {
+  font-size: 7px; padding: 1px 4px; border: 1px solid var(--border); color: var(--muted);
+}
+.slippage-btn.active { border-color: var(--primary); color: var(--primary); background: #e6007a0a; }
+.pct-row { display: flex; gap-2px; margin-top: 4px; }
+.pct-btn {
+  flex: 1; font-size: 7px; text-align: center; padding: 2px 0;
+  border: 1px solid var(--border); color: var(--muted);
+}
+
+.hl-label {
+  font-size: 8px; font-weight: 700; color: #334155; margin-bottom: 4px;
+}
+.stat-row {
+  display: flex; justify-content: space-between; margin-bottom: 3px;
+}
+.stat-key { font-size: 7px; color: var(--muted); }
+.stat-val { font-size: 7px; font-weight: 600; color: #334155; font-variant-numeric: tabular-nums; }
+</style>
+</head>
+<body>
+
+<h1>Trade Page Layout</h1>
+<p class="sub">All three use the same components — the difference is how they're arranged. Click to select.</p>
+
+<!-- ══════════════════════════════════════════════════════
+     OPTION A — KyberSwap 2-col (Swap left, Route right)
+══════════════════════════════════════════════════════ -->
+<div class="option-card selected" data-choice="a" onclick="toggleSelect(this)">
+  <div class="card-header">
+    <div>
+      <div class="card-title">A — Side-by-side (KyberSwap style)</div>
+      <div class="card-desc">Swap widget pinned left, route diagram fills the right. Info banners at top of right column.</div>
+    </div>
+    <span class="card-badge badge-rec">Recommended</span>
+  </div>
+  <div class="mock-wrap">
+    <div class="mock-nav">
+      <div class="mock-logo"></div>
+      <div class="mock-nav-sep"></div>
+      <div class="mock-nav-link">Trade</div>
+      <div class="mock-nav-link-dim">Yields</div>
+      <div class="mock-nav-link-dim">Strategies</div>
+      <div class="mock-nav-link-dim">Dashboard</div>
+      <div class="mock-nav-right">
+        <div class="mock-chip">⬡ Polkadot Hub</div>
+        <div class="mock-connect">Connect</div>
+      </div>
+    </div>
+
+    <div class="layout-a">
+      <!-- SWAP PANEL -->
+      <div class="swap-col">
+        <div class="tab-row">
+          <div class="mock-tab active">↕ Swap</div>
+          <div class="mock-tab">⏱ Limit</div>
+          <div class="mock-tab">🔗 Cross-Chain</div>
+        </div>
+        <div class="swap-body">
+          <div class="slippage-row">
+            <div class="slippage-label">Slippage</div>
+            <div class="slippage-btns">
+              <div class="slippage-btn">0.5%</div>
+              <div class="slippage-btn active">1%</div>
+              <div class="slippage-btn">2%</div>
+            </div>
+          </div>
+          <div class="token-box" style="margin-bottom:2px">
+            <div class="token-box-label">You Pay</div>
+            <div class="token-box-row">
+              <span class="token-amount">100</span>
+              <div class="token-pill"><div class="token-dot" style="background:#e6007a"></div>tDOT</div>
+            </div>
+            <div style="display:flex;gap:2px;margin-top:4px">
+              <div class="pct-btn">25%</div><div class="pct-btn">50%</div><div class="pct-btn">75%</div><div class="pct-btn">MAX</div>
+            </div>
+          </div>
+          <div class="flip-btn">⇅</div>
+          <div class="token-box">
+            <div class="token-box-label">You Receive</div>
+            <div class="token-box-row">
+              <span class="token-amount" style="color:#94a3b8">99.4</span>
+              <div class="token-pill"><div class="token-dot" style="background:#06b6d4"></div>tUSDC</div>
+            </div>
+          </div>
+          <div class="swap-btn">SWAP tDOT → tUSDC</div>
+        </div>
+      </div>
+
+      <!-- ROUTE + INFO COL -->
+      <div class="route-col">
+        <div class="info-strip">
+          <div class="info-banner" style="flex:1">
+            <div class="info-dot" style="background:#22c55e"></div>
+            <div class="info-text">Router deployed · Phase 17</div>
+          </div>
+          <div class="info-banner" style="flex:1">
+            <div class="info-dot" style="background:#e6007a"></div>
+            <div class="info-text">3 adapters live</div>
+          </div>
+        </div>
+        <div class="route-body">
+          <div class="section-head">Your trade route</div>
+          <div class="route-card best" style="margin-bottom:6px">
+            <div>
+              <span class="route-badge badge-best">BEST</span>
+              <span class="route-badge badge-live" style="margin-left:3px">V2</span>
+            </div>
+            <div class="route-row" style="margin:5px 0">
+              <div class="route-node" style="color:#e6007a;border-color:#e6007a40">tD</div>
+              <div class="route-line"></div>
+              <div class="route-pool">Bifrost V2 · 0.30%</div>
+              <div class="route-line"></div>
+              <div class="route-node" style="color:#06b6d4;border-color:#06b6d440">tU</div>
+            </div>
+            <div style="display:flex;gap:10px">
+              <div class="stat-row" style="gap:4px"><span class="stat-key">Fee</span><span class="stat-val">0.30%</span></div>
+              <div class="stat-row" style="gap:4px"><span class="stat-key">Impact</span><span class="stat-val" style="color:#22c55e">&lt;0.01%</span></div>
+            </div>
+          </div>
+          <div class="route-card">
+            <div><span class="route-badge badge-live" style="border-color:#06b6d440;color:#06b6d4">XCM</span></div>
+            <div class="route-row" style="margin:4px 0">
+              <div class="route-node" style="color:#e6007a;border-color:#e6007a40">tD</div>
+              <div class="route-line"></div>
+              <div class="route-pool">HydraDX</div>
+              <div class="route-line"></div>
+              <div class="route-node" style="color:#7c3aed;border-color:#7c3aed40">tE</div>
+              <div class="route-line"></div>
+              <div class="route-pool">Acala</div>
+              <div class="route-line"></div>
+              <div class="route-node" style="color:#06b6d4;border-color:#06b6d440">tU</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════
+     OPTION B — Centered swap + metadata right
+══════════════════════════════════════════════════════ -->
+<div class="option-card" data-choice="b" onclick="toggleSelect(this)">
+  <div class="card-header">
+    <div>
+      <div class="card-title">B — Swap + Stats panel</div>
+      <div class="card-desc">Narrow swap widget left, trade stats and route summary right in structured sections.</div>
+    </div>
+    <span class="card-badge badge-kyber">Compact</span>
+  </div>
+  <div class="mock-wrap">
+    <div class="mock-nav">
+      <div class="mock-logo"></div>
+      <div class="mock-nav-sep"></div>
+      <div class="mock-nav-link">Trade</div>
+      <div class="mock-nav-link-dim">Yields</div>
+      <div class="mock-nav-link-dim">Strategies</div>
+      <div class="mock-nav-right">
+        <div class="mock-chip">⬡ Polkadot Hub</div>
+        <div class="mock-connect">Connect</div>
+      </div>
+    </div>
+
+    <div class="layout-b">
+      <div class="top-row">
+        <!-- SWAP LEFT -->
+        <div class="swap-center">
+          <div class="tab-row">
+            <div class="mock-tab active">↕ Swap</div>
+            <div class="mock-tab">⏱ Limit</div>
+            <div class="mock-tab">🔗 XC</div>
+          </div>
+          <div class="swap-body">
+            <div class="token-box" style="margin-bottom:2px">
+              <div class="token-box-label">You Pay</div>
+              <div class="token-box-row">
+                <span class="token-amount">100</span>
+                <div class="token-pill"><div class="token-dot" style="background:#e6007a"></div>tDOT</div>
+              </div>
+            </div>
+            <div class="flip-btn">⇅</div>
+            <div class="token-box">
+              <div class="token-box-label">You Receive</div>
+              <div class="token-box-row">
+                <span class="token-amount" style="color:#94a3b8">99.4</span>
+                <div class="token-pill"><div class="token-dot" style="background:#06b6d4"></div>tUSDC</div>
+              </div>
+            </div>
+            <div class="swap-btn">SWAP tDOT → tUSDC</div>
+          </div>
+        </div>
+
+        <!-- META RIGHT -->
+        <div class="meta-col">
+          <div>
+            <div class="section-head">Quote details</div>
+            <div class="stat-row"><span class="stat-key">Rate</span><span class="stat-val">1 tDOT = 0.994 tUSDC</span></div>
+            <div class="stat-row"><span class="stat-key">Min received</span><span class="stat-val">98.4 tUSDC</span></div>
+            <div class="stat-row"><span class="stat-key">Price impact</span><span class="stat-val" style="color:#22c55e">&lt;0.01%</span></div>
+            <div class="stat-row"><span class="stat-key">Fee</span><span class="stat-val">0.30%</span></div>
+            <div class="stat-row"><span class="stat-key">Route</span><span class="stat-val">Bifrost V2</span></div>
+          </div>
+          <div>
+            <div class="section-head" style="margin-top:8px">Route</div>
+            <div class="route-row" style="margin-bottom:4px">
+              <div class="route-node" style="color:#e6007a;border-color:#e6007a40">tD</div>
+              <div class="route-line"></div>
+              <div class="route-pool">Bifrost V2</div>
+              <div class="route-line"></div>
+              <div class="route-node" style="color:#06b6d4;border-color:#06b6d440">tU</div>
+            </div>
+          </div>
+          <div>
+            <div class="section-head" style="margin-top:8px">Network</div>
+            <div class="info-banner"><div class="info-dot" style="background:#22c55e"></div><div class="info-text">Router live · 3 adapters</div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════
+     OPTION C — 3-column explorer
+══════════════════════════════════════════════════════ -->
+<div class="option-card" data-choice="c" onclick="toggleSelect(this)">
+  <div class="card-header">
+    <div>
+      <div class="card-title">C — 3-column explorer</div>
+      <div class="card-desc">Swap widget · Route diagram · Info/stats panel. Maximum information density, closest to a trading terminal.</div>
+    </div>
+    <span class="card-badge badge-full">Dense</span>
+  </div>
+  <div class="mock-wrap">
+    <div class="mock-nav">
+      <div class="mock-logo"></div>
+      <div class="mock-nav-sep"></div>
+      <div class="mock-nav-link">Trade</div>
+      <div class="mock-nav-link-dim">Yields</div>
+      <div class="mock-nav-right">
+        <div class="mock-chip">⬡ Polkadot Hub</div>
+        <div class="mock-connect">Connect</div>
+      </div>
+    </div>
+
+    <div class="layout-c">
+      <!-- SWAP -->
+      <div class="swap-col">
+        <div class="tab-row">
+          <div class="mock-tab active">↕ Swap</div>
+          <div class="mock-tab">⏱ Limit</div>
+        </div>
+        <div class="swap-body">
+          <div class="slippage-row">
+            <div class="slippage-label">Slippage</div>
+            <div class="slippage-btns">
+              <div class="slippage-btn active">1%</div>
+              <div class="slippage-btn">2%</div>
+            </div>
+          </div>
+          <div class="token-box" style="margin-bottom:2px">
+            <div class="token-box-label">You Pay</div>
+            <div class="token-box-row">
+              <span class="token-amount">100</span>
+              <div class="token-pill"><div class="token-dot" style="background:#e6007a"></div>tDOT</div>
+            </div>
+          </div>
+          <div class="flip-btn">⇅</div>
+          <div class="token-box">
+            <div class="token-box-label">You Receive</div>
+            <div class="token-box-row">
+              <span class="token-amount" style="color:#94a3b8">99.4</span>
+              <div class="token-pill"><div class="token-dot" style="background:#06b6d4"></div>tUSDC</div>
+            </div>
+          </div>
+          <div class="swap-btn">SWAP</div>
+        </div>
+      </div>
+
+      <!-- ROUTE DIAGRAM -->
+      <div class="route-col">
+        <div style="padding:6px 8px;border-bottom:1px solid var(--border);font-size:8px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.06em">Trade Route</div>
+        <div class="route-body">
+          <div class="route-card best" style="margin-bottom:5px">
+            <div><span class="route-badge badge-best">BEST</span> <span class="route-badge badge-live">V2</span></div>
+            <div class="route-row" style="margin:5px 0">
+              <div class="route-node" style="color:#e6007a;border-color:#e6007a40">tD</div>
+              <div class="route-line"></div>
+              <div class="route-pool">Bifrost</div>
+              <div class="route-line"></div>
+              <div class="route-node" style="color:#06b6d4;border-color:#06b6d440">tU</div>
+            </div>
+            <div style="display:flex;gap:8px">
+              <span class="stat-key">Fee <b style="color:#334155">0.30%</b></span>
+              <span class="stat-key">Impact <b style="color:#22c55e">&lt;0.01%</b></span>
+            </div>
+          </div>
+          <div class="route-card">
+            <div><span class="route-badge" style="border-color:#06b6d440;color:#06b6d4">XCM</span></div>
+            <div class="route-row" style="margin:4px 0">
+              <div class="route-node" style="font-size:5px;color:#e6007a">tD</div>
+              <div class="route-line"></div>
+              <div class="route-pool" style="font-size:6px">HydraDX</div>
+              <div class="route-line"></div>
+              <div class="route-node" style="font-size:5px;color:#7c3aed">tE</div>
+              <div class="route-line"></div>
+              <div class="route-pool" style="font-size:6px">Acala</div>
+              <div class="route-line"></div>
+              <div class="route-node" style="font-size:5px;color:#06b6d4">tU</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- INFO -->
+      <div class="info-col">
+        <div style="padding:6px 8px;border-bottom:1px solid var(--border);font-size:8px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.06em">Details</div>
+        <div class="info-body">
+          <div class="stat-row"><span class="stat-key">Rate</span><span class="stat-val">0.994</span></div>
+          <div class="stat-row"><span class="stat-key">Min out</span><span class="stat-val">98.4</span></div>
+          <div class="stat-row"><span class="stat-key">Impact</span><span class="stat-val" style="color:#22c55e">&lt;0.01%</span></div>
+          <div class="stat-row"><span class="stat-key">Fee</span><span class="stat-val">0.30%</span></div>
+          <div style="margin-top:8px">
+            <div class="section-head">Network</div>
+            <div class="info-banner"><div class="info-dot" style="background:#22c55e"></div><div class="info-text">Router live</div></div>
+            <div class="info-banner"><div class="info-dot" style="background:#e6007a"></div><div class="info-text">3 adapters</div></div>
+            <div class="info-banner"><div class="info-dot" style="background:#f59e0b"></div><div class="info-text">Testnet only</div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>

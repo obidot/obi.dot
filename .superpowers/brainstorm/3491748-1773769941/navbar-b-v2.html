@@ -1,0 +1,222 @@
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #f1f5f9; font-family: 'Inter', system-ui, sans-serif; color: #0f172a; padding: 40px 32px; }
+
+  .page-title { font-size: 18px; font-weight: 600; color: #0f172a; margin-bottom: 6px; }
+  .page-sub { font-size: 13px; color: #64748b; margin-bottom: 28px; }
+
+  .preview-wrap {
+    background: white;
+    border-radius: 14px;
+    overflow: hidden;
+    box-shadow: 0 1px 3px #0000001a, 0 4px 20px #0000000d;
+    margin-bottom: 28px;
+  }
+
+  /* ── The navbar ── */
+  .navbar {
+    background: #ffffff;
+    border-bottom: 1px solid #e2e8f0;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .top-bar {
+    height: 56px;
+    display: flex;
+    align-items: center;
+    padding: 0 24px;
+    gap: 0;
+  }
+
+  .logo {
+    display: flex; align-items: center; gap: 9px;
+    font-size: 16px; font-weight: 700; color: #0f172a;
+    letter-spacing: -0.3px;
+    margin-right: 28px;
+    text-decoration: none;
+    flex-shrink: 0;
+  }
+  .logo-mark {
+    width: 28px; height: 28px;
+    background: #e6007a;
+    border-radius: 6px;
+    display: flex; align-items: center; justify-content: center;
+    color: white; font-size: 13px; font-weight: 800;
+  }
+
+  .nav-links {
+    display: flex;
+    align-items: stretch;
+    height: 56px;
+    gap: 0;
+  }
+  .nav-link {
+    display: flex; align-items: center;
+    padding: 0 16px;
+    font-size: 14px;
+    font-weight: 500;
+    color: #64748b;
+    border-bottom: 2px solid transparent;
+    white-space: nowrap;
+    text-decoration: none;
+    transition: color 0.12s, border-color 0.12s;
+  }
+  .nav-link.active {
+    color: #0f172a;
+    border-bottom-color: #e6007a;
+    font-weight: 600;
+  }
+  .nav-link:not(.active):hover {
+    color: #334155;
+    border-bottom-color: #e2e8f0;
+  }
+
+  .right {
+    margin-left: auto;
+    display: flex; align-items: center; gap: 8px;
+    flex-shrink: 0;
+  }
+
+  .chain-chip {
+    height: 34px; border-radius: 8px;
+    border: 1px solid #e2e8f0;
+    padding: 0 12px;
+    font-size: 13px; color: #475569;
+    display: flex; align-items: center; gap: 6px;
+    background: #f8fafc;
+    cursor: pointer;
+  }
+  .chain-dot { width: 8px; height: 8px; border-radius: 50%; background: #e6007a; }
+
+  .connect-btn {
+    height: 34px; border-radius: 8px;
+    background: #0f172a; color: #fff;
+    padding: 0 16px; font-size: 13px; font-weight: 600;
+    border: none; cursor: pointer;
+    letter-spacing: -0.2px;
+  }
+
+  /* ticker */
+  .ticker-bar {
+    height: 27px;
+    background: #f8fafc;
+    border-top: 1px solid #e2e8f0;
+    display: flex; align-items: center;
+    padding: 0 20px; gap: 28px;
+    overflow: hidden;
+  }
+  .ticker-live {
+    display: flex; align-items: center; gap: 5px;
+    font-size: 10px; font-weight: 600;
+    text-transform: uppercase; letter-spacing: 0.06em;
+    color: #94a3b8; flex-shrink: 0;
+  }
+  .live-dot { width: 5px; height: 5px; border-radius: 50%; background: #22c55e; }
+  .ticker-items { display: flex; align-items: center; gap: 24px; overflow: hidden; }
+  .ticker-item { display: flex; align-items: center; gap: 6px; font-size: 12px; white-space: nowrap; flex-shrink: 0; }
+  .ticker-name { color: #94a3b8; }
+  .ticker-apy { color: #16a34a; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .ticker-label { color: #cbd5e1; font-size: 11px; }
+  .ticker-sep { color: #e2e8f0; margin: 0 4px; }
+
+  /* mock page body */
+  .mock-body {
+    height: 200px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #f8fafc;
+    color: #cbd5e1;
+    font-size: 13px;
+  }
+
+  /* annotation strip */
+  .annotations {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 12px;
+    margin-top: 20px;
+  }
+  .ann {
+    background: white;
+    border-radius: 10px;
+    padding: 14px 16px;
+    border: 1px solid #e2e8f0;
+  }
+  .ann-label {
+    font-size: 10px; font-weight: 600;
+    text-transform: uppercase; letter-spacing: 0.07em;
+    color: #94a3b8; margin-bottom: 4px;
+  }
+  .ann-value { font-size: 13px; font-weight: 600; color: #0f172a; }
+  .ann-desc { font-size: 11px; color: #64748b; margin-top: 2px; line-height: 1.4; }
+</style>
+
+<div class="page-title">Option B — Refined (larger text)</div>
+<div class="page-sub">Nav links bumped from 13px → 14px. Logo 15px → 16px. Ticker 11px → 12px. Connect/chain chips 12px → 13px.</div>
+
+<div class="preview-wrap">
+  <div class="navbar">
+    <div class="top-bar">
+      <a class="logo" href="#">
+        <div class="logo-mark">O</div>
+        Obidot
+      </a>
+      <div class="nav-links">
+        <a class="nav-link active" href="#">Trade</a>
+        <a class="nav-link" href="#">Yields</a>
+        <a class="nav-link" href="#">Strategies</a>
+        <a class="nav-link" href="#">Cross-Chain</a>
+        <a class="nav-link" href="#">Insights</a>
+        <a class="nav-link" href="#">Agent</a>
+        <a class="nav-link" href="#">Dashboard</a>
+      </div>
+      <div class="right">
+        <div class="chain-chip">
+          <div class="chain-dot"></div>
+          Polkadot Hub
+        </div>
+        <button class="connect-btn">Connect</button>
+      </div>
+    </div>
+    <div class="ticker-bar">
+      <div class="ticker-live"><div class="live-dot"></div>Live</div>
+      <div class="ticker-items">
+        <div class="ticker-item"><span class="ticker-name">stDOT</span><span class="ticker-apy">14.2%</span><span class="ticker-label">APY</span></div>
+        <span class="ticker-sep">·</span>
+        <div class="ticker-item"><span class="ticker-name">USDC/DOT</span><span class="ticker-apy">8.7%</span><span class="ticker-label">APY</span></div>
+        <span class="ticker-sep">·</span>
+        <div class="ticker-item"><span class="ticker-name">ETH/USDC</span><span class="ticker-apy">5.1%</span><span class="ticker-label">APY</span></div>
+        <span class="ticker-sep">·</span>
+        <div class="ticker-item"><span class="ticker-name">wBTC</span><span class="ticker-apy">3.4%</span><span class="ticker-label">APY</span></div>
+        <span class="ticker-sep">·</span>
+        <div class="ticker-item"><span class="ticker-name">stKSM</span><span class="ticker-apy">18.9%</span><span class="ticker-label">APY</span></div>
+      </div>
+    </div>
+  </div>
+  <div class="mock-body">← page content goes here</div>
+</div>
+
+<div class="annotations">
+  <div class="ann">
+    <div class="ann-label">Nav links</div>
+    <div class="ann-value">14px / 500w</div>
+    <div class="ann-desc">Active: 600w + pink underline</div>
+  </div>
+  <div class="ann">
+    <div class="ann-label">Logo</div>
+    <div class="ann-value">16px / 700w</div>
+    <div class="ann-desc">Pink square mark + wordmark</div>
+  </div>
+  <div class="ann">
+    <div class="ann-label">Chips & button</div>
+    <div class="ann-value">13px / 600w</div>
+    <div class="ann-desc">34px height, 8px radius</div>
+  </div>
+  <div class="ann">
+    <div class="ann-label">Ticker</div>
+    <div class="ann-value">12px / Live badge</div>
+    <div class="ann-desc">Green dot, APY in green</div>
+  </div>
+</div>

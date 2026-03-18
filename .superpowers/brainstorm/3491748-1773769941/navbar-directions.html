@@ -1,0 +1,324 @@
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body { background: #0d0f12; font-family: 'Inter', system-ui, sans-serif; color: #e2e8f0; }
+
+  .page-title { padding: 28px 32px 8px; font-size: 18px; font-weight: 600; color: #f1f5f9; }
+  .page-sub { padding: 0 32px 24px; font-size: 13px; color: #64748b; }
+
+  .navbar-preview {
+    margin: 0 32px 24px;
+    border-radius: 12px;
+    overflow: hidden;
+    border: 2px solid transparent;
+    cursor: pointer;
+    transition: border-color 0.15s, box-shadow 0.15s;
+  }
+  .navbar-preview:hover { border-color: #7c3aed44; }
+  .navbar-preview.selected { border-color: #e6007a; box-shadow: 0 0 0 4px #e6007a22; }
+
+  .preview-label {
+    padding: 10px 16px 6px;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: #64748b;
+    background: #161a20;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .preview-label .badge {
+    font-size: 10px;
+    padding: 2px 8px;
+    border-radius: 20px;
+    font-weight: 500;
+    text-transform: none;
+    letter-spacing: 0;
+  }
+  .badge-recommended { background: #e6007a22; color: #e6007a; border: 1px solid #e6007a44; }
+  .badge-minimal { background: #06b6d422; color: #06b6d4; border: 1px solid #06b6d444; }
+  .badge-bold { background: #7c3aed22; color: #a78bfa; border: 1px solid #7c3aed44; }
+
+  .preview-desc {
+    padding: 8px 16px 12px;
+    font-size: 12px;
+    color: #94a3b8;
+    background: #161a20;
+    border-bottom: 1px solid #1e2530;
+    line-height: 1.5;
+  }
+
+  /* ── Option A: Compact dark (KyberSwap-inspired) ── */
+  .nav-a {
+    background: #0d0f12;
+    border-bottom: 1px solid #1e2530;
+    display: flex;
+    flex-direction: column;
+  }
+  .nav-a .top-bar {
+    height: 52px;
+    display: flex;
+    align-items: center;
+    padding: 0 20px;
+    gap: 20px;
+  }
+  .nav-a .logo {
+    display: flex; align-items: center; gap: 8px;
+    font-size: 15px; font-weight: 700; color: #f1f5f9;
+  }
+  .nav-a .logo-dot { width: 28px; height: 28px; background: #e6007a; border-radius: 6px; }
+  .nav-a .divider { width: 1px; height: 18px; background: #2d3748; }
+  .nav-a .nav-links { display: flex; align-items: center; gap: 2px; }
+  .nav-a .nav-link {
+    padding: 5px 12px; border-radius: 6px;
+    font-size: 13px; font-weight: 500; color: #94a3b8;
+    white-space: nowrap;
+  }
+  .nav-a .nav-link.active {
+    background: #e6007a; color: #fff;
+  }
+  .nav-a .nav-link:not(.active):hover { color: #f1f5f9; background: #ffffff0f; }
+  .nav-a .right { margin-left: auto; display: flex; align-items: center; gap: 8px; }
+  .nav-a .chain-chip {
+    height: 32px; border-radius: 20px; border: 1px solid #2d3748;
+    padding: 0 12px; font-size: 12px; color: #94a3b8;
+    display: flex; align-items: center; gap: 6px; background: #161a20;
+  }
+  .nav-a .connect-btn {
+    height: 32px; border-radius: 20px;
+    background: #e6007a; color: #fff;
+    padding: 0 16px; font-size: 12px; font-weight: 600;
+    border: none;
+  }
+  .nav-a .ticker-bar {
+    height: 26px; background: #0a0c10;
+    border-top: 1px solid #1e2530;
+    display: flex; align-items: center;
+    padding: 0 16px; gap: 24px; overflow: hidden;
+  }
+  .nav-a .ticker-item {
+    display: flex; align-items: center; gap: 6px;
+    font-size: 11px; white-space: nowrap; flex-shrink: 0;
+  }
+  .nav-a .ticker-name { color: #64748b; }
+  .nav-a .ticker-apy { color: #22c55e; font-weight: 600; font-family: 'JetBrains Mono', monospace; }
+  .nav-a .ticker-label { color: #475569; }
+
+  /* ── Option B: Minimal float (Paradigm-inspired) ── */
+  .nav-b {
+    background: #f8fafc;
+    border-bottom: 1px solid #e2e8f0;
+    display: flex; flex-direction: column;
+  }
+  .nav-b .top-bar {
+    height: 52px;
+    display: flex; align-items: center; padding: 0 24px; gap: 0;
+  }
+  .nav-b .logo {
+    display: flex; align-items: center; gap: 8px;
+    font-size: 14px; font-weight: 700; color: #0f172a;
+    margin-right: 32px;
+  }
+  .nav-b .logo-dot { width: 26px; height: 26px; background: #e6007a; border-radius: 5px; }
+  .nav-b .nav-links { display: flex; align-items: center; gap: 0; }
+  .nav-b .nav-link {
+    padding: 6px 14px; font-size: 13px; font-weight: 500; color: #64748b;
+    border-bottom: 2px solid transparent; white-space: nowrap;
+  }
+  .nav-b .nav-link.active {
+    color: #0f172a; border-bottom-color: #e6007a;
+  }
+  .nav-b .nav-link:not(.active):hover { color: #334155; }
+  .nav-b .right { margin-left: auto; display: flex; align-items: center; gap: 8px; }
+  .nav-b .chain-chip {
+    height: 30px; border-radius: 6px; border: 1px solid #dbe3ee;
+    padding: 0 10px; font-size: 12px; color: #475569;
+    display: flex; align-items: center; gap: 5px; background: #fff;
+  }
+  .nav-b .connect-btn {
+    height: 30px; border-radius: 6px;
+    background: #0f172a; color: #fff;
+    padding: 0 14px; font-size: 12px; font-weight: 600; border: none;
+  }
+  .nav-b .ticker-bar {
+    height: 24px; background: #f1f5f9;
+    border-top: 1px solid #e2e8f0;
+    display: flex; align-items: center;
+    padding: 0 16px; gap: 24px; overflow: hidden;
+  }
+  .nav-b .ticker-item { display: flex; align-items: center; gap: 5px; font-size: 11px; white-space: nowrap; flex-shrink: 0; }
+  .nav-b .ticker-name { color: #94a3b8; }
+  .nav-b .ticker-apy { color: #16a34a; font-weight: 600; font-family: monospace; }
+  .nav-b .ticker-label { color: #cbd5e1; }
+
+  /* ── Option C: Dark glass with colored active pill ── */
+  .nav-c {
+    background: linear-gradient(135deg, #0f1117 0%, #121620 100%);
+    border-bottom: 1px solid #1e2a3a;
+    display: flex; flex-direction: column;
+  }
+  .nav-c .top-bar {
+    height: 56px;
+    display: flex; align-items: center; padding: 0 20px; gap: 16px;
+  }
+  .nav-c .logo {
+    display: flex; align-items: center; gap: 9px;
+    font-size: 15px; font-weight: 700; color: #f1f5f9;
+    letter-spacing: -0.3px;
+  }
+  .nav-c .logo-dot { width: 30px; height: 30px; background: linear-gradient(135deg, #e6007a, #7c3aed); border-radius: 8px; }
+  .nav-c .divider { width: 1px; height: 20px; background: #1e2a3a; }
+  .nav-c .nav-links {
+    display: flex; align-items: center; gap: 2px;
+    background: #ffffff08; border-radius: 10px; padding: 3px;
+    border: 1px solid #1e2a3a;
+  }
+  .nav-c .nav-link {
+    padding: 5px 13px; border-radius: 7px;
+    font-size: 13px; font-weight: 500; color: #64748b;
+    white-space: nowrap; transition: all 0.12s;
+  }
+  .nav-c .nav-link.active {
+    background: linear-gradient(135deg, #e6007a22, #7c3aed22);
+    color: #f1f5f9;
+    border: 1px solid #e6007a44;
+    box-shadow: 0 0 12px #e6007a1a;
+  }
+  .nav-c .nav-link:not(.active):hover { color: #cbd5e1; background: #ffffff0a; }
+  .nav-c .right { margin-left: auto; display: flex; align-items: center; gap: 8px; }
+  .nav-c .chain-chip {
+    height: 34px; border-radius: 20px;
+    border: 1px solid #1e2a3a;
+    padding: 0 12px; font-size: 12px; color: #94a3b8;
+    display: flex; align-items: center; gap: 6px;
+    background: #ffffff08;
+  }
+  .nav-c .connect-btn {
+    height: 34px; border-radius: 20px;
+    background: linear-gradient(135deg, #e6007a, #b8005f);
+    color: #fff; padding: 0 18px; font-size: 12px; font-weight: 600;
+    border: none; box-shadow: 0 2px 12px #e6007a44;
+  }
+  .nav-c .ticker-bar {
+    height: 27px; background: #0c0e14;
+    border-top: 1px solid #1e2a3a;
+    display: flex; align-items: center; padding: 0 16px; gap: 24px; overflow: hidden;
+  }
+  .nav-c .ticker-item { display: flex; align-items: center; gap: 6px; font-size: 11px; white-space: nowrap; flex-shrink: 0; }
+  .nav-c .ticker-name { color: #475569; }
+  .nav-c .ticker-apy { color: #e6007a; font-weight: 600; font-family: 'JetBrains Mono', monospace; }
+  .nav-c .ticker-label { color: #334155; }
+  .nav-c .ticker-sep { color: #1e2a3a; }
+
+  .spacer { height: 20px; }
+</style>
+
+<div class="page-title">Navbar Direction</div>
+<div class="page-sub">Pick the overall direction that feels right. We'll refine details after.</div>
+
+<!-- Option A -->
+<div class="navbar-preview" data-choice="a" onclick="toggleSelect(this)">
+  <div class="preview-label">
+    Option A — Dark Compact
+    <span class="badge badge-recommended">Recommended</span>
+  </div>
+  <div class="preview-desc">Tight, dark-first nav like KyberSwap. Active link uses brand pink fill. Feels DeFi-native and focused.</div>
+  <div class="nav-a">
+    <div class="top-bar">
+      <div class="logo"><div class="logo-dot"></div>Obidot</div>
+      <div class="divider"></div>
+      <div class="nav-links">
+        <div class="nav-link active">Trade</div>
+        <div class="nav-link">Yields</div>
+        <div class="nav-link">Strategies</div>
+        <div class="nav-link">Cross-Chain</div>
+        <div class="nav-link">Insights</div>
+        <div class="nav-link">Agent</div>
+        <div class="nav-link">Dashboard</div>
+      </div>
+      <div class="right">
+        <div class="chain-chip">⬡ Polkadot Hub</div>
+        <button class="connect-btn">Connect</button>
+      </div>
+    </div>
+    <div class="ticker-bar">
+      <div class="ticker-item"><span class="ticker-name">stDOT</span><span class="ticker-apy">14.2%</span><span class="ticker-label">APY</span></div>
+      <div class="ticker-item"><span class="ticker-name">USDC/DOT</span><span class="ticker-apy">8.7%</span><span class="ticker-label">APY</span></div>
+      <div class="ticker-item"><span class="ticker-name">ETH/USDC</span><span class="ticker-apy">5.1%</span><span class="ticker-label">APY</span></div>
+      <div class="ticker-item"><span class="ticker-name">wBTC</span><span class="ticker-apy">3.4%</span><span class="ticker-label">APY</span></div>
+      <div class="ticker-item"><span class="ticker-name">stKSM</span><span class="ticker-apy">18.9%</span><span class="ticker-label">APY</span></div>
+    </div>
+  </div>
+</div>
+
+<!-- Option B -->
+<div class="navbar-preview" data-choice="b" onclick="toggleSelect(this)">
+  <div class="preview-label">
+    Option B — Light Underline
+    <span class="badge badge-minimal">Minimal</span>
+  </div>
+  <div class="preview-desc">Light background, underline-style active indicator. Clean and readable, closer to the Paradigm data-tool aesthetic.</div>
+  <div class="nav-b">
+    <div class="top-bar">
+      <div class="logo"><div class="logo-dot"></div>Obidot</div>
+      <div class="nav-links">
+        <div class="nav-link active">Trade</div>
+        <div class="nav-link">Yields</div>
+        <div class="nav-link">Strategies</div>
+        <div class="nav-link">Cross-Chain</div>
+        <div class="nav-link">Insights</div>
+        <div class="nav-link">Agent</div>
+        <div class="nav-link">Dashboard</div>
+      </div>
+      <div class="right">
+        <div class="chain-chip">⬡ Polkadot Hub</div>
+        <button class="connect-btn">Connect</button>
+      </div>
+    </div>
+    <div class="ticker-bar">
+      <div class="ticker-item"><span class="ticker-name">stDOT</span><span class="ticker-apy">14.2%</span><span class="ticker-label">APY</span></div>
+      <div class="ticker-item"><span class="ticker-name">USDC/DOT</span><span class="ticker-apy">8.7%</span><span class="ticker-label">APY</span></div>
+      <div class="ticker-item"><span class="ticker-name">ETH/USDC</span><span class="ticker-apy">5.1%</span><span class="ticker-label">APY</span></div>
+      <div class="ticker-item"><span class="ticker-name">wBTC</span><span class="ticker-apy">3.4%</span><span class="ticker-label">APY</span></div>
+    </div>
+  </div>
+</div>
+
+<!-- Option C -->
+<div class="navbar-preview" data-choice="c" onclick="toggleSelect(this)">
+  <div class="preview-label">
+    Option C — Dark Glass Gradient
+    <span class="badge badge-bold">Bold</span>
+  </div>
+  <div class="preview-desc">Dark with subtle gradient, pill nav group with a glowing active state using brand pink + purple. More expressive and premium.</div>
+  <div class="nav-c">
+    <div class="top-bar">
+      <div class="logo"><div class="logo-dot"></div>Obidot</div>
+      <div class="divider"></div>
+      <div class="nav-links">
+        <div class="nav-link active">Trade</div>
+        <div class="nav-link">Yields</div>
+        <div class="nav-link">Strategies</div>
+        <div class="nav-link">Cross-Chain</div>
+        <div class="nav-link">Insights</div>
+        <div class="nav-link">Agent</div>
+        <div class="nav-link">Dashboard</div>
+      </div>
+      <div class="right">
+        <div class="chain-chip">⬡ Polkadot Hub</div>
+        <button class="connect-btn">Connect</button>
+      </div>
+    </div>
+    <div class="ticker-bar">
+      <div class="ticker-item"><span class="ticker-name">stDOT</span><span class="ticker-apy">14.2%</span><span class="ticker-sep">·</span></div>
+      <div class="ticker-item"><span class="ticker-name">USDC/DOT</span><span class="ticker-apy">8.7%</span><span class="ticker-sep">·</span></div>
+      <div class="ticker-item"><span class="ticker-name">ETH/USDC</span><span class="ticker-apy">5.1%</span><span class="ticker-sep">·</span></div>
+      <div class="ticker-item"><span class="ticker-name">wBTC</span><span class="ticker-apy">3.4%</span><span class="ticker-sep">·</span></div>
+      <div class="ticker-item"><span class="ticker-name">stKSM</span><span class="ticker-apy">18.9%</span><span class="ticker-sep">·</span></div>
+    </div>
+  </div>
+</div>
+
+<div class="spacer"></div>

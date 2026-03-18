@@ -1,0 +1,419 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Trade Page Layout v2</title>
+<script src="http://localhost:65403/helper.js"></script>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: 'Inter', system-ui, sans-serif; background: #f1f5f9; color: #0f172a; }
+
+/* ── Page chrome ── */
+.page-wrap { max-width: 1100px; margin: 0 auto; padding: 24px 28px 40px; }
+h1 { font-size: 17px; font-weight: 700; margin-bottom: 4px; }
+.sub { font-size: 13px; color: #64748b; margin-bottom: 24px; line-height: 1.5; }
+
+/* ── Full-width mockup ── */
+.mockup-frame {
+  background: #fff;
+  border: 1px solid #dbe3ee;
+  overflow: hidden;
+  width: 100%;
+}
+
+/* ── Navbar ── */
+.nav {
+  height: 44px; border-bottom: 1px solid #dbe3ee;
+  display: flex; align-items: center; padding: 0 20px; gap: 14px;
+  background: #fff;
+}
+.nav-logo { display: flex; align-items: center; gap: 7px; font-size: 14px; font-weight: 700; }
+.nav-logo-mark { width: 22px; height: 22px; background: #e6007a; }
+.nav-sep { width: 1px; height: 16px; background: #dbe3ee; }
+.nav-link { font-size: 12px; font-weight: 500; color: #94a3b8; padding: 3px 8px; }
+.nav-link.active { background: #0f172a; color: #fff; font-weight: 600; }
+.nav-right { margin-left: auto; display: flex; align-items: center; gap: 6px; }
+.nav-chip { font-size: 10px; padding: 3px 10px; border: 1px solid #dbe3ee; color: #64748b; display: flex; align-items: center; gap: 4px; }
+.nav-chip-dot { width: 6px; height: 6px; border-radius: 50%; background: #e6007a; }
+.nav-btn { font-size: 10px; padding: 4px 12px; background: #0f172a; color: #fff; font-weight: 600; border: 1px solid #0f172a; }
+
+/* ── Ticker ── */
+.ticker {
+  height: 24px; border-bottom: 1px solid #e7edf5;
+  background: #f8fafc; display: flex; align-items: center;
+  padding: 0 16px; gap: 20px; font-size: 10px; overflow: hidden;
+}
+.ticker-live { display: flex; align-items: center; gap: 4px; color: #94a3b8; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; font-size: 9px; }
+.ticker-live-dot { width: 5px; height: 5px; border-radius: 50%; background: #22c55e; }
+.ticker-item { display: flex; align-items: center; gap: 4px; white-space: nowrap; }
+.ticker-name { color: #94a3b8; }
+.ticker-apy { color: #16a34a; font-weight: 600; }
+
+/* ── Content area ── */
+.content {
+  display: flex;
+  min-height: 500px;
+  background: #f8fafc;
+}
+
+/* LEFT: Swap panel */
+.swap-panel {
+  width: 420px; flex-shrink: 0;
+  background: #fff;
+  border-right: 1px solid #dbe3ee;
+  display: flex; flex-direction: column;
+}
+
+/* Swap tab header */
+.swap-tabs {
+  display: flex; align-items: stretch;
+  border-bottom: 1px solid #dbe3ee;
+  padding: 0 16px;
+}
+.swap-tab {
+  font-size: 13px; font-weight: 500; color: #94a3b8;
+  padding: 11px 10px 9px; border-bottom: 2px solid transparent;
+  display: flex; align-items: center; gap: 5px;
+}
+.swap-tab.active { color: #e6007a; border-bottom-color: #e6007a; font-weight: 600; }
+.swap-tab-sep { color: #dbe3ee; font-size: 16px; font-weight: 300; padding: 0 4px; align-self: center; }
+.swap-tab-right { margin-left: auto; display: flex; align-items: center; gap: 4px; padding-bottom: 2px; }
+.swap-icon-btn { width: 28px; height: 28px; border: 1px solid #dbe3ee; display: flex; align-items: center; justify-content: center; color: #94a3b8; font-size: 13px; }
+
+.swap-desc { font-size: 11px; color: #94a3b8; padding: 8px 16px 0; }
+
+/* Swap body */
+.swap-body { padding: 12px 16px 16px; flex: 1; display: flex; flex-direction: column; gap: 2px; }
+
+/* Slippage */
+.slip-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+.slip-label { font-size: 11px; color: #94a3b8; }
+.slip-btns { display: flex; gap: 3px; }
+.slip-btn { font-size: 11px; padding: 3px 10px; border: 1px solid #dbe3ee; color: #94a3b8; font-variant-numeric: tabular-nums; }
+.slip-btn.active { border-color: #e6007a40; color: #e6007a; background: #e6007a08; }
+
+/* Token box */
+.token-box {
+  border: 1px solid #dbe3ee; background: #f8fafc;
+  padding: 12px 14px;
+}
+.token-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+.token-label { font-size: 11px; color: #94a3b8; }
+.token-balance { font-size: 11px; color: #94a3b8; display: flex; align-items: center; gap: 3px; }
+.token-row { display: flex; align-items: center; justify-content: space-between; }
+.token-amount { font-size: 26px; font-weight: 700; color: #0f172a; line-height: 1; }
+.token-amount.dim { color: #94a3b8; }
+.token-picker {
+  display: flex; align-items: center; gap: 6px;
+  border: 1px solid #dbe3ee; padding: 4px 10px 4px 6px;
+  background: #fff; font-size: 13px; font-weight: 600;
+}
+.token-circle { width: 22px; height: 22px; border-radius: 50%; flex-shrink: 0; }
+.token-usd { font-size: 11px; color: #94a3b8; margin-top: 4px; }
+.pct-row { display: flex; gap: 4px; margin-top: 8px; }
+.pct-btn { flex: 1; text-align: center; font-size: 10px; padding: 3px 0; border: 1px solid #dbe3ee; color: #94a3b8; font-weight: 500; }
+
+/* Flip */
+.flip-wrap { display: flex; justify-content: center; padding: 4px 0; position: relative; z-index: 1; }
+.flip-btn {
+  width: 32px; height: 32px; border: 1px solid #dbe3ee;
+  background: #fff; display: flex; align-items: center; justify-content: center;
+  font-size: 14px; color: #94a3b8;
+}
+
+/* Quote display */
+.quote-box {
+  border: 1px solid #dbe3ee; padding: 10px 14px;
+  background: #fff; margin-top: 6px;
+}
+.quote-row { display: flex; justify-content: space-between; margin-bottom: 4px; }
+.quote-key { font-size: 11px; color: #94a3b8; }
+.quote-val { font-size: 11px; color: #334155; font-weight: 600; font-variant-numeric: tabular-nums; }
+.quote-val.green { color: #16a34a; }
+
+/* CTA */
+.swap-cta {
+  margin-top: 8px; width: 100%; padding: 12px 0;
+  background: #e6007a; color: #fff; border: none;
+  font-size: 13px; font-weight: 700; letter-spacing: 0.04em;
+  text-align: center;
+}
+.swap-cta.connect { background: #0f172a; }
+.swap-hint { text-align: center; font-size: 10px; color: #94a3b8; margin-top: 6px; }
+
+/* RIGHT: Route area (KyberSwap-style open space) */
+.route-area {
+  flex: 1; display: flex; flex-direction: column;
+  padding: 20px 24px;
+}
+
+/* Info banners row */
+.banners-row { display: flex; gap: 8px; margin-bottom: 16px; }
+.banner {
+  flex: 1; border: 1px solid #dbe3ee; padding: 10px 12px;
+  background: #fff; display: flex; flex-direction: column; gap: 4px;
+}
+.banner-label { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: #94a3b8; display: flex; align-items: center; gap: 4px; }
+.banner-val { font-size: 12px; font-weight: 600; color: #0f172a; display: flex; align-items: center; gap: 6px; }
+.banner-apy { font-size: 11px; font-weight: 700; color: #16a34a; padding: 1px 8px; background: #16a34a12; border: 1px solid #16a34a30; }
+
+/* Route heading */
+.route-heading {
+  font-size: 15px; font-weight: 600; color: #0f172a;
+  margin-bottom: 16px; display: flex; align-items: center; gap: 8px;
+}
+.route-heading-icon { font-size: 18px; }
+
+/* Route diagram (KyberSwap flow style) */
+.route-flow {
+  flex: 1; position: relative;
+  display: flex; align-items: flex-start;
+  gap: 0; padding: 12px 0;
+}
+
+/* Token endpoints */
+.flow-endpoint {
+  display: flex; flex-direction: column; align-items: center; gap: 4px;
+  flex-shrink: 0;
+}
+.flow-token-amount { font-size: 13px; font-weight: 600; color: #0f172a; display: flex; align-items: center; gap: 4px; }
+.flow-token-circle { width: 16px; height: 16px; border-radius: 50%; flex-shrink: 0; }
+.flow-pct { font-size: 12px; font-weight: 700; color: #e6007a; margin-top: 50px; }
+
+/* Flow paths */
+.flow-middle {
+  flex: 1; display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  position: relative; min-height: 150px;
+}
+
+/* Pool boxes (KyberSwap-style) */
+.pool-card {
+  border: 1px solid #dbe3ee; background: #fff;
+  padding: 8px 12px; min-width: 120px;
+  position: relative;
+}
+.pool-token { font-size: 12px; font-weight: 600; color: #0f172a; display: flex; align-items: center; gap: 4px; margin-bottom: 3px; }
+.pool-detail { font-size: 10px; color: #94a3b8; }
+
+/* Connecting lines */
+.flow-line-h {
+  height: 1px; background: #dbe3ee; flex: 1; min-width: 30px; align-self: center;
+}
+.flow-line-h.primary { background: #e6007a; height: 2px; }
+.flow-arrow { color: #e6007a; font-size: 10px; align-self: center; }
+
+/* Empty state */
+.route-empty {
+  flex: 1; display: flex; flex-direction: column;
+  align-items: center; justify-content: center; gap: 8px;
+  color: #94a3b8;
+}
+.route-empty-icon { width: 40px; height: 40px; border: 1px solid #e6007a30; background: #e6007a08; display: flex; align-items: center; justify-content: center; font-size: 18px; }
+.route-empty-title { font-size: 13px; font-weight: 600; color: #64748b; }
+.route-empty-desc { font-size: 11px; color: #94a3b8; text-align: center; max-width: 240px; }
+.adapter-pills { display: flex; gap: 4px; margin-top: 4px; }
+.adapter-pill { font-size: 9px; padding: 2px 8px; border: 1px solid #dbe3ee; color: #94a3b8; background: #f8fafc; }
+</style>
+</head>
+<body>
+<div class="page-wrap">
+<h1>Trade Page — Revised Layout</h1>
+<p class="sub">KyberSwap layout structure (swap left, route right with padding) + Paradigm design language (no radius, clean borders, structured). This is a single proposal based on your feedback.</p>
+
+<div class="mockup-frame">
+  <!-- ── NAVBAR ── -->
+  <div class="nav">
+    <div class="nav-logo"><div class="nav-logo-mark"></div>Obidot</div>
+    <div class="nav-sep"></div>
+    <div class="nav-link active">Trade</div>
+    <div class="nav-link">Yields</div>
+    <div class="nav-link">Strategies</div>
+    <div class="nav-link">Cross-Chain</div>
+    <div class="nav-link">Insights</div>
+    <div class="nav-link">Agent</div>
+    <div class="nav-link">Dashboard</div>
+    <div class="nav-right">
+      <div class="nav-chip"><div class="nav-chip-dot"></div>Polkadot Hub</div>
+      <div class="nav-btn">Connect</div>
+    </div>
+  </div>
+
+  <!-- ── TICKER ── -->
+  <div class="ticker">
+    <div class="ticker-live"><div class="ticker-live-dot"></div>Live</div>
+    <div class="ticker-item"><span class="ticker-name">stDOT</span><span class="ticker-apy">14.2%</span></div>
+    <div class="ticker-item"><span class="ticker-name">USDC/DOT</span><span class="ticker-apy">8.7%</span></div>
+    <div class="ticker-item"><span class="ticker-name">ETH/USDC</span><span class="ticker-apy">5.1%</span></div>
+    <div class="ticker-item"><span class="ticker-name">wBTC</span><span class="ticker-apy">3.4%</span></div>
+    <div class="ticker-item"><span class="ticker-name">stKSM</span><span class="ticker-apy">18.9%</span></div>
+  </div>
+
+  <!-- ── MAIN CONTENT ── -->
+  <div class="content">
+    <!-- LEFT: Swap Panel -->
+    <div class="swap-panel">
+      <div class="swap-tabs">
+        <div class="swap-tab active">↕ Swap</div>
+        <div class="swap-tab-sep">|</div>
+        <div class="swap-tab">⏱ Limit Order</div>
+        <div class="swap-tab-sep">|</div>
+        <div class="swap-tab">🔗 Cross-Chain</div>
+        <div class="swap-tab-right">
+          <div class="swap-icon-btn">ℹ</div>
+          <div class="swap-icon-btn">⚙</div>
+        </div>
+      </div>
+      <div class="swap-desc">Instantly buy or sell tokens at superior prices</div>
+
+      <div class="swap-body">
+        <div class="slip-row">
+          <div class="slip-label">Max Slippage</div>
+          <div class="slip-btns">
+            <div class="slip-btn">0.5%</div>
+            <div class="slip-btn active">1%</div>
+            <div class="slip-btn">2%</div>
+            <div class="slip-btn">5%</div>
+          </div>
+        </div>
+
+        <div class="token-box">
+          <div class="token-header">
+            <span class="token-label">You Pay</span>
+            <span class="token-balance">💳 142.5 tDOT</span>
+          </div>
+          <div class="token-row">
+            <span class="token-amount">100</span>
+            <div class="token-picker">
+              <div class="token-circle" style="background:#e6007a"></div>
+              tDOT ▾
+            </div>
+          </div>
+          <div class="token-usd">~$671.82</div>
+          <div class="pct-row">
+            <div class="pct-btn">25%</div>
+            <div class="pct-btn">50%</div>
+            <div class="pct-btn">75%</div>
+            <div class="pct-btn">MAX</div>
+          </div>
+        </div>
+
+        <div class="flip-wrap">
+          <div class="flip-btn">⇅</div>
+        </div>
+
+        <div class="token-box">
+          <div class="token-header">
+            <span class="token-label">You Receive</span>
+            <span class="token-label" style="color:#06b6d4">via Bifrost V2</span>
+          </div>
+          <div class="token-row">
+            <span class="token-amount dim">99.40</span>
+            <div class="token-picker">
+              <div class="token-circle" style="background:#06b6d4"></div>
+              tUSDC ▾
+            </div>
+          </div>
+          <div class="token-usd">~$99.40</div>
+        </div>
+
+        <div class="quote-box">
+          <div class="quote-row">
+            <span class="quote-key">Rate</span>
+            <span class="quote-val">1 tDOT = 0.994 tUSDC ↻</span>
+          </div>
+          <div class="quote-row">
+            <span class="quote-key">Minimum Received</span>
+            <span class="quote-val">98.41 tUSDC</span>
+          </div>
+          <div class="quote-row" style="margin-bottom:0">
+            <span class="quote-key">Price Impact</span>
+            <span class="quote-val green">&lt; 0.01%</span>
+          </div>
+        </div>
+
+        <div class="swap-cta">SWAP tDOT → tUSDC</div>
+        <div class="swap-hint">Connect wallet to enable swaps</div>
+      </div>
+    </div>
+
+    <!-- RIGHT: Route + Info area -->
+    <div class="route-area">
+      <!-- Banners -->
+      <div class="banners-row">
+        <div class="banner">
+          <div class="banner-label">🔥 Trending Pools</div>
+          <div class="banner-val">
+            WETH/USDC
+            <span class="banner-apy">38.86% APR</span>
+          </div>
+        </div>
+        <div class="banner" style="border-color:#e6007a30;">
+          <div class="banner-label" style="color:#e6007a">🌾 Farming Pools</div>
+          <div class="banner-val">
+            ETH/cbBTC
+            <span class="banner-apy">13.92%</span>
+            <span style="margin-left:12px">BNB/USDT</span>
+            <span class="banner-apy">8.95%</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Route heading -->
+      <div class="route-heading">
+        <span class="route-heading-icon">🔀</span>
+        Your trade route
+      </div>
+
+      <!-- KyberSwap-style flow diagram -->
+      <div class="route-flow">
+        <!-- Left: token in -->
+        <div class="flow-endpoint" style="margin-top: 20px;">
+          <div class="flow-token-amount">
+            <div class="flow-token-circle" style="background:#e6007a"></div>
+            100 tDOT
+          </div>
+          <div style="height:60px;width:1px;background:#dbe3ee;margin:4px 0"></div>
+          <div class="flow-pct">100%</div>
+        </div>
+
+        <div class="flow-line-h primary" style="margin-top:28px"></div>
+        <div class="flow-arrow" style="margin-top:24px">▸</div>
+
+        <!-- Middle: pool card -->
+        <div style="display:flex;flex-direction:column;align-items:center;gap:4px;margin-top:10px">
+          <div class="pool-card">
+            <div class="pool-token">
+              <div class="flow-token-circle" style="background:#06b6d4;width:14px;height:14px"></div>
+              tUSDC
+            </div>
+            <div class="pool-detail">tDOT → tUSDC</div>
+            <div class="pool-detail">Swap/Bifrost V2</div>
+            <div class="pool-detail">100%</div>
+          </div>
+        </div>
+
+        <div class="flow-arrow" style="margin-top:24px">▸</div>
+        <div class="flow-line-h primary" style="margin-top:28px"></div>
+
+        <!-- Right: token out -->
+        <div class="flow-endpoint" style="margin-top: 20px;">
+          <div class="flow-token-amount">
+            99.40 tUSDC
+            <div class="flow-token-circle" style="background:#06b6d4"></div>
+          </div>
+          <div style="height:60px;width:1px;background:#dbe3ee;margin:4px 0"></div>
+          <div class="flow-pct">100%</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<p style="margin-top:16px;font-size:12px;color:#64748b;text-align:center">
+  Does this layout and style direction feel right? I'll implement it directly into the codebase.
+</p>
+</div>
+</body>
+</html>
