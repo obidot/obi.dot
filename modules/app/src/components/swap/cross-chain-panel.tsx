@@ -1,13 +1,18 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useCallback, useEffect } from "react";
 import { parseUnits } from "viem";
+import type { Address } from "viem";
 import { useAccount } from "wagmi";
+import { useWriteContract, useWaitForTransactionReceipt, useReadContract } from "wagmi";
 import { useConnectModal } from "@rainbow-me/rainbowkit";
 import { cn, formatTokenAmount } from "@/lib/format";
 import { useRouteFinder } from "@/hooks/use-swap";
 import { TOKENS } from "@/shared/trade/swap";
 import type { SwapRouteResult } from "@/types";
+import { PoolType } from "@/types";
+import { CONTRACTS, ZERO_BYTES32, GAS_LIMITS } from "@/lib/constants";
+import { SWAP_ROUTER_ABI, ERC20_APPROVE_ABI } from "@/lib/abi";
 import TokenPicker from "./token-picker";
 import {
   Link2,
@@ -142,13 +147,29 @@ export default function CrossChainSwapPanel() {
   const [amountIn, setAmountIn] = useState("");
   const [selectedChain, setSelectedChain] = useState<XCMChain>(XCM_CHAINS[0]);
 
-  const { isConnected } = useAccount();
+  const [xcmStep, setXcmStep] = useState<"idle" | "approving" | "swapping" | "done">("idle");
+
+  const { isConnected, address } = useAccount();
   const { openConnectModal } = useConnectModal();
+
+  const { writeContract: writeApprove, data: approveTxHash, isPending: approveWalletPending } = useWriteContract();
+  const { isSuccess: approveConfirmed } = useWaitForTransactionReceipt({ hash: approveTxHash });
+
+  const { writeContract: writeSwap, data: swapTxHash, isPending: swapWalletPending } = useWriteContract();
+  const { isSuccess: swapConfirmed } = useWaitForTransactionReceipt({ hash: swapTxHash });
 
   const tokenIn = TOKENS[tokenInIdx];
   const tokenOut = TOKENS[tokenOutIdx];
 
   const isRelayTeleport = selectedChain.id === "relay";
+
+  const { data: allowance } = useReadContract({
+    address: tokenIn.address as Address,
+    abi: ERC20_APPROVE_ABI,
+    functionName: "allowance",
+    args: address ? [address as Address, CONTRACTS.SWAP_ROUTER as Address] : undefined,
+    query: { enabled: !!address },
+  });
 
   const parsedAmountIn = useMemo(() => {
     if (!amountIn || isNaN(Number(amountIn)) || Number(amountIn) <= 0) return "";
@@ -156,6 +177,8 @@ export default function CrossChainSwapPanel() {
       return parseUnits(amountIn, tokenIn.decimals).toString();
     } catch { return ""; }
   }, [amountIn, tokenIn.decimals]);
+
+  const needsApproval = !allowance || (parsedAmountIn ? allowance < BigInt(parsedAmountIn) : false);
 
   const { routes, isLoading } = useRouteFinder({
     tokenIn: tokenIn.address,
@@ -188,15 +211,68 @@ export default function CrossChainSwapPanel() {
     setAmountIn("");
   };
 
-  const handleExecute = () => {
-    if (!isConnected) {
-      openConnectModal?.();
-      return;
+  const executeXcmSwap = useCallback(() => {
+    if (!parsedAmountIn || !address) return;
+    const deadline = BigInt(Math.floor(Date.now() / 1000) + 300);
+    setXcmStep("swapping");
+    writeSwap({
+      address: CONTRACTS.SWAP_ROUTER as Address,
+      abi: SWAP_ROUTER_ABI,
+      functionName: "swapFlat",
+      gas: GAS_LIMITS.SWAP,
+      args: [
+        PoolType.RelayTeleport,
+        CONTRACTS.XCM_EXECUTOR as Address,
+        tokenIn.address as Address,
+        CONTRACTS.NATIVE_DOT as Address,
+        0n,
+        ZERO_BYTES32,
+        BigInt(parsedAmountIn),
+        0n,
+        address as Address,
+        deadline,
+      ],
+    });
+  }, [parsedAmountIn, address, writeSwap, tokenIn]);
+
+  // After approval confirmed, execute the swap
+  useEffect(() => {
+    if (xcmStep === "approving" && approveConfirmed) {
+      executeXcmSwap();
     }
-    // TODO: wire up XCM execution via SwapRouter adapter
-    // RelayTeleport → adapter slot 5, no tokenOut (native relay DOT)
-    // Other chains → execute via respective adapter
-  };
+  }, [xcmStep, approveConfirmed, executeXcmSwap]);
+
+  // Mark done when swap confirmed
+  useEffect(() => {
+    if (swapConfirmed) setXcmStep("done");
+  }, [swapConfirmed]);
+
+  // Reset step when inputs change
+  useEffect(() => {
+    setXcmStep("idle");
+  }, [tokenInIdx, tokenOutIdx, amountIn, selectedChain.id]);
+
+  const handleExecute = useCallback(() => {
+    if (!isConnected) { openConnectModal?.(); return; }
+    if (!parsedAmountIn || !address) return;
+    if (xcmStep !== "idle" && xcmStep !== "done") return;
+
+    if (isRelayTeleport) {
+      if (needsApproval) {
+        setXcmStep("approving");
+        writeApprove({
+          address: tokenIn.address as Address,
+          abi: ERC20_APPROVE_ABI,
+          functionName: "approve",
+          gas: GAS_LIMITS.APPROVE,
+          args: [CONTRACTS.SWAP_ROUTER as Address, BigInt(parsedAmountIn)],
+        });
+      } else {
+        executeXcmSwap();
+      }
+    }
+    // Other chains are mainnet_only or coming_soon — button is disabled for those
+  }, [isConnected, openConnectModal, parsedAmountIn, address, xcmStep, isRelayTeleport, needsApproval, writeApprove, executeXcmSwap, tokenIn]);
 
   return (
     <div className="p-5 space-y-5">
@@ -342,7 +418,13 @@ export default function CrossChainSwapPanel() {
       <button
         type="button"
         onClick={handleExecute}
-        disabled={isConnected && (isRelayTeleport ? !parsedAmountIn : (!activeRoute || activeRoute.status !== "live" || !parsedAmountIn))}
+        disabled={
+          isConnected && (
+            isRelayTeleport
+              ? !parsedAmountIn || (xcmStep !== "idle" && xcmStep !== "done")
+              : (!activeRoute || activeRoute.status !== "live" || !parsedAmountIn)
+          )
+        }
         className="btn-primary"
       >
         {!isConnected
@@ -350,7 +432,15 @@ export default function CrossChainSwapPanel() {
           : !parsedAmountIn
             ? "ENTER AMOUNT"
             : isRelayTeleport
-              ? "TELEPORT DOT TO RELAY CHAIN"
+              ? xcmStep === "approving" || approveWalletPending
+                ? `APPROVING ${tokenIn.symbol}...`
+                : xcmStep === "swapping" || swapWalletPending
+                  ? "TELEPORTING..."
+                  : xcmStep === "done"
+                    ? "TELEPORT AGAIN"
+                    : needsApproval
+                      ? `APPROVE ${tokenIn.symbol}`
+                      : "TELEPORT DOT TO RELAY CHAIN"
               : !activeRoute
                 ? "NO ROUTE AVAILABLE"
                 : activeRoute.status === "live"
