@@ -675,6 +675,13 @@ body {
   animation: xcm-flow 1.8s ease-in-out infinite;
 }
 
+/* ── Route Flow (CSS animated connector line) ─────────────────────────── */
+
+@keyframes route-dash-bg {
+  from { background-position: 0 0; }
+  to   { background-position: 20px 0; }
+}
+
 /* ── RainbowKit Connect Button — MetaLiquid pill style ──────────────────────── */
 
 /*
