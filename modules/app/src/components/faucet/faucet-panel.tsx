@@ -66,6 +66,7 @@ function FaucetCard({
     try {
       setState("pending");
       setErrorMsg(undefined);
+      setTxHash(undefined);
       const hash = await writeContractAsync({
         address: token.address,
         abi: ERC20_MINT_ABI,
@@ -82,7 +83,6 @@ function FaucetCard({
   }
 
   const isLoading = state === "pending" || state === "confirming";
-  void isConfirmed; // consumed via useEffect above
 
   return (
     <div className="panel rounded-lg p-5 flex flex-col gap-4">
