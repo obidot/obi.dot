@@ -32,16 +32,23 @@
 
 > **This task must land before any other task. All downstream tasks depend on it.**
 
-> **Scope note:** The spec mentions four repos but based on actual code inspection, only two files need changing:
-> - `obi-kit/packages/` — grep confirms no stale SwapRouter address in any `.ts` file
-> - `modules/agent/src/config/constants.ts` — agent's tUSDC has no hardcoded `decimals: 18`; route math uses raw bigints from `getReserves()` directly. Decimal-formatted display is handled by the app's `TOKENS` array (`swap.ts`), which already has `decimals: 6`.
->
-> If you want to double-check before proceeding:
-> ```bash
-> grep -r "0x0A85A1B0\|decimals.*18" /home/harry-riddle/dev/github.com/obidot/obi-kit/packages/ 2>/dev/null
-> grep -n "tUSDC.*decimals\|decimals.*tUSDC" /home/harry-riddle/dev/github.com/obidot/obidot/modules/agent/src/config/constants.ts
-> ```
-> Both should return empty — no changes needed in those files.
+> **Scope note:** The spec mentions four repos but code inspection indicates only two files need changing. Run the verification steps below before editing anything to confirm.
+
+- [ ] **Step 0a: Verify obi-kit has no stale SwapRouter address**
+
+```bash
+grep -r "0x0A85A1B0" /home/harry-riddle/dev/github.com/obidot/obi-kit/packages/ 2>/dev/null
+```
+Expected: **no output** (obi-kit doesn't reference the old address).
+If output appears, add an `obi-kit` fix to this task: open the file shown and replace `0x0A85A1B0bb893cab3b5fad7312ac241e92C8Badf` with `0x60a72d1e20c5dc40Bb5a24394f0583d863201A3c`.
+
+- [ ] **Step 0b: Verify agent has no hardcoded tUSDC decimals: 18**
+
+```bash
+grep -n "decimals.*18\|18.*decimals" /home/harry-riddle/dev/github.com/obidot/obidot/modules/agent/src/config/constants.ts | grep -i "usdc\|token"
+```
+Expected: **no output** (agent uses raw bigints from `getReserves()`; no decimal scaling for tUSDC).
+If output appears, update the matching line from `decimals: 18` to `decimals: 6` and add it to this task's commit.
 
 - [ ] **Step 1: Fix ObidotVault address in obi.index**
 
