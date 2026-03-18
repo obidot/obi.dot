@@ -21,7 +21,7 @@ The Obidot AI Agent is an autonomous financial strategist that manages the vault
 │  └──────────────────────────────────────────────────────────────┘   │
 │                                                                      │
 │  ┌─────────────────────┐    ┌────────────────────────────────────┐  │
-│  │   Services           │    │   Fastify API Server (port 3011)   │  │
+│  │   Services           │    │   Fastify API Server (port 3001)   │  │
 │  │ • YieldService       │    │                                    │  │
 │  │ • CrossChainService  │    │   GET  /api/vault/state            │  │
 │  │ • SignerService      │    │   GET  /api/vault/performance      │  │
@@ -400,7 +400,7 @@ After each cycle the decision (action, reasoning, snapshot) is written to `Strat
 
 ## API Server
 
-The Fastify HTTP server starts on port `API_PORT` (default `3011`). All routes are prefixed `/api/`. CORS is open (suitable for local development). WebSocket upgrades are handled at `GET /ws`.
+The Fastify HTTP server starts on port `API_PORT` (default `3001`). All routes are prefixed `/api/`. CORS is open (suitable for local development). WebSocket upgrades are handled at `GET /ws`.
 
 ### Endpoints
 
@@ -413,9 +413,12 @@ The Fastify HTTP server starts on port `API_PORT` (default `3011`). All routes a
 | `GET`  | `/api/strategies`        | Strategy execution history from StrategyStore                       |
 | `GET`  | `/api/crosschain/state`  | Hub + satellite vault state aggregate                               |
 | `GET`  | `/api/agent/log`         | Agent decision log (most recent first)                              |
-| `POST` | `/api/agent/trigger`     | Trigger an LLM cycle — GPT-4o with all tools (up to 5 iterations)   |
-| `GET`  | `/api/swap/quote`        | Best swap quote for a token pair via `SwapQuoter.getBestQuote()`    |
-| `GET`  | `/api/swap/routes`       | All adapter quotes for a token pair via `SwapQuoter.getAllQuotes()` |
+| `POST` | `/api/chat`              | AI chat — GPT-4o with all tools (up to 5 tool-calling iterations)  |
+| `GET`  | `/api/routes`            | Multi-hop route discovery for a token pair (sorted best-first)      |
+| `GET`  | `/api/quote`             | Single best route for a token pair                                  |
+| `GET`  | `/api/swap/quote`        | Best swap quote via `SwapQuoter.getBestQuote()`                     |
+| `GET`  | `/api/swap/routes`       | All adapter quotes via `SwapQuoter.getAllQuotes()`                  |
+| `GET`  | `/api/health`            | Server health check (status, uptime, timestamp)                     |
 | `GET`  | `/ws`                    | WebSocket — streams `EventBus` events to connected clients          |
 
 ### Response Envelope
@@ -447,7 +450,7 @@ When `TELEGRAM_BOT_TOKEN` is set, a Telegram bot is started alongside the loop a
 
 - Responds to the `/start` command with a welcome message
 - Passes any text message to GPT-4o with all 9 LangChain tools available
-- Runs up to 5 tool-calling iterations per query (same runner as `/api/agent/trigger`)
+- Runs up to 5 tool-calling iterations per query (same runner as `/api/chat`)
 - Uses `ADMIN_CHAT_ID` to restrict access to a specific Telegram user/chat (optional)
 
 ## System Prompt
@@ -489,7 +492,7 @@ The prompt enforces a strict 3-step pipeline:
 | `RPC_URL`                     | Yes      | Polkadot Hub EVM RPC endpoint              |
 | `VAULT_ADDRESS`               | Yes      | ObidotVault contract address               |
 | `OPENAI_API_KEY`              | Yes      | OpenAI API key for GPT-4o model            |
-| `API_PORT`                    | No       | HTTP server port (default `3011`)          |
+| `API_PORT`                    | No       | HTTP server port (default `3001`)          |
 | `SWAP_ROUTER_ADDRESS`         | No       | SwapRouter contract address                |
 | `SWAP_QUOTER_ADDRESS`         | No       | SwapQuoter contract address                |
 | `HYDRATION_ADAPTER_ADDRESS`   | No       | HydrationOmnipoolAdapter contract address  |
@@ -569,4 +572,4 @@ pnpm --filter @obidot/agent run dev
 pnpm --filter @obidot/agent run start
 ```
 
-The agent starts its autonomous loop and API server together. The loop runs one cycle at a configurable interval (default: 60 seconds). The API server is available at `http://localhost:3011` once started.
+The agent starts its autonomous loop and API server together. The loop runs one cycle at a configurable interval (default: 60 seconds). The API server is available at `http://localhost:3001` once started.
