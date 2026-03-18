@@ -483,24 +483,27 @@ export class SwapRouterService {
 
     if (tokenInLc === tokenOutLc) return [];
 
-    // ── 1. Fetch all pair reserves in one multicall ──────────────────────────
+    // ── 1. Fetch all pair reserves via sequential readContract calls ─────────
+    // (multicall3 is not deployed on Polkadot Hub TestNet)
     let reservesData: Array<[bigint, bigint, number] | null>;
     try {
-      const calls = UV2_PAIRS.map((pair) => ({
-        address: pair.address,
-        abi: UV2_PAIR_ABI,
-        functionName: "getReserves" as const,
-      }));
-
-      const results = await this.publicClient.multicall({ contracts: calls });
+      const results = await Promise.allSettled(
+        UV2_PAIRS.map((pair) =>
+          this.publicClient.readContract({
+            address: pair.address,
+            abi: UV2_PAIR_ABI,
+            functionName: "getReserves",
+          }),
+        ),
+      );
 
       reservesData = results.map((r) => {
-        if (r.status === "failure" || !r.result) return null;
-        const [r0, r1, ts] = r.result as [bigint, bigint, number];
+        if (r.status === "rejected" || !r.value) return null;
+        const [r0, r1, ts] = r.value as [bigint, bigint, number];
         return [r0, r1, ts];
       });
     } catch (err) {
-      swapLog.error({ err }, "findRoutes: multicall getReserves failed");
+      swapLog.error({ err }, "findRoutes: getReserves failed");
       return [];
     }
 
