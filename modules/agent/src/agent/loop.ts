@@ -515,6 +515,16 @@ export class AutonomousLoop {
       `  Strategies Executed: ${vs.strategyCounter.toString()}`,
       crossChainSection,
       "",
+      ...(CHAIN_ID === 420_420_417
+        ? [
+            "⚠️ TESTNET ENVIRONMENT (Polkadot Hub TestNet, chain 420420417):",
+            "  - XCM channels to Bifrost, Hydration, and other parachains are NOT active.",
+            "  - BIFROST_STRATEGY, REALLOCATE, CROSS_CHAIN_REBALANCE, and UNIVERSAL_INTENT will revert.",
+            "  - Only NO_ACTION and LOCAL_SWAP are executable on this network.",
+            "  - Choose NO_ACTION unless a LOCAL_SWAP opportunity is clearly profitable.",
+            "",
+          ]
+        : []),
       "Based on this data, produce your decision as a JSON object.",
     ].join("\n");
   }
