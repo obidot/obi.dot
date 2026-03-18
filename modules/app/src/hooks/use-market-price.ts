@@ -20,7 +20,7 @@ export function useMarketPrice(
 
   const price = useMemo(() => {
     const locals = routes.filter(
-      (r) => r.routeType === "local" && r.amountOut !== "0",
+      (r) => r.routeType === "local" && r.amountOut !== "0" && /^\d+$/.test(r.amountOut),
     );
     if (locals.length === 0) return null;
     try {
