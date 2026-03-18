@@ -1,4 +1,12 @@
-// ── Frontend Types (serialized for JSON transport) ────────────────────────
+export type SwapStep =
+  | "idle"
+  | "approving"
+  | "approve-confirming"
+  | "swapping"
+  | "swap-confirming"
+  | "done";
+
+export type TradeActionType = "swap" | "limit" | "crosschain";
 
 /** Vault state with bigints serialized as strings */
 export interface VaultState {
@@ -190,6 +198,15 @@ export interface SwapRouteResult {
   status: "live" | "mainnet_only" | "coming_soon";
 }
 
+// ── Split Route Types ─────────────────────────────────────────────────────
+
+/** A selected route with a weight (basis points, 0–10000) for split execution */
+export interface SplitRouteSelection {
+  route: SwapRouteResult;
+  /** Basis points weight — selections must sum to 10_000 */
+  weight: number;
+}
+
 // ── WebSocket Event Types ─────────────────────────────────────────────────
 
 /** WebSocket event types */
@@ -198,14 +215,14 @@ export type WsEvent =
   | { type: "strategy:executed"; data: StrategyRecord }
   | { type: "agent:decision"; data: AgentDecision }
   | {
-      type: "swap:executed";
-      data: {
-        txHash: string;
-        amountIn: string;
-        amountOut: string;
-        source: PoolType;
-      };
-    }
+    type: "swap:executed";
+    data: {
+      txHash: string;
+      amountIn: string;
+      amountOut: string;
+      source: PoolType;
+    };
+  }
   | { type: "heartbeat"; data: { timestamp: string } };
 
 /** Navigation item */

@@ -1,12 +1,13 @@
 "use client";
 
 import { useState } from "react";
-import { SwapForm } from "@/components/swap/swap-form";
+import SwapForm from "@/components/swap/swap-form";
 import { RouteDiagram } from "@/components/swap/route-diagram";
 import { cn } from "@/lib/format";
 import { useSwapRoutes } from "@/hooks/use-swap";
 import type { SwapRouteResult } from "@/types";
-import { TRADE_ACTIONS, TradeActionType } from "@/shared/trade";
+import { TRADE_ACTIONS } from "@/shared/trade";
+import type { TradeActionType } from "@/types";
 import InfoBanners from "@/components/swap/info-banners";
 import LimitOrderPanel from "@/components/swap/limit-order-panel";
 import CrossChainSwapPanel from "@/components/swap/cross-chain-panel";
@@ -29,6 +30,8 @@ export default function SwapPage() {
     tokenIn: string;
     tokenOut: string;
     amountIn: string;
+    tokenOutSymbol: string;
+    tokenOutDecimals: number;
   }) => {
     setSwapInput(params);
     setSelectedRoute(null);
@@ -42,7 +45,7 @@ export default function SwapPage() {
     !!swapInput.tokenOut;
 
   const activeDescription =
-    TRADE_ACTIONS.find((t) => t.id === activeTab)?.description ?? "";
+    TRADE_ACTIONS.find((t: { id: string }) => t.id === activeTab)?.description ?? "";
 
   return (
     <div className="space-y-0">
@@ -55,7 +58,7 @@ export default function SwapPage() {
           {/* Tab bar */}
           <div className="border-b border-border px-4 pt-4 pb-3">
             <div className="tab-group">
-              {TRADE_ACTIONS.map((action) => (
+              {TRADE_ACTIONS.map((action: { id: TradeActionType; label: string }) => (
                 <button
                   key={action.id}
                   type="button"

@@ -1,4 +1,4 @@
-export type TradeActionType = "swap" | "limit" | "crosschain";
+import { TradeActionType } from "@/types";
 
 export const TRADE_ACTIONS: {
   id: TradeActionType;
@@ -96,4 +96,21 @@ export function resolveTradeRoute(params: {
     tokenIn: pair.tokenIn,
     tokenOut: pair.tokenOut,
   };
+}
+
+export const TOKEN_SLUG_TO_IDX: Record<string, number> = {
+  tdot: 0,
+  dot: 0,
+  tusdc: 1,
+  usdc: 1,
+  teth: 2,
+  eth: 2,
+};
+
+export function slugToTokenIdx(slug: string): number {
+  return TOKEN_SLUG_TO_IDX[slug.toLowerCase()] ?? 0;
+}
+
+export function chainToSlug(chainName: string): string {
+  return chainName.toLowerCase().replace(/\s+/g, "-");
 }

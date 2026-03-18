@@ -1,13 +1,15 @@
 import type { Metadata } from "next";
 import { Outfit } from "next/font/google";
 import localFont from "next/font/local";
-import { Navbar } from "@/components/layout/navbar";
+import Navbar from "@/components/layout/navbar";
 import { ChatWidget } from "@/components/chat/chat-widget";
 import "./globals.css";
-import { Providers } from "./providers";
+import Providers from "./providers";
+import { cn } from "@/lib/utils";
 
 export const outfitFont = Outfit({
   subsets: ["latin"],
+  variable: "--font-outfit",
 });
 
 export const atlasFont = localFont({
@@ -27,11 +29,17 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" className={outfitFont.className}>
+    <html
+      lang="en"
+      className={cn(atlasFont.className, atlasFont.variable, outfitFont.variable)}
+    >
       <body className="min-h-screen antialiased">
         <Providers>
           <div className="flex min-h-screen flex-col">
-            <Navbar />
+            {/* Navbar uses Outfit; everything else inherits Atlas */}
+            <div className={outfitFont.className}>
+              <Navbar />
+            </div>
             <main id="main-content" className="flex-1 px-5 py-4">
               {children}
             </main>
