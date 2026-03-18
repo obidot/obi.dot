@@ -424,10 +424,10 @@ export default function SwapForm({
               onChange={(e) => handleAmountChange(e.target.value)}
               placeholder="0.00"
               aria-label="Amount to swap"
-              className="input-trading text-left text-2xl font-semibold w-full bg-transparent border-0 focus:ring-0 p-0"
+              className="input-trading text-left text-[28px] font-bold tracking-tight w-full bg-transparent border-0 focus:ring-0 p-0"
             />
             <p className="text-left text-[13px] text-text-muted mt-1 font-mono">
-              {amountIn && Number(amountIn) > 0 ? "≈ —" : ""}
+              {amountIn && Number(amountIn) > 0 ? "≈ market value" : ""}
             </p>
           </div>
           <TokenPicker selectedIdx={tokenInIdx} onSelect={setTokenInIdx} disabledIdx={tokenOutIdx} />
@@ -485,10 +485,10 @@ export default function SwapForm({
               value={quoteLoading ? "..." : amountOutDisplay}
               placeholder="0.00"
               aria-label="Amount to receive"
-              className="input-trading text-left text-2xl font-semibold w-full bg-transparent border-0 focus:ring-0 p-0 text-text-secondary"
+              className="input-trading text-left text-[28px] font-bold tracking-tight w-full bg-transparent border-0 focus:ring-0 p-0 text-text-secondary"
             />
             <p className="text-left text-[13px] text-text-muted mt-1 font-mono">
-              {amountOutDisplay && Number(amountOutDisplay) > 0 ? "≈ —" : ""}
+              {amountOutDisplay && Number(amountOutDisplay) > 0 ? "≈ market value" : ""}
             </p>
           </div>
           <TokenPicker selectedIdx={tokenOutIdx} onSelect={setTokenOutIdx} disabledIdx={tokenInIdx} />
