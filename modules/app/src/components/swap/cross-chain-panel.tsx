@@ -1,11 +1,14 @@
 "use client";
 
 import { useState, useMemo } from "react";
+import { parseUnits } from "viem";
+import { useAccount } from "wagmi";
+import { useConnectModal } from "@rainbow-me/rainbowkit";
 import { cn, formatTokenAmount } from "@/lib/format";
 import { useRouteFinder } from "@/hooks/use-swap";
-import { CONTRACTS } from "@/lib/constants";
 import { TOKENS } from "@/shared/trade/swap";
 import type { SwapRouteResult } from "@/types";
+import TokenPicker from "./token-picker";
 import {
   Link2,
   Clock,
@@ -27,13 +30,13 @@ interface XCMChain {
 }
 
 const XCM_CHAINS: XCMChain[] = [
+  { id: "relay", name: "Relay Teleport", paraId: null, type: "xcm", icon: "RL", estTime: "~12s" },
   { id: "hydration", name: "Hydration", paraId: 2034, type: "xcm", icon: "HY", estTime: "~30s" },
   { id: "bifrost", name: "Bifrost", paraId: 2030, type: "xcm", icon: "BI", estTime: "~30s" },
-  { id: "assethub", name: "AssetHub", paraId: 1000, type: "xcm", icon: "AH", estTime: "~12s" },
-  { id: "relay", name: "Relay Teleport", paraId: null, type: "xcm", icon: "RL", estTime: "~12s" },
   { id: "karura", name: "Karura", paraId: 2000, type: "xcm", icon: "KA", estTime: "~30s" },
-  { id: "moonbeam", name: "Moonbeam", paraId: 2004, type: "xcm", icon: "MO", estTime: "~30s" },
   { id: "interlay", name: "Interlay", paraId: 2032, type: "xcm", icon: "IN", estTime: "~30s" },
+  { id: "moonbeam", name: "Moonbeam", paraId: 2004, type: "xcm", icon: "MO", estTime: "~30s" },
+  { id: "assethub", name: "AssetHub", paraId: 1000, type: "xcm", icon: "AH", estTime: "~12s" },
   { id: "snowbridge", name: "Snowbridge (Ethereum)", paraId: null, type: "bridge", icon: "SN", estTime: "~20min" },
   { id: "chainflip", name: "ChainFlip (ETH)", paraId: null, type: "bridge", icon: "CF", estTime: "~3min" },
 ];
@@ -139,13 +142,17 @@ export default function CrossChainSwapPanel() {
   const [amountIn, setAmountIn] = useState("");
   const [selectedChain, setSelectedChain] = useState<XCMChain>(XCM_CHAINS[0]);
 
+  const { isConnected } = useAccount();
+  const { openConnectModal } = useConnectModal();
+
   const tokenIn = TOKENS[tokenInIdx];
   const tokenOut = TOKENS[tokenOutIdx];
+
+  const isRelayTeleport = selectedChain.id === "relay";
 
   const parsedAmountIn = useMemo(() => {
     if (!amountIn || isNaN(Number(amountIn)) || Number(amountIn) <= 0) return "";
     try {
-      const { parseUnits } = require("viem");
       return parseUnits(amountIn, tokenIn.decimals).toString();
     } catch { return ""; }
   }, [amountIn, tokenIn.decimals]);
@@ -161,6 +168,16 @@ export default function CrossChainSwapPanel() {
   // Find route matching selected chain
   const activeRoute = xcmRoutes.find((r) => matchRouteToChain(r, selectedChain.id));
 
+  // For RelayTeleport: 1:1 teleport (DOT Hub → relay DOT), minus ~0.1% XCM fee estimate
+  const relayReceiveAmount = useMemo(() => {
+    if (!isRelayTeleport || !parsedAmountIn) return null;
+    try {
+      const raw = BigInt(parsedAmountIn);
+      const fee = raw / BigInt(1000); // ~0.1%
+      return (raw - fee).toString();
+    } catch { return null; }
+  }, [isRelayTeleport, parsedAmountIn]);
+
   const handleAmountChange = (raw: string) => {
     if (raw === "" || /^\d*\.?\d*$/.test(raw)) setAmountIn(raw);
   };
@@ -169,6 +186,16 @@ export default function CrossChainSwapPanel() {
     setTokenInIdx(tokenOutIdx);
     setTokenOutIdx(tokenInIdx);
     setAmountIn("");
+  };
+
+  const handleExecute = () => {
+    if (!isConnected) {
+      openConnectModal?.();
+      return;
+    }
+    // TODO: wire up XCM execution via SwapRouter adapter
+    // RelayTeleport → adapter slot 5, no tokenOut (native relay DOT)
+    // Other chains → execute via respective adapter
   };
 
   return (
@@ -214,19 +241,7 @@ export default function CrossChainSwapPanel() {
               placeholder="0.00"
               className="input-trading text-xl font-semibold flex-1 bg-transparent border-0 focus:ring-0 p-0"
             />
-            <button
-              type="button"
-              className="flex items-center gap-1.5 border border-border px-2.5 py-1.5 hover:border-primary/50 transition-colors"
-              onClick={() => {
-                const next = (tokenInIdx + 1) % TOKENS.length === tokenOutIdx
-                  ? (tokenInIdx + 2) % TOKENS.length
-                  : (tokenInIdx + 1) % TOKENS.length;
-                setTokenInIdx(next);
-              }}
-            >
-              <span className="font-mono text-[13px] text-text-primary">{tokenIn.symbol}</span>
-              <ChevronDown className="h-3 w-3 text-text-muted" />
-            </button>
+            <TokenPicker selectedIdx={tokenInIdx} onSelect={setTokenInIdx} disabledIdx={tokenOutIdx} />
           </div>
         </div>
 
@@ -241,17 +256,24 @@ export default function CrossChainSwapPanel() {
         </div>
 
         <div className="border border-border bg-background/60 p-4">
-          <p className="text-[13px] text-text-muted mb-3">You Receive on {selectedChain.name}</p>
+          <p className="text-[13px] text-text-muted mb-3">
+            You Receive on {isRelayTeleport ? "Relay Chain" : selectedChain.name}
+          </p>
           <div className="flex items-center gap-3">
             <span className="text-xl font-semibold text-text-secondary flex-1">
-              {isLoading ? "..." : activeRoute?.amountOut && activeRoute.amountOut !== "0"
-                ? formatTokenAmount(activeRoute.amountOut, tokenOut.decimals, 6)
-                : "—"}
+              {isLoading ? "..." : isRelayTeleport
+                ? (relayReceiveAmount ? formatTokenAmount(relayReceiveAmount, tokenIn.decimals, 6) : "—")
+                : (activeRoute?.amountOut && activeRoute.amountOut !== "0"
+                    ? formatTokenAmount(activeRoute.amountOut, tokenOut.decimals, 6)
+                    : "—")}
             </span>
-            <span className="font-mono text-[13px] text-text-primary border border-border px-2.5 py-1.5">
-              {tokenOut.symbol}
-            </span>
+            <TokenPicker selectedIdx={tokenOutIdx} onSelect={setTokenOutIdx} disabledIdx={tokenInIdx} />
           </div>
+          {isRelayTeleport && parsedAmountIn && (
+            <p className="text-[11px] text-text-muted mt-1.5">
+              ~0.1% XCM fee deducted · 1:1 teleport, no exchange rate
+            </p>
+          )}
         </div>
       </div>
 
@@ -277,6 +299,12 @@ export default function CrossChainSwapPanel() {
                 : "—"}
             </span>
           </div>
+          {isRelayTeleport && (
+            <div className="flex items-center justify-between px-3 py-2">
+              <span className="text-[12px] text-text-muted">Exchange Rate</span>
+              <span className="font-mono text-[13px] text-primary font-semibold">1:1 (teleport)</span>
+            </div>
+          )}
           {selectedChain.paraId && (
             <div className="flex items-center justify-between px-3 py-2">
               <span className="text-[12px] text-text-muted">Parachain</span>
@@ -287,7 +315,7 @@ export default function CrossChainSwapPanel() {
       )}
 
       {/* Status-based action */}
-      {!activeRoute && !isLoading && (
+      {!activeRoute && !isLoading && !isRelayTeleport && (
         <p className="text-[13px] text-text-muted text-center py-2">
           {parsedAmountIn ? "No route found for this chain" : "Enter an amount to see routes"}
         </p>
@@ -313,18 +341,23 @@ export default function CrossChainSwapPanel() {
 
       <button
         type="button"
-        disabled={!activeRoute || activeRoute.status !== "live" || !parsedAmountIn}
+        onClick={handleExecute}
+        disabled={isConnected && (isRelayTeleport ? !parsedAmountIn : (!activeRoute || activeRoute.status !== "live" || !parsedAmountIn))}
         className="btn-primary"
       >
-        {!parsedAmountIn
-          ? "ENTER AMOUNT"
-          : !activeRoute
-            ? "NO ROUTE AVAILABLE"
-            : activeRoute.status === "live"
-              ? `SWAP VIA ${selectedChain.name.toUpperCase()}`
-              : activeRoute.status === "mainnet_only"
-                ? "MAINNET ONLY"
-                : "COMING SOON"}
+        {!isConnected
+          ? "CONNECT WALLET"
+          : !parsedAmountIn
+            ? "ENTER AMOUNT"
+            : isRelayTeleport
+              ? "TELEPORT DOT TO RELAY CHAIN"
+              : !activeRoute
+                ? "NO ROUTE AVAILABLE"
+                : activeRoute.status === "live"
+                  ? `SWAP VIA ${selectedChain.name.toUpperCase()}`
+                  : activeRoute.status === "mainnet_only"
+                    ? "MAINNET ONLY"
+                    : "COMING SOON"}
       </button>
 
       <p className="text-center text-[11px] text-text-muted">
