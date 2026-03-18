@@ -1,13 +1,11 @@
 "use client";
 
-import { useState, useMemo, useEffect } from "react";
-import { cn, formatTokenAmount } from "@/lib/format";
-import { useSwapQuote } from "@/hooks/use-swap";
-import { CONTRACTS, ZERO_ADDRESS } from "@/lib/constants";
+import { useState } from "react";
+import { cn } from "@/lib/format";
+import { useMarketPrice } from "@/hooks/use-market-price";
 import { TOKENS } from "@/shared/trade/swap";
-import { PoolType, POOL_TYPE_LABELS } from "@/types";
-import { Clock3, Trash2, ChevronDown, TrendingUp, TrendingDown } from "lucide-react";
-import { parseUnits, formatUnits } from "viem";
+import { Clock3, TrendingUp, TrendingDown } from "lucide-react";
+import TokenPicker from "./token-picker";
 
 // ── Types ─────────────────────────────────────────────────────────────────
 
@@ -33,24 +31,8 @@ const EXPIRY_OPTIONS = [
 
 // ── Helpers ───────────────────────────────────────────────────────────────
 
-function loadOrders(): PendingOrder[] {
-  if (typeof window === "undefined") return [];
-  try {
-    return JSON.parse(localStorage.getItem("obidot_limit_orders") ?? "[]");
-  } catch { return []; }
-}
-
 function saveOrders(orders: PendingOrder[]) {
   localStorage.setItem("obidot_limit_orders", JSON.stringify(orders));
-}
-
-function formatExpiry(ts: number): string {
-  const diff = ts - Date.now();
-  if (diff <= 0) return "Expired";
-  const h = Math.floor(diff / 3_600_000);
-  const m = Math.floor((diff % 3_600_000) / 60_000);
-  if (h > 24) return `${Math.floor(h / 24)}d ${h % 24}h`;
-  return h > 0 ? `${h}h ${m}m` : `${m}m`;
 }
 
 function priceDeltaPct(target: string, market: string): number {
@@ -68,37 +50,13 @@ export default function LimitOrderPanel() {
   const [amountIn, setAmountIn] = useState("");
   const [targetPrice, setTargetPrice] = useState("");
   const [expiryIdx, setExpiryIdx] = useState(1); // 24h default
-  const [orders, setOrders] = useState<PendingOrder[]>([]);
   const [submitted, setSubmitted] = useState(false);
 
   const tokenIn = TOKENS[tokenInIdx];
   const tokenOut = TOKENS[tokenOutIdx];
 
-  // Load orders from localStorage on mount
-  useEffect(() => { setOrders(loadOrders()); }, []);
-
-  // ── Current market price (from quoter with 1 unit) ────────────────────
-  const unitAmount = useMemo(() => {
-    try { return parseUnits("1", tokenIn.decimals).toString(); } catch { return ""; }
-  }, [tokenIn.decimals]);
-
-  const { data: unitQuote } = useSwapQuote({
-    pool: ZERO_ADDRESS,
-    tokenIn: tokenIn.address,
-    tokenOut: tokenOut.address,
-    amountIn: unitAmount,
-  });
-
-  const marketPriceDisplay = unitQuote
-    ? formatUnits(BigInt(unitQuote.amountOut), tokenOut.decimals)
-    : null;
-
-  // ── Pre-fill target with market price ────────────────────────────────
-  useEffect(() => {
-    if (marketPriceDisplay && !targetPrice) {
-      setTargetPrice(marketPriceDisplay.slice(0, 10));
-    }
-  }, [marketPriceDisplay, targetPrice]);
+  // ── Current market price ──────────────────────────────────────────────
+  const { price: marketPriceDisplay } = useMarketPrice(tokenIn, tokenOut);
 
   const delta = marketPriceDisplay ? priceDeltaPct(targetPrice, marketPriceDisplay) : 0;
   const isAboveMarket = delta > 0;
@@ -127,23 +85,19 @@ export default function LimitOrderPanel() {
       marketPriceAtOrder: marketPriceDisplay ?? "—",
       createdAt: Date.now(),
     };
-    const next = [order, ...orders];
-    setOrders(next);
+    const existing: PendingOrder[] = (() => {
+      try {
+        return JSON.parse(localStorage.getItem("obidot_limit_orders") ?? "[]");
+      } catch { return []; }
+    })();
+    const next = [order, ...existing];
     saveOrders(next);
+    window.dispatchEvent(new CustomEvent("obidot:order-placed"));
     setAmountIn("");
     setTargetPrice(marketPriceDisplay?.slice(0, 10) ?? "");
     setSubmitted(true);
     setTimeout(() => setSubmitted(false), 3000);
   };
-
-  const handleDeleteOrder = (id: string) => {
-    const next = orders.filter((o) => o.id !== id);
-    setOrders(next);
-    saveOrders(next);
-  };
-
-  const activeOrders = orders.filter((o) => o.expiry > Date.now());
-  const expiredOrders = orders.filter((o) => o.expiry <= Date.now());
 
   return (
     <div className="p-5 space-y-5">
@@ -155,29 +109,9 @@ export default function LimitOrderPanel() {
 
       {/* Token pair row */}
       <div className="flex items-center gap-2">
-        <button
-          type="button"
-          className="flex items-center gap-1.5 border border-border px-2.5 py-1.5 hover:border-primary/50 transition-colors"
-          onClick={() => {
-            const next = tokenInIdx === 0 ? 2 : tokenInIdx - 1;
-            if (next !== tokenOutIdx) setTokenInIdx(next);
-          }}
-        >
-          <span className="font-mono text-[13px] text-text-primary">{tokenIn.symbol}</span>
-          <ChevronDown className="h-3 w-3 text-text-muted" />
-        </button>
+        <TokenPicker selectedIdx={tokenInIdx} onSelect={setTokenInIdx} disabledIdx={tokenOutIdx} />
         <span className="text-text-muted">→</span>
-        <button
-          type="button"
-          className="flex items-center gap-1.5 border border-border px-2.5 py-1.5 hover:border-primary/50 transition-colors"
-          onClick={() => {
-            const next = (tokenOutIdx + 1) % TOKENS.length;
-            if (next !== tokenInIdx) setTokenOutIdx(next);
-          }}
-        >
-          <span className="font-mono text-[13px] text-text-primary">{tokenOut.symbol}</span>
-          <ChevronDown className="h-3 w-3 text-text-muted" />
-        </button>
+        <TokenPicker selectedIdx={tokenOutIdx} onSelect={setTokenOutIdx} disabledIdx={tokenInIdx} />
         {marketPriceDisplay && (
           <span className="ml-auto font-mono text-[12px] text-text-muted">
             Market: 1 {tokenIn.symbol} = {Number(marketPriceDisplay).toFixed(6)} {tokenOut.symbol}
@@ -300,80 +234,6 @@ export default function LimitOrderPanel() {
       <p className="text-[11px] text-text-muted text-center">
         Orders are monitored by the Obidot AI agent and executed via UniversalIntent when price is reached.
       </p>
-
-      {/* Active orders list */}
-      {activeOrders.length > 0 && (
-        <div className="space-y-2">
-          <p className="text-[12px] text-text-muted uppercase tracking-wider">Active Orders ({activeOrders.length})</p>
-          {activeOrders.map((order) => (
-            <div key={order.id} className="border border-border bg-background/40 p-3 flex items-start justify-between gap-2">
-              <div className="space-y-0.5 min-w-0">
-                <div className="flex items-center gap-2">
-                  <span className="font-mono text-[13px] text-text-primary font-semibold">
-                    {order.amountIn} {order.tokenInSymbol} → {order.tokenOutSymbol}
-                  </span>
-                  <span className="font-mono text-[11px] text-primary border border-primary/20 px-1 py-0.5">PENDING</span>
-                </div>
-                <p className="text-[12px] text-text-muted font-mono">
-                  At: {Number(order.targetPrice).toFixed(6)} {order.tokenOutSymbol} / {order.tokenInSymbol}
-                  {order.marketPriceAtOrder !== "—" && (
-                    <span className={cn("ml-2", Number(order.targetPrice) > Number(order.marketPriceAtOrder) ? "text-bull" : "text-danger")}>
-                      ({priceDeltaPct(order.targetPrice, order.marketPriceAtOrder) > 0 ? "+" : ""}
-                      {priceDeltaPct(order.targetPrice, order.marketPriceAtOrder).toFixed(1)}% vs placed)
-                    </span>
-                  )}
-                </p>
-                <div className="flex items-center gap-1 text-[11px] text-text-muted">
-                  <Clock3 className="h-3 w-3" />
-                  <span>Expires in {formatExpiry(order.expiry)}</span>
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={() => handleDeleteOrder(order.id)}
-                className="text-text-muted hover:text-danger transition-colors shrink-0 p-1"
-                aria-label="Cancel order"
-              >
-                <Trash2 className="h-4 w-4" />
-              </button>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {/* Expired orders */}
-      {expiredOrders.length > 0 && (
-        <div className="space-y-2">
-          <div className="flex items-center justify-between">
-            <p className="text-[12px] text-text-muted uppercase tracking-wider">Expired ({expiredOrders.length})</p>
-            <button
-              type="button"
-              onClick={() => { setOrders(activeOrders); saveOrders(activeOrders); }}
-              className="text-[11px] text-text-muted hover:text-danger transition-colors font-mono"
-            >
-              Clear all
-            </button>
-          </div>
-          {expiredOrders.map((order) => (
-            <div key={order.id} className="border border-border opacity-50 bg-background/40 p-3 flex items-start justify-between gap-2">
-              <div className="space-y-0.5 min-w-0">
-                <span className="font-mono text-[13px] text-text-secondary">
-                  {order.amountIn} {order.tokenInSymbol} → {order.tokenOutSymbol}
-                </span>
-                <p className="text-[12px] text-text-muted font-mono">At: {Number(order.targetPrice).toFixed(6)}</p>
-                <p className="text-[11px] text-text-muted">Expired</p>
-              </div>
-              <button
-                type="button"
-                onClick={() => handleDeleteOrder(order.id)}
-                className="text-text-muted hover:text-danger transition-colors shrink-0 p-1"
-              >
-                <Trash2 className="h-4 w-4" />
-              </button>
-            </div>
-          ))}
-        </div>
-      )}
     </div>
   );
 }
