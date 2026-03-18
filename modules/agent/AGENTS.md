@@ -120,6 +120,25 @@ import { yieldLog } from "../utils/logger.js";
 | GET    | `/api/swap/quote`        | DEX aggregator quote (pool, tokenIn, tokenOut, amountIn) |
 | GET    | `/api/swap/routes`       | Available pool adapters + router status                  |
 
+### GET /api/swap/routes Response
+
+The `/api/swap/routes` endpoint includes cross-chain stubs appended to all live on-chain routes:
+
+| Stub | routeType | status |
+|------|-----------|--------|
+| RelayTeleport (XCM) | xcm | live |
+| Hydration Omnipool (XCM) | xcm | mainnet_only |
+| Bifrost DEX (XCM) | xcm | mainnet_only |
+| Uniswap V2 (Polkadot Hub) | local | live |
+| Karura DEX (XCM) | xcm | mainnet_only |
+| Interlay Loans (XCM) | xcm | mainnet_only |
+| Moonbeam DEX (XCM) | xcm | coming_soon |
+| Hyperbridge (ISMP) | bridge | mainnet_only |
+| Snowbridge (BridgeHub → Ethereum) | bridge | coming_soon |
+| ChainFlip (Polkadot → Ethereum) | bridge | coming_soon |
+
+Stubs have `amountOut: "0"` and `hops: []`. The UI filters them from on-chain route cards and displays them separately in the cross-chain section.
+
 ## PR Instructions
 
 - Branch/title format: `[@obidot/agent] <Title>`
