@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useDepositSubscription, useSwapSubscription } from "@/hooks/use-graphql-subscription";
 import type { DepositEvent, SwapEvent } from "@/hooks/use-graphql-subscription";
 import { cn } from "@/lib/format";
-import { Zap, ArrowLeftRight, TrendingDown } from "lucide-react";
+import { ArrowLeftRight, TrendingDown } from "lucide-react";
 
 type LiveEvent =
   | { kind: "deposit"; data: DepositEvent; ts: number }
@@ -12,12 +12,17 @@ type LiveEvent =
 
 const MAX_EVENTS = 20;
 
-// ── Pool type labels ─────────────────────────────────────
-const POOL_LABELS: Record<number, string> = {
-  0: "Hydration",
-  1: "AssetHub",
-  2: "Bifrost DEX",
-  3: "Custom",
+// ── Pool type labels (poolType is a String from obi.index) ────────────────
+const POOL_LABELS: Record<string, string> = {
+  "0": "Hydration",
+  "1": "AssetHub",
+  "2": "Bifrost DEX",
+  "3": "Custom",
+  "4": "Bridge",
+  "5": "Relay Teleport",
+  "6": "Karura",
+  "7": "Moonbeam",
+  "8": "Interlay",
 };
 
 // ── Component ─────────────────────────────────────────────
@@ -126,7 +131,7 @@ function SwapRow({ event }: { event: SwapEvent }) {
           </span>
         </div>
         <p className="mt-0.5 font-mono text-xs text-text-secondary">
-          {amountIn} → {amountOut} via {shortenAddress(event.sender)}
+          {amountIn} → {amountOut} via {shortenAddress(event.recipient)}
         </p>
       </div>
     </div>
@@ -152,6 +157,3 @@ function shortenAddress(addr: string): string {
   return `${addr.slice(0, 6)}…${addr.slice(-4)}`;
 }
 
-// Unused import shim
-const _Zap = Zap;
-void _Zap;
