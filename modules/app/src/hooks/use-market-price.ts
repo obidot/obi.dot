@@ -23,10 +23,14 @@ export function useMarketPrice(
       (r) => r.routeType === "local" && r.amountOut !== "0",
     );
     if (locals.length === 0) return null;
-    const best = locals.reduce((a, b) =>
-      BigInt(a.amountOut) >= BigInt(b.amountOut) ? a : b,
-    );
-    return formatUnits(BigInt(best.amountOut), tokenOut.decimals);
+    try {
+      const best = locals.reduce((a, b) =>
+        BigInt(a.amountOut) >= BigInt(b.amountOut) ? a : b,
+      );
+      return formatUnits(BigInt(best.amountOut), tokenOut.decimals);
+    } catch {
+      return null;
+    }
   }, [routes, tokenOut.decimals]);
 
   return { price, isLoading };
