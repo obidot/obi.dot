@@ -8,7 +8,7 @@ export const polkadotHubTestnet: Chain = defineChain({
   id: 420_420_417,
   name: "Polkadot Hub TestNet",
   iconUrl: "/images/polkadot.png",
-  iconBackground: '#fff',
+  iconBackground: 'transparent',
   nativeCurrency: {
     name: "PAS",
     symbol: "PAS",
@@ -32,7 +32,7 @@ export const polkadotHub: Chain = defineChain({
   id: 420_420_419,
   name: "Polkadot Hub",
   iconUrl: "/images/polkadot.png",
-  iconBackground: '#fff',
+  iconBackground: 'transparent',
   nativeCurrency: {
     name: "DOT",
     symbol: "DOT",

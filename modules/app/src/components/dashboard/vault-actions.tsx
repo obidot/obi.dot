@@ -10,7 +10,8 @@ import {
 import { parseUnits, type Address } from "viem";
 import { cn, formatTokenAmount } from "@/lib/format";
 import { Loader2 } from "lucide-react";
-import { CONTRACTS, VAULT_ABI, ERC20_APPROVE_ABI } from "@/lib/constants";
+import { CONTRACTS } from "@/lib/constants";
+import { VAULT_ABI, ERC20_APPROVE_ABI } from "@/lib/abi";
 
 type Action = "deposit" | "withdraw";
 

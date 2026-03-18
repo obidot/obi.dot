@@ -25,10 +25,10 @@ The Obidot dashboard is a **Next.js 15** web application that gives operators a 
 pnpm --filter @obidot/app run dev
 ```
 
-The app runs on **port 3010** by default. It proxies `/api/*` to the agent API on `http://localhost:3011/api/*` via `next.config.ts` rewrites; the agent must be running for yields/crosschain/agent-log data.
+The app runs on **port 3010** by default. It proxies `/api/*` to the agent API on `http://localhost:3001/api/*` via `next.config.ts` rewrites; the agent must be running for yields/crosschain/agent-log data.
 
 ```bash
-# Start the agent first (port 3011)
+# Start the agent first (port 3001, default API_PORT)
 pnpm --filter @obidot/agent run dev
 
 # Then start the dashboard (port 3010)
@@ -52,13 +52,39 @@ No Apollo Client is used — GraphQL subscriptions use raw `graphql-ws`; HTTP qu
 `next.config.ts` rewrites proxy yield/crosschain/agent routes to the agent backend:
 
 ```
-GET /api/yields       → http://localhost:3011/api/yields
-GET /api/crosschain   → http://localhost:3011/api/crosschain
-GET /api/agent        → http://localhost:3011/api/agent
-POST /api/agent/trigger → http://localhost:3011/api/agent/trigger
+GET /api/yields            → http://localhost:3001/api/yields
+GET /api/crosschain/state  → http://localhost:3001/api/crosschain/state
+GET /api/agent/log         → http://localhost:3001/api/agent/log
+POST /api/chat             → http://localhost:3001/api/chat
+GET /api/strategies        → http://localhost:3001/api/strategies
+GET /api/routes            → http://localhost:3001/api/routes
+GET /api/swap/quote        → http://localhost:3001/api/swap/quote
+GET /api/vault/state       → http://localhost:3001/api/vault/state
 ```
 
 ## Pages
+
+### `/[trade]/[chain]/[router]` — DEX Aggregator (Trade)
+
+The primary trading interface. URL segments encode the trade mode, chain, and token pair:
+
+```
+/swap/polkadot-hub-testnet/tdot-to-tusdc
+/limit/polkadot-hub-testnet/tdot-to-tusdc
+/crosschain/polkadot-hub-testnet/tdot-to-tusdc
+```
+
+| Component             | Description                                                                                    |
+| --------------------- | ---------------------------------------------------------------------------------------------- |
+| `SwapPanel`           | Left column: tab bar (Swap / Limit / Cross-Chain) + active form                                |
+| `SwapForm`            | Token inputs, live quote via on-chain `SwapQuoter`, approve-then-swap state machine            |
+| `LimitOrderPanel`     | Target price input, market delta indicator, expiry selector, localStorage order persistence    |
+| `CrossChainSwapPanel` | XCM/bridge destination selector, live route from `/api/routes`, status-aware execute button    |
+| `RouteDiagram`        | Right column: per-adapter quote comparison table, split-route toggle (60/40 weight sliders)    |
+
+**Wallet redirect:** when the connected wallet switches chains, `TradePage` auto-redirects the URL chain segment to match (e.g. `polkadot-hub-testnet` → `polkadot-hub`).
+
+**Split execution:** selecting two routes in the diagram enables `swapSplit()` with configurable BPS weights summing to 10000.
 
 ### `/` — Vault Dashboard
 
@@ -200,9 +226,9 @@ On-chain hooks use Wagmi `useReadContracts` with a 12-second `refetchInterval` (
 
 ## Known Gaps
 
-| Gap                       | Detail                                                                           |
-| ------------------------- | -------------------------------------------------------------------------------- |
-| `PnlChart` uses demo data | Hard-coded candlestick data, not live P&L from the vault                         |
-| `useWebSocket` unused     | Hook defined in `src/hooks/useWebSocket.ts` but not wired to any component       |
-| `src/stores/` is empty    | Zustand store directory reserved for future state management                     |
-| APYs are simulated        | The agent's yield service uses a sine-wave oscillator; no live APY feed on Paseo |
+| Gap                       | Detail                                                                                               |
+| ------------------------- | ---------------------------------------------------------------------------------------------------- |
+| `PnlChart` uses demo data | Hard-coded candlestick data, not live P&L from the vault                                             |
+| APYs are simulated        | The agent's yield service uses a sine-wave oscillator; no live APY feed on Paseo testnet             |
+| Limit orders are off-chain | `/limit` tab stores orders in `localStorage` — the agent monitors and executes them via UniversalIntent when price is reached, but there is no on-chain limit order contract |
+| Price oracle feed         | DOT/USD market price in `MarketPulse` uses DeFiLlama/CoinGecko; `KeeperOracle` feeds are on-chain but not yet surfaced in the UI |

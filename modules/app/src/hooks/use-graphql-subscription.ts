@@ -108,19 +108,21 @@ export function useDepositSubscription(onDeposit: (d: DepositEvent) => void) {
 export type SwapEvent = {
   id: string;
   txHash: string;
-  sender: string;
+  /** Recipient of the swap output (from SwapRouter calldata). */
+  recipient: string;
   tokenIn: string;
   tokenOut: string;
   amountIn: string;
   amountOut: string;
-  poolType: number;
+  /** Pool type as a string (GraphQL String! in obi.index schema). */
+  poolType: string;
   blockNumber: number;
   timestamp: string;
 };
 
 export function useSwapSubscription(onSwap: (s: SwapEvent) => void) {
   return useGraphQLSubscription<SwapEvent>(
-    `subscription { swapExecuted { id txHash sender tokenIn tokenOut amountIn amountOut poolType blockNumber timestamp } }`,
+    `subscription { swapExecuted { id txHash recipient tokenIn tokenOut amountIn amountOut poolType blockNumber timestamp } }`,
     onSwap,
   );
 }
@@ -129,14 +131,15 @@ export function useSwapSubscription(onSwap: (s: SwapEvent) => void) {
 export type OracleUpdateEvent = {
   id: string;
   feed: string;
-  answer: string;
-  updatedAt: string;
+  /** Price as a string (obi.index field: price). */
+  price: string;
+  timestamp: string;
   blockNumber: number;
 };
 
 export function useOracleSubscription(onUpdate: (o: OracleUpdateEvent) => void) {
   return useGraphQLSubscription<OracleUpdateEvent>(
-    `subscription { oracleUpdated { id feed answer updatedAt blockNumber } }`,
+    `subscription { oracleUpdated { id feed price timestamp blockNumber } }`,
     onUpdate,
   );
 }

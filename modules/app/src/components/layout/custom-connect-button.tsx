@@ -37,40 +37,40 @@ export default function CustomConnectButton() {
             })}
           >
             {connected && chain.unsupported ? (
-              /* Wrong network — single button replaces both */
+              /* Wrong network */
               <button
                 type="button"
                 onClick={openChainModal}
                 className={cn(
-                  "h-9 rounded-full px-4 text-[13px] font-semibold transition-colors",
-                  "bg-secondary/20 text-secondary hover:bg-secondary/30",
+                  "h-9 rounded-none px-4 text-[14px] font-semibold transition-colors",
+                  "border border-secondary bg-secondary/20 text-secondary hover:bg-secondary/30",
                 )}
               >
                 Wrong network
               </button>
             ) : (
               <>
-                {/* Chain chip — always visible */}
+                {/* Chain chip */}
                 {connected ? (
                   <button
                     type="button"
                     onClick={openChainModal}
                     className={cn(
-                      "inline-flex h-9 items-center gap-2 rounded-full px-3.5",
-                      "border border-border bg-background/80 text-[12px] font-medium text-text-primary",
+                      "inline-flex h-9 items-center gap-2 rounded-none px-3",
+                      "border border-border bg-background/80 text-[14px] font-medium text-text-primary",
                       "hover:bg-surface-hover transition-colors",
                     )}
                   >
                     {chain.hasIcon && (
                       <span
-                        className="inline-flex h-3 w-3 overflow-hidden rounded-full"
+                        className="inline-flex h-5 w-5 shrink-0 overflow-hidden rounded-sm"
                         style={{ background: chain.iconBackground }}
                       >
                         {chain.iconUrl && (
                           <img
                             alt={chain.name ?? "Chain icon"}
                             src={chain.iconUrl}
-                            className="h-3 w-3"
+                            className="h-5 w-5 object-contain"
                           />
                         )}
                       </span>
@@ -78,23 +78,23 @@ export default function CustomConnectButton() {
                     <span>{chain.name}</span>
                   </button>
                 ) : (
-                  /* Not connected: dimmed default chain chip — non-interactive */
+                  /* Not connected: dimmed default chain chip */
                   <div
                     className={cn(
-                      "inline-flex h-9 items-center gap-2 rounded-full px-3.5",
-                      "border border-border/50 bg-background/50 text-[12px] font-medium text-text-muted",
+                      "inline-flex h-9 items-center gap-2 rounded-none px-3",
+                      "border border-border/50 bg-background/50 text-[14px] font-medium text-text-muted",
                       "select-none",
                     )}
                     aria-hidden="true"
                   >
                     <span
-                      className="inline-flex h-3 w-3 overflow-hidden rounded-full"
+                      className="inline-flex h-5 w-5 shrink-0 overflow-hidden rounded-sm"
                       style={{ background: "#fff" }}
                     >
                       <img
                         alt="Polkadot"
                         src="/images/polkadot.png"
-                        className="h-3 w-3"
+                        className="h-5 w-5 object-contain"
                       />
                     </span>
                     <span>{DEFAULT_CHAIN_NAME}</span>
@@ -107,8 +107,8 @@ export default function CustomConnectButton() {
                     type="button"
                     onClick={openAccountModal}
                     className={cn(
-                      "inline-flex h-9 items-center rounded-full px-3.5",
-                      "border border-border bg-background/80 text-[12px] font-mono text-text-primary",
+                      "inline-flex h-9 items-center rounded-none px-3",
+                      "border border-border bg-background/80 text-[14px] font-mono text-text-primary",
                       "hover:bg-surface-hover transition-colors",
                     )}
                   >
@@ -119,8 +119,8 @@ export default function CustomConnectButton() {
                     type="button"
                     onClick={openConnectModal}
                     className={cn(
-                      "h-9 rounded-full px-4 text-[13px] font-semibold transition-colors",
-                      "bg-primary/15 text-primary hover:bg-primary/20",
+                      "h-9 rounded-none px-4 text-[14px] font-semibold transition-colors cursor-pointer",
+                      "border border-text-primary bg-text-primary text-white hover:bg-text-primary/90",
                     )}
                   >
                     Connect

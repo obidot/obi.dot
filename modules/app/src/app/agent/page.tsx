@@ -5,46 +5,13 @@ import { DecisionFeed } from "@/components/agent/decision-feed";
 import { AgentStatus } from "@/components/agent/agent-status";
 import { LiveEvents } from "@/components/agent/live-events";
 import { PanelSkeleton } from "@/components/ui/skeleton";
-import { PageHero, HeroStat } from "@/components/ui/page-hero";
-import { Activity, Cpu, RefreshCw } from "lucide-react";
+import { RefreshCw } from "lucide-react";
 
 export default function AgentPage() {
   const { data: decisions, isLoading, error, refetch } = useAgentLog();
 
-  const actionCounts = (decisions ?? []).reduce(
-    (acc, d) => {
-      acc[d.action] = (acc[d.action] ?? 0) + 1;
-      return acc;
-    },
-    {} as Record<string, number>,
-  );
-
-  const actionsTaken = Object.entries(actionCounts)
-    .filter(([k]) => k !== "NO_ACTION")
-    .reduce((sum, [, v]) => sum + v, 0);
-
   return (
     <div className="space-y-4">
-      <PageHero
-        eyebrow="Autonomous Agent"
-        title="Agent Activity"
-        description="Live feed of autonomous agent decisions and AI reasoning"
-        stats={
-          <>
-            <HeroStat
-              label="Decisions"
-              icon={<Cpu className="h-3.5 w-3.5 text-accent" />}
-              value={<span className="text-text-primary">{decisions?.length ?? 0}</span>}
-            />
-            <HeroStat
-              label="Actions Taken"
-              icon={<Activity className="h-3.5 w-3.5 text-primary" />}
-              value={<span className="text-primary">{actionsTaken}</span>}
-            />
-          </>
-        }
-      />
-
       <AgentStatus decisionCount={decisions?.length ?? 0} decisions={decisions ?? []} />
 
       {isLoading ? (

@@ -4,14 +4,7 @@ import { useMemo } from "react";
 import { useStrategies } from "@/hooks/use-strategies";
 import { StrategyTable } from "@/components/strategies/strategy-table";
 import { PanelSkeleton } from "@/components/ui/skeleton";
-import { PageHero, HeroStat } from "@/components/ui/page-hero";
-import {
-  Activity,
-  TrendingUp,
-  CheckCircle2,
-  XCircle,
-  RefreshCw,
-} from "lucide-react";
+import { RefreshCw } from "lucide-react";
 import type { StrategyRecord } from "@/types";
 import type { IndexedStrategyExecution } from "@/lib/graphql";
 
@@ -37,45 +30,8 @@ export default function StrategiesPage() {
     [indexed],
   );
 
-  const executed = strategies.filter((s) => s.status === "executed").length;
-  const failed = strategies.filter(
-    (s) => s.status === "failed" || s.status === "timeout",
-  ).length;
-  const total = strategies.length;
-  const successRate = total > 0 ? ((executed / total) * 100).toFixed(1) : "0.0";
-
   return (
     <div className="space-y-4">
-      <PageHero
-        eyebrow="Strategy Engine"
-        title="Execution History"
-        description="AI agent strategy execution log and performance tracking"
-        stats={
-          <>
-            <HeroStat
-              label="Total"
-              icon={<Activity className="h-3.5 w-3.5 text-accent" />}
-              value={<span className="text-text-primary">{total}</span>}
-            />
-            <HeroStat
-              label="Executed"
-              icon={<CheckCircle2 className="h-3.5 w-3.5 text-primary" />}
-              value={<span className="text-primary">{executed}</span>}
-            />
-            <HeroStat
-              label="Failed"
-              icon={<XCircle className="h-3.5 w-3.5 text-danger" />}
-              value={<span className="text-danger">{failed}</span>}
-            />
-            <HeroStat
-              label="Success Rate"
-              icon={<TrendingUp className="h-3.5 w-3.5 text-primary" />}
-              value={<span className="text-primary">{successRate}%</span>}
-            />
-          </>
-        }
-      />
-
       {isLoading ? (
         <PanelSkeleton rows={8} />
       ) : error ? (

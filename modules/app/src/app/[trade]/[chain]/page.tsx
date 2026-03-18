@@ -1,6 +1,9 @@
 import React from "react";
 import { notFound, redirect } from "next/navigation";
-import { resolveTradeRoute, getDefaultRouterForChain } from "@/shared/trade";
+import {
+  resolveTradeRoute,
+  getDefaultRouterForChain,
+} from "@/shared/trade";
 
 type ChainPageProps = {
   params: Promise<{

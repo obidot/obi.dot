@@ -1,7 +1,7 @@
 import React from "react";
 import { notFound } from "next/navigation";
-import { resolveTradeRoute } from "@/shared/trade";
 import TradePage from "@/components/trade/trade-page";
+import { resolveTradeRoute } from "@/shared/trade";
 
 type RouterPageProps = {
   params: Promise<{
