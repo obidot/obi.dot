@@ -4,35 +4,36 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "next dev --turbopack -p 3010",
-    "build": "next build",
-    "start": "next start",
-    "lint": "next lint",
+    "dev": "bun --bun next dev --turbopack -p 3010",
+    "build": "bun --bun next build",
+    "start": "bun --bun next start",
+    "lint": "bun --bun next lint",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@rainbow-me/rainbowkit": "^2.2.5",
+    "@tanstack/react-query": "^5.76.2",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "graphql": "^16.13.1",
+    "graphql-ws": "^6.0.7",
+    "lightweight-charts": "^4.2.2",
+    "lucide-react": "^0.511.0",
     "next": "^15.3.3",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
-    "@tanstack/react-query": "^5.76.2",
-    "zustand": "^5.0.5",
-    "lightweight-charts": "^4.2.2",
-    "lucide-react": "^0.511.0",
-    "clsx": "^2.1.1",
     "tailwind-merge": "^3.3.0",
-    "class-variance-authority": "^0.7.1",
-    "wagmi": "^2.14.16",
-    "@rainbow-me/rainbowkit": "^2.2.5",
     "viem": "^2.23.2",
-    "@tanstack/react-query": "^5.76.2"
+    "wagmi": "^2.14.16",
+    "zustand": "^5.0.5"
   },
   "devDependencies": {
-    "tailwindcss": "^4.1.8",
     "@tailwindcss/postcss": "^4.1.8",
-    "postcss": "^8.5.4",
-    "typescript": "^5.7.3",
+    "@types/node": "^22.15.21",
     "@types/react": "^19.1.4",
     "@types/react-dom": "^19.1.5",
-    "@types/node": "^22.15.21"
+    "postcss": "^8.5.4",
+    "tailwindcss": "^4.1.8",
+    "typescript": "^5.7.3"
   }
 }

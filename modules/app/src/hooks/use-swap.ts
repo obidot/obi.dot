@@ -1,5 +1,6 @@
 "use client";
 
+import { useState, useEffect } from "react";
 import { useReadContract, useReadContracts } from "wagmi";
 import {
   CONTRACTS,
@@ -11,6 +12,7 @@ import type {
   SwapQuoteResult,
   SwapRoutesResponse,
   PoolAdapterInfo,
+  SwapRouteResult,
 } from "@/types";
 import { PoolType, POOL_TYPE_LABELS } from "@/types";
 
@@ -119,21 +121,23 @@ export function useSwapRoutes() {
   ] as const;
 
   const result = useReadContracts({
-    contracts,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    contracts: contracts as any,
     query: { staleTime: 30_000 },
   });
 
   const data: SwapRoutesResponse | undefined = result.data
     ? (() => {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const anyData = result.data as any[];
         const routerPaused =
-          (result.data[0].result as boolean | undefined) ?? false;
+          (anyData[0]?.result as boolean | undefined) ?? false;
         const adapters: PoolAdapterInfo[] = ADAPTER_REGISTRY.map(
           ({ poolType, adapter }, i) => ({
             poolType,
             label: POOL_TYPE_LABELS[poolType],
             adapter,
-            deployed:
-              (result.data[i + 1].result as boolean | undefined) ?? false,
+            deployed: (anyData[i + 1]?.result as boolean | undefined) ?? false,
           }),
         );
         return {
@@ -145,4 +149,66 @@ export function useSwapRoutes() {
     : undefined;
 
   return { ...result, data };
+}
+
+// ── useRouteFinder ────────────────────────────────────────────────────────
+
+/**
+ * Fetch all available swap routes from the agent's /api/routes endpoint.
+ * Debounces 600ms to avoid hammering the API on every keystroke.
+ */
+export function useRouteFinder(params: {
+  tokenIn: string;
+  tokenOut: string;
+  amountIn: string; // wei string
+}) {
+  const [routes, setRoutes] = useState<SwapRouteResult[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (
+      !params.tokenIn ||
+      !params.tokenOut ||
+      !params.amountIn ||
+      params.amountIn === "0"
+    ) {
+      setRoutes([]);
+      setIsLoading(false);
+      setError(null);
+      return;
+    }
+
+    setIsLoading(true);
+    setError(null);
+
+    const controller = new AbortController();
+
+    const timer = setTimeout(async () => {
+      try {
+        const url = `/api/routes?tokenIn=${encodeURIComponent(params.tokenIn)}&tokenOut=${encodeURIComponent(params.tokenOut)}&amountIn=${encodeURIComponent(params.amountIn)}`;
+        const res = await fetch(url, { signal: controller.signal });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const json = (await res.json()) as {
+          success: boolean;
+          data?: { routes: SwapRouteResult[]; timestamp: string };
+        };
+        setRoutes(json.data?.routes ?? []);
+        setError(null);
+      } catch (err) {
+        if ((err as { name?: string }).name === "AbortError") return;
+        setError(err instanceof Error ? err.message : "Failed to fetch routes");
+        setRoutes([]);
+      } finally {
+        setIsLoading(false);
+      }
+    }, 600);
+
+    return () => {
+      clearTimeout(timer);
+      controller.abort();
+    };
+  }, [params.tokenIn, params.tokenOut, params.amountIn]);
+
+  return { routes, isLoading, error };
 }

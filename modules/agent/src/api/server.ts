@@ -16,10 +16,6 @@ import { registerAgentRoutes } from "./routes/agent.js";
 import { registerSwapRoutes } from "./routes/swap.js";
 import { logger } from "../utils/logger.js";
 
-// ─────────────────────────────────────────────────────────────────────────────
-//  API Server — Shared backend for Web App + Telegram + Autonomous Loop
-// ─────────────────────────────────────────────────────────────────────────────
-
 const apiLog = logger.child({ module: "api" });
 
 const API_PORT = Number(process.env["API_PORT"] ?? "3001");

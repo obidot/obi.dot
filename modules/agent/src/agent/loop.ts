@@ -1,5 +1,5 @@
-import { ChatOpenAI } from "@langchain/openai";
 import { HumanMessage, SystemMessage } from "@langchain/core/messages";
+import type { BaseChatModel } from "@langchain/core/language_models/chat_models";
 import type { StructuredToolInterface } from "@langchain/core/tools";
 import { ObiKit, type ChainConfig, type VaultConfig } from "@obidot-kit/sdk";
 
@@ -11,6 +11,7 @@ import { CrossChainService } from "../services/crosschain.service.js";
 import { SwapRouterService } from "../services/swap-router.service.js";
 import { IntentService } from "../services/intent.service.js";
 import { createObidotTools } from "./tools.js";
+import { createLlm } from "./llm.js";
 import { SYSTEM_PROMPT } from "./systemPrompt.js";
 import { aiDecisionSchema } from "../types/index.js";
 import type { MarketSnapshot } from "../types/index.js";
@@ -37,7 +38,7 @@ export class AutonomousLoop {
   private readonly crossChainService: CrossChainService;
   private readonly swapRouterService: SwapRouterService;
   private readonly intentService: IntentService;
-  private readonly llm: ChatOpenAI;
+  private llm: BaseChatModel | null = null;
   private readonly kit: ObiKit;
   private readonly tools: StructuredToolInterface[];
   private running = false;
@@ -111,12 +112,8 @@ export class AutonomousLoop {
       "Tools registered with ObiKit",
     );
 
-    // ── LLM ──────────────────────────────────────────────────────────
-    this.llm = new ChatOpenAI({
-      model: "gpt-4o",
-      temperature: 0,
-      apiKey: env.OPENAI_API_KEY,
-    });
+    // LLM is initialised lazily on first cycle via createLlm() to allow
+    // async provider setup (e.g. dynamic import of @langchain/anthropic).
   }
 
   // ─────────────────────────────────────────────────────────────────────
@@ -266,12 +263,41 @@ export class AutonomousLoop {
       }
     }
 
+    // Fetch DEX aggregator data when SwapQuoter is available
+    let swapQuotes: MarketSnapshot["swapQuotes"] | undefined;
+    if (this.swapRouterService.isQuoterDeployed) {
+      try {
+        const [dotToUsdcQuote] = await Promise.all([
+          this.swapRouterService.getBestQuote(
+            "0x0000000000000000000000000000000000000000" as const, // pool (0x0 = any)
+            "0xE72453bD8d5ECF56ccdDeF949C8AE0Cea5A41E7d" as `0x${string}`, // NativeAssetDOT
+            "0xAf233E9f2ED78022CAdEA58a84144ce6BcDFd63E" as `0x${string}`, // USDC
+            vaultState.idleBalance / 100n, // quote for 1% of idle
+          ),
+        ]);
+        if (dotToUsdcQuote) {
+          swapQuotes = {
+            dotToUsdc: {
+              amountIn: (vaultState.idleBalance / 100n).toString(),
+              amountOut: dotToUsdcQuote.amountOut.toString(),
+              feeBps: dotToUsdcQuote.feeBps.toString(),
+              source: dotToUsdcQuote.source,
+            },
+          };
+          loopLog.debug({ swapQuotes }, "SwapQuoter pre-flight complete");
+        }
+      } catch {
+        // Non-fatal — SwapQuoter data is informational only
+      }
+    }
+
     // Build market snapshot for the LLM
     const snapshot: MarketSnapshot = {
       yields,
       bifrostYields,
       vaultState,
       crossChainState,
+      swapQuotes,
       timestamp: new Date().toISOString(),
     };
 
@@ -504,6 +530,11 @@ export class AutonomousLoop {
     userMessage: string,
   ): Promise<ReturnType<typeof aiDecisionSchema.parse> | null> {
     const maxAttempts = 3;
+
+    // Lazy-init LLM on first invocation
+    if (!this.llm) {
+      this.llm = await createLlm();
+    }
 
     for (let attempt = 1; attempt <= maxAttempts; attempt++) {
       try {

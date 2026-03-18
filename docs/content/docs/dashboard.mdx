@@ -3,19 +3,20 @@ title: Dashboard
 description: Reference for the Obidot Next.js operator dashboard — all six pages, the Financial Intelligence Hub, computation engines, design system, and API proxy setup.
 ---
 
-The Obidot dashboard is a **Next.js 15** web application that gives operators a real-time view of vault performance, active strategies, cross-chain activity, and AI-powered analytics. It connects to the [AI Agent](/docs/agent) REST API and reads on-chain state via Wagmi.
+The Obidot dashboard is a **Next.js 15** web application that gives operators a real-time view of vault performance, active strategies, cross-chain activity, and AI-powered analytics. It reads on-chain state live from Polkadot Hub TestNet via Wagmi, queries historical events from the [obi.index](/docs/architecture) GraphQL indexer, and proxies yield/crosschain/agent-log calls to the [AI Agent](/docs/agent) REST API.
 
 ## Tech Stack
 
-| Layer | Technology |
-|-------|-----------|
-| Framework | Next.js 15 (App Router, Turbopack) |
-| UI | React 19 |
-| Styles | TailwindCSS v4 (custom utility classes) |
-| Server state | TanStack Query v5 (polling every 10 s) |
-| Wallet | Wagmi v2 + RainbowKit v2 + viem v2 |
-| Charts | recharts (PnL candlestick chart) |
-| Icons | lucide-react |
+| Layer        | Technology                                                            |
+| ------------ | --------------------------------------------------------------------- |
+| Framework    | Next.js 15 (App Router, Turbopack)                                    |
+| UI           | React 19                                                              |
+| Styles       | TailwindCSS v4 (custom utility classes)                               |
+| Server state | TanStack Query v5 (polling every 10–30 s)                             |
+| Wallet       | Wagmi v2 + RainbowKit v2 + viem v2                                    |
+| GraphQL      | Raw `graphql-ws` for subscriptions; `fetchGraphQL()` for HTTP queries |
+| Charts       | recharts (PnL candlestick chart)                                      |
+| Icons        | lucide-react                                                          |
 
 ## Running Locally
 
@@ -24,30 +25,38 @@ The Obidot dashboard is a **Next.js 15** web application that gives operators a 
 pnpm --filter @obidot/app run dev
 ```
 
-The app runs on **port 3000** by default. It proxies all `/api/*` requests to the agent API on `http://localhost:3001/api/*` via `next.config.ts` rewrites, so the agent must be running for live data.
+The app runs on **port 3010** by default. It proxies `/api/*` to the agent API on `http://localhost:3011/api/*` via `next.config.ts` rewrites; the agent must be running for yields/crosschain/agent-log data.
 
 ```bash
-# Start the agent first (port 3001)
+# Start the agent first (port 3011)
 pnpm --filter @obidot/agent run dev
 
-# Then start the dashboard (port 3000)
+# Then start the dashboard (port 3010)
 pnpm --filter @obidot/app run dev
 ```
 
+## Data Sources
+
+The dashboard uses three distinct data sources:
+
+| Source                                  | Used For                                                                                                                       |
+| --------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| **On-chain (Wagmi `useReadContracts`)** | Live vault state: `totalAssets`, `totalSupply`, `paused`, `emergencyMode`, `totalRemoteAssets`, user share balance             |
+| **obi.index GraphQL**                   | Historical events: deposits, withdrawals, swap executions, strategy executions, vault stats — queried via `src/lib/graphql.ts` |
+| **Agent REST API (proxied `/api/*`)**   | Yield opportunities, cross-chain topology, agent decisions, vault performance                                                  |
+
+No Apollo Client is used — GraphQL subscriptions use raw `graphql-ws`; HTTP queries use the `fetchGraphQL<T>()` helper.
+
 ## API Proxy
 
-All data fetching goes through an API proxy route (`src/app/api/[...path]/route.ts`) that rewrites requests to the agent backend:
+`next.config.ts` rewrites proxy yield/crosschain/agent routes to the agent backend:
 
 ```
-GET /api/vault        → http://localhost:3001/api/vault
-GET /api/yields       → http://localhost:3001/api/yields
-GET /api/strategies   → http://localhost:3001/api/strategies
-GET /api/crosschain   → http://localhost:3001/api/crosschain
-GET /api/agent        → http://localhost:3001/api/agent
-POST /api/agent/trigger → http://localhost:3001/api/agent/trigger
+GET /api/yields       → http://localhost:3011/api/yields
+GET /api/crosschain   → http://localhost:3011/api/crosschain
+GET /api/agent        → http://localhost:3011/api/agent
+POST /api/agent/trigger → http://localhost:3011/api/agent/trigger
 ```
-
-This means the dashboard can be deployed behind a reverse proxy without exposing the agent port directly.
 
 ## Pages
 
@@ -55,51 +64,52 @@ This means the dashboard can be deployed behind a reverse proxy without exposing
 
 The landing page provides a high-level health check of the vault.
 
-| Component | Description |
-|-----------|-------------|
-| `PageHero` | Navbar with live ticker strip (DOT/USD price), wallet connect pill |
-| `VaultOverview` | Total assets, share price, remote assets, deposit cap utilization |
-| `QuickStats` | Four KPI cards — TVL, APY, active strategies, idle ratio |
-| `PnlChart` | Candlestick chart (demo data — not live P&L) |
-| `VaultActions` | Deposit / Withdraw forms (UI stub — no on-chain transaction yet) |
-| `HealthIndicators` | Oracle freshness, circuit breaker status, emergency mode flag |
+| Component          | Description                                                                               |
+| ------------------ | ----------------------------------------------------------------------------------------- |
+| `PageHero`         | Navbar with live ticker strip (DOT/USD price), wallet connect pill                        |
+| `VaultOverview`    | Total assets, share price, remote assets, deposit cap utilization                         |
+| `QuickStats`       | Four KPI cards — TVL, APY, active strategies, idle ratio                                  |
+| `PnlChart`         | Candlestick chart (demo data — not live P&L)                                              |
+| `VaultActions`     | Deposit / Withdraw forms with real on-chain transactions (approve → deposit step machine) |
+| `HealthIndicators` | Circuit breaker (`paused`) and emergency mode flag, read live from chain                  |
+| `RecentActivity`   | Inline feed of last 5 deposits + 5 swaps from obi.index                                   |
 
-**Live data:** vault balances and share price are read directly from the contract via Wagmi (`useBalance`, `useReadContract`). The wallet connect pill shows the connected address's tDOT balance in real time.
+**Live data:** vault balances and share price are read directly from the contract via Wagmi `useReadContracts`. Deposit and withdraw execute real on-chain transactions using `useWriteContract` with an approve-then-deposit state machine.
 
 ### `/yields` — Yield Opportunities
 
-| Component | Description |
-|-----------|-------------|
-| `YieldGrid` | Responsive card grid of all known DeFi protocols |
+| Component      | Description                                             |
+| -------------- | ------------------------------------------------------- |
+| `YieldGrid`    | Responsive card grid of all known DeFi protocols        |
 | `ProtocolCard` | Shows protocol name, chain, current APY, TVL, risk tier |
 
 APY data is fetched from the agent's `/api/yields` endpoint. The agent fetches TVL from DeFiLlama and simulates APY with a sine-wave oscillator (no live APY feed exists on Paseo testnet).
 
 ### `/strategies` — Strategy History
 
-| Component | Description |
-|-----------|-------------|
-| `StrategyTable` | Full strategy history — sortable and filterable by status/chain/protocol |
+| Component        | Description                                                                  |
+| ---------------- | ---------------------------------------------------------------------------- |
+| `StrategyTable`  | Full strategy history — sortable and filterable by status/chain/protocol     |
 | `StrategyDetail` | Slide-over side panel (with focus trap) showing full intent data and outcome |
 
-Strategies are fetched from `/api/strategies` and polled every 10 seconds. Clicking a row opens the detail panel without a navigation change.
+Strategies are fetched from obi.index (`getIndexedStrategyExecutions`) and polled every 30 seconds. Clicking a row opens the detail panel without a navigation change.
 
 ### `/crosschain` — Cross-Chain Activity
 
-| Component | Description |
-|-----------|-------------|
-| `ChainTopology` | Visual node graph showing Polkadot Hub connections to satellite chains |
-| `SatelliteTable` | Per-chain table: TVL, last sync age, status |
+| Component        | Description                                                            |
+| ---------------- | ---------------------------------------------------------------------- |
+| `ChainTopology`  | Visual node graph showing Polkadot Hub connections to satellite chains |
+| `SatelliteTable` | Per-chain table: TVL, last sync age, status                            |
 
 Data is fetched from `/api/crosschain`.
 
 ### `/agent` — Agent Status
 
-| Component | Description |
-|-----------|-------------|
-| `AgentStatus` | Derived state: running / idle / error, last decision timestamp, loop iteration count |
-| `DecisionFeed` | Scrollable list of recent agent decisions |
-| `DecisionCard` | Per-decision: type (deploy / rebalance / hold / error), rationale text, timestamp |
+| Component      | Description                                                                          |
+| -------------- | ------------------------------------------------------------------------------------ |
+| `AgentStatus`  | Derived state: running / idle / error, last decision timestamp, loop iteration count |
+| `DecisionFeed` | Scrollable list of recent agent decisions                                            |
+| `DecisionCard` | Per-decision: type (deploy / rebalance / hold / error), rationale text, timestamp    |
 
 The `AgentStatus` component derives its display state from `lastDecision` and `isRunning` fields — it does not rely on a separate status endpoint.
 
@@ -109,28 +119,31 @@ The insights page is the most feature-rich section of the dashboard, providing A
 
 #### Components
 
-| Component | Description |
-|-----------|-------------|
-| `MarketPulse` | Real-time market sentiment: DOT price, 24h change, volume trend, fear/greed indicator |
-| `OpportunityRadar` | Ranked list of yield opportunities scored by the opportunity scoring engine |
-| `RiskMatrix` | 2D risk/return scatter plot for all active positions and protocols |
-| `PositionSimulatorPanel` | Interactive simulator: enter a position size and duration to project outcomes |
-| `PortfolioOptimizer` | Suggests optimal allocation weights across protocols given risk tolerance |
-| `YieldComparison` | Side-by-side APY comparison across protocols and chains |
+| Component                | Description                                                                           |
+| ------------------------ | ------------------------------------------------------------------------------------- |
+| `MarketPulse`            | Real-time market sentiment: DOT price, 24h change, volume trend, fear/greed indicator |
+| `OpportunityRadar`       | Ranked list of yield opportunities scored by the opportunity scoring engine           |
+| `RiskMatrix`             | 2D risk/return scatter plot for all active positions and protocols                    |
+| `PositionSimulatorPanel` | Interactive simulator: enter a position size and duration to project outcomes         |
+| `PortfolioOptimizer`     | Suggests optimal allocation weights across protocols given risk tolerance             |
+| `YieldComparison`        | Side-by-side APY comparison across protocols and chains                               |
 
 #### Computation Engines
 
 The three engines in `src/lib/` perform client-side calculations on top of data from the agent API:
 
 **`yield-opportunity-score.ts`** — Scores each protocol opportunity on a 0–100 scale:
+
 - Weighted factors: APY (40%), TVL stability (25%), risk tier (20%), liquidity depth (15%)
 - Outputs a ranked list used by `OpportunityRadar`
 
 **`risk-analyzer.ts`** — Computes risk metrics for each position and protocol:
+
 - Volatility score, liquidity risk, smart contract risk, cross-chain execution risk
 - Outputs `(risk, return)` coordinates used by `RiskMatrix`
 
 **`position-simulator.ts`** — Projects position outcomes over time:
+
 - Inputs: principal amount, duration (days), protocol selection
 - Models: compound APY, gas costs, impermanent loss estimate, slippage
 - Outputs: projected value, P&L, best/worst case scenarios
@@ -139,54 +152,57 @@ The three engines in `src/lib/` perform client-side calculations on top of data 
 
 The design system is defined in `src/app/globals.css` as TailwindCSS v4 custom utility classes. Key classes:
 
-| Class | Usage |
-|-------|-------|
-| `.panel` | Primary content container (dark background, subtle border) |
-| `.card` | Smaller info unit inside a panel |
-| `.btn-primary` | Primary action button (purple gradient) |
-| `.btn-secondary` | Secondary action button (ghost/outline) |
-| `.btn-danger` | Destructive action button (red) |
-| `.tab-*` | Tab bar and individual tab items |
-| `.input-trading` | Dark-themed numeric input for trade forms |
-| `.hero-banner` | Full-width page header with gradient overlay |
-| `.ticker-track` | Scrolling price ticker animation |
-| `.table-pro` | Full-width data table with hover states |
-| `.stat-number` | Large numeric KPI display |
-| `.pill` | Status badge (colored dot + label) |
-| `.glow-green` / `.glow-red` | Subtle box-shadow glow for positive/negative values |
+| Class                       | Usage                                                      |
+| --------------------------- | ---------------------------------------------------------- |
+| `.panel`                    | Primary content container (dark background, subtle border) |
+| `.card`                     | Smaller info unit inside a panel                           |
+| `.btn-primary`              | Primary action button (purple gradient)                    |
+| `.btn-secondary`            | Secondary action button (ghost/outline)                    |
+| `.btn-danger`               | Destructive action button (red)                            |
+| `.tab-*`                    | Tab bar and individual tab items                           |
+| `.input-trading`            | Dark-themed numeric input for trade forms                  |
+| `.hero-banner`              | Full-width page header with gradient overlay               |
+| `.ticker-track`             | Scrolling price ticker animation                           |
+| `.table-pro`                | Full-width data table with hover states                    |
+| `.stat-number`              | Large numeric KPI display                                  |
+| `.pill`                     | Status badge (colored dot + label)                         |
+| `.glow-green` / `.glow-red` | Subtle box-shadow glow for positive/negative values        |
 
 ### Color Palette
 
 The app uses a dark theme throughout (no light mode):
 
-| Token | Usage |
-|-------|-------|
-| `#0f1117` | Page background |
-| `#1a1d2e` | Panel/card surface |
+| Token     | Usage                            |
+| --------- | -------------------------------- |
+| `#0f1117` | Page background                  |
+| `#1a1d2e` | Panel/card surface               |
 | `#252840` | Elevated surface (inputs, hover) |
-| `#7c3aed` | Primary purple accent |
-| `#22c55e` | Positive/success green |
-| `#ef4444` | Negative/error red |
-| `#94a3b8` | Secondary text |
+| `#7c3aed` | Primary purple accent            |
+| `#22c55e` | Positive/success green           |
+| `#ef4444` | Negative/error red               |
+| `#94a3b8` | Secondary text                   |
 
 ## Hooks
 
-| Hook | Returns |
-|------|---------|
-| `useVaultData()` | Vault state (TVL, share price, cap, remote assets) |
-| `useYields()` | Protocol yield opportunities array |
-| `useStrategies()` | Strategy records array |
-| `useAgentStatus()` | Agent running state and last decision |
-| `useWebSocket()` | WebSocket connection (defined, currently unused in UI) |
+| Hook                       | Returns                                                                                                                                        |
+| -------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| `useVaultState()`          | Live on-chain `VaultOnChainState` — `totalAssets`, `totalSupply`, `totalRemoteAssets`, `paused`, `emergencyMode`, `tvlDisplay` (bigint fields) |
+| `useShareBalance(address)` | User's share balance and max withdrawable assets                                                                                               |
+| `useIndexedVaultState()`   | Historical vault state snapshot from obi.index                                                                                                 |
+| `useVaultStats()`          | Aggregated stats from obi.index (strategy count, deposit/swap totals)                                                                          |
+| `useVaultPerformance()`    | Cumulative PnL and high-water mark from agent API (legacy)                                                                                     |
+| `useYields()`              | Protocol yield opportunities from agent API                                                                                                    |
+| `useBifrostYields()`       | Bifrost-specific yield opportunities from agent API                                                                                            |
+| `useStrategies()`          | Strategy execution records from obi.index (`IndexedStrategyExecution[]`)                                                                       |
+| `useAgentLog()`            | Agent decision log from agent API                                                                                                              |
 
-All data-fetching hooks use TanStack Query with a 10-second `refetchInterval`.
+On-chain hooks use Wagmi `useReadContracts` with a 12-second `refetchInterval` (≈ one block). GraphQL hooks use TanStack Query with a 30-second `staleTime`.
 
 ## Known Gaps
 
-| Gap | Detail |
-|-----|--------|
-| `PnlChart` uses demo data | Hard-coded candlestick data, not live P&L from the vault |
-| `VaultActions` is a UI stub | Deposit/withdraw forms exist but do not submit on-chain transactions |
-| `useWebSocket` unused | Hook defined in `src/hooks/useWebSocket.ts` but not wired to any component |
-| `src/stores/` is empty | Zustand store directory reserved for future state management |
-| APYs are simulated | The agent's yield service uses a sine-wave oscillator; no live APY feed on Paseo |
+| Gap                       | Detail                                                                           |
+| ------------------------- | -------------------------------------------------------------------------------- |
+| `PnlChart` uses demo data | Hard-coded candlestick data, not live P&L from the vault                         |
+| `useWebSocket` unused     | Hook defined in `src/hooks/useWebSocket.ts` but not wired to any component       |
+| `src/stores/` is empty    | Zustand store directory reserved for future state management                     |
+| APYs are simulated        | The agent's yield service uses a sine-wave oscillator; no live APY feed on Paseo |

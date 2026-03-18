@@ -1,11 +1,13 @@
 "use client";
 
-import { useVaultState } from "@/hooks/use-vault-state";
+import { useVaultState, useVaultStats } from "@/hooks/use-vault-state";
 import { formatTokenAmount } from "@/lib/format";
+import { formatUnits } from "viem";
 import { Loader2, Eye } from "lucide-react";
 
 export function VaultOverview() {
   const { data: vault, isLoading, error } = useVaultState();
+  const { data: stats } = useVaultStats();
 
   if (isLoading) {
     return (
@@ -23,10 +25,10 @@ export function VaultOverview() {
     );
   }
 
-  const total = BigInt(vault.totalAssets || "0");
-  const remote = BigInt(vault.totalRemoteAssets || "0");
-  const idle = BigInt(vault.idleBalance || "0");
-  const utilization = total > 0n ? Number((remote * 100n) / total) : 0;
+  const { totalAssets, totalRemoteAssets } = vault;
+  const idle = totalAssets - totalRemoteAssets;
+  const utilization =
+    totalAssets > 0n ? Number((totalRemoteAssets * 100n) / totalAssets) : 0;
 
   return (
     <div className="hero-banner relative px-6 py-5">
@@ -36,7 +38,7 @@ export function VaultOverview() {
           <div>
             <div className="flex items-center gap-2">
               <h2 className="stat-number text-3xl text-text-primary">
-                ${formatTokenAmount(vault.totalAssets, 18, 2)}
+                ${parseFloat(formatUnits(totalAssets, 18)).toFixed(2)}
               </h2>
               <Eye className="h-4 w-4 text-text-muted" />
             </div>
@@ -58,7 +60,7 @@ export function VaultOverview() {
           />
           <MetricItem
             label="Deployed"
-            value={formatTokenAmount(remote.toString())}
+            value={formatTokenAmount(totalRemoteAssets.toString())}
             suffix="DOT"
           />
           <MetricItem
@@ -68,7 +70,7 @@ export function VaultOverview() {
           />
           <MetricItem
             label="Strategies"
-            value={vault.strategyCounter}
+            value={stats ? String(stats.totalStrategies) : "—"}
           />
         </div>
       </div>

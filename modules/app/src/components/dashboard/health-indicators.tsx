@@ -8,39 +8,23 @@ import { Skeleton } from "@/components/ui/skeleton";
 export function HealthIndicators() {
   const { data: vault, isLoading } = useVaultState();
 
-  if (isLoading) {
+  if (isLoading || !vault) {
     return (
-      <div className="p-4 space-y-2" aria-busy="true" aria-label="Loading health indicators...">
+      <div
+        className="p-4 space-y-2"
+        aria-busy="true"
+        aria-label="Loading health indicators..."
+      >
         <Skeleton className="h-3 w-16" />
-        {[1, 2, 3].map((i) => (
+        {[1, 2].map((i) => (
           <div key={i} className="flex items-center justify-between">
             <Skeleton className="h-3 w-20" />
             <Skeleton className="h-3 w-10" />
           </div>
         ))}
-        <Skeleton className="mt-3 h-1 w-full rounded-full" />
       </div>
     );
   }
-
-  if (!vault) {
-    return (
-      <div className="p-4 space-y-2" aria-busy="true" aria-label="Waiting for vault data...">
-        <Skeleton className="h-3 w-16" />
-        {[1, 2, 3].map((i) => (
-          <div key={i} className="flex items-center justify-between">
-            <Skeleton className="h-3 w-20" />
-            <Skeleton className="h-3 w-10" />
-          </div>
-        ))}
-        <Skeleton className="mt-3 h-1 w-full rounded-full" />
-      </div>
-    );
-  }
-
-  const dailyLoss = BigInt(vault.dailyLoss || "0");
-  const maxDailyLoss = BigInt(vault.maxDailyLoss || "1");
-  const lossPercent = maxDailyLoss > 0n ? Number((dailyLoss * 10000n) / maxDailyLoss) / 100 : 0;
 
   const indicators = [
     {
@@ -52,11 +36,6 @@ export function HealthIndicators() {
       label: "Emergency",
       value: vault.emergencyMode,
       color: vault.emergencyMode ? "text-danger" : "text-primary",
-    },
-    {
-      label: "Daily Loss",
-      text: `${lossPercent.toFixed(2)}%`,
-      color: lossPercent > 80 ? "text-danger" : lossPercent > 50 ? "text-warning" : "text-primary",
     },
   ];
 
@@ -87,39 +66,13 @@ export function HealthIndicators() {
         {indicators.map((ind) => (
           <div key={ind.label} className="flex items-center justify-between">
             <span className="text-[12px] text-text-secondary">{ind.label}</span>
-            <span className={cn("font-mono text-[12px] font-medium", ind.color)}>
-              {"text" in ind ? ind.text : ind.value ? "YES" : "NO"}
+            <span
+              className={cn("font-mono text-[12px] font-medium", ind.color)}
+            >
+              {ind.value ? "YES" : "NO"}
             </span>
           </div>
         ))}
-      </div>
-
-      {/* Loss bar with progressbar role */}
-      <div className="mt-3">
-        <div
-          className="h-1 w-full rounded-full bg-border"
-          role="progressbar"
-          aria-label="Daily loss vs. maximum allowed"
-          aria-valuenow={Math.round(lossPercent)}
-          aria-valuemin={0}
-          aria-valuemax={100}
-        >
-          <div
-            className={cn(
-              "h-full rounded-full transition-all duration-500",
-              lossPercent > 80
-                ? "bg-danger"
-                : lossPercent > 50
-                  ? "bg-warning"
-                  : "bg-primary",
-            )}
-            style={{ width: `${Math.min(lossPercent, 100)}%` }}
-          />
-        </div>
-        <div className="mt-1 flex justify-between font-mono text-[9px] text-text-muted">
-          <span>0%</span>
-          <span>Max Loss</span>
-        </div>
       </div>
     </div>
   );

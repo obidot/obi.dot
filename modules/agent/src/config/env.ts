@@ -13,8 +13,29 @@ dotenv.config();
  * missing or malformed configuration — fail-fast before any RPC call.
  */
 const envSchema = z.object({
-  /** OpenAI API key for LangChain GPT-4o reasoning. */
-  OPENAI_API_KEY: z.string().min(1, "OPENAI_API_KEY is required"),
+  /**
+   * LLM provider selection.
+   * "openai" (default) — ChatOpenAI (GPT-4o or configured model).
+   * "anthropic"        — ChatAnthropic (claude-sonnet-4 or configured model).
+   * "openrouter"       — OpenRouter proxy (requires OPENAI_API_KEY as the API key).
+   */
+  LLM_PROVIDER: z
+    .enum(["openai", "anthropic", "openrouter"])
+    .default("openai"),
+
+  /**
+   * LLM model string.
+   * For openai:      "gpt-4o" (default), "gpt-4o-mini", etc.
+   * For anthropic:   "claude-sonnet-4-5" (default), "claude-3-5-haiku-20241022", etc.
+   * For openrouter:  e.g. "anthropic/claude-sonnet-4", "openai/gpt-4o"
+   */
+  LLM_MODEL: z.string().min(1).optional(),
+
+  /** OpenAI API key (required for openai and openrouter providers). */
+  OPENAI_API_KEY: z.string().min(1).optional(),
+
+  /** Anthropic API key (required for anthropic provider). */
+  ANTHROPIC_API_KEY: z.string().min(1).optional(),
 
   /** Hex-encoded secp256k1 private key (with 0x prefix) of the strategist agent. */
   AGENT_PRIVATE_KEY: z

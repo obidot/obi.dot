@@ -2,14 +2,14 @@
 
 import { useMemo } from "react";
 import type { ProtocolYield, BifrostYield } from "@/types";
-import type { VaultState } from "@/types";
-import { formatUsdNumber, formatTokenAmount, cn } from "@/lib/format";
-import { PieChart, ArrowRight, Lightbulb } from "lucide-react";
+import type { VaultOnChainState } from "@/hooks/use-vault-state";
+import { formatUsdNumber, cn } from "@/lib/format";
+import { PieChart, Lightbulb } from "lucide-react";
 
 interface PortfolioOptimizerProps {
   yields: ProtocolYield[];
   bifrostYields: BifrostYield[];
-  vault: VaultState | undefined;
+  vault: VaultOnChainState | undefined;
 }
 
 interface AllocationSlice {
@@ -57,15 +57,31 @@ function optimizeAllocations(
   const items: Item[] = [];
 
   for (const y of yields) {
-    items.push({ name: y.name, apy: y.apyPercent, tvl: y.tvlUsd, safetyMul: 0.9 });
+    items.push({
+      name: y.name,
+      apy: y.apyPercent,
+      tvl: y.tvlUsd,
+      safetyMul: 0.9,
+    });
   }
   for (const y of bifrostYields) {
     const mul =
-      y.category === "SLP" ? 1.0 :
-      y.category === "DEX" ? 0.7 :
-      y.category === "Farming" ? 0.5 :
-      y.category === "SALP" ? 0.6 : 0.7;
-    items.push({ name: y.name, apy: y.apyPercent, tvl: y.tvlUsd, category: y.category, safetyMul: mul });
+      y.category === "SLP"
+        ? 1.0
+        : y.category === "DEX"
+          ? 0.7
+          : y.category === "Farming"
+            ? 0.5
+            : y.category === "SALP"
+              ? 0.6
+              : 0.7;
+    items.push({
+      name: y.name,
+      apy: y.apyPercent,
+      tvl: y.tvlUsd,
+      category: y.category,
+      safetyMul: mul,
+    });
   }
 
   // Score each: APY * safety * log(TVL)
@@ -99,7 +115,7 @@ export function PortfolioOptimizer({
   vault,
 }: PortfolioOptimizerProps) {
   const totalUsd = vault
-    ? Number(BigInt(vault.totalAssets || "0")) / 1e18 * 7 // rough DOT price
+    ? (Number(vault.totalAssets) / 1e18) * 7 // rough DOT price
     : 10_000;
 
   const allocations = useMemo(
@@ -122,7 +138,8 @@ export function PortfolioOptimizer({
               Portfolio Optimizer
             </h3>
             <p className="font-mono text-[9px] text-text-muted">
-              Risk-adjusted allocation for {formatUsdNumber(totalUsd, true)} portfolio
+              Risk-adjusted allocation for {formatUsdNumber(totalUsd, true)}{" "}
+              portfolio
             </p>
           </div>
         </div>
@@ -143,7 +160,10 @@ export function PortfolioOptimizer({
             <div
               key={slice.name}
               className={cn("h-full transition-all", slice.color)}
-              style={{ width: `${slice.weight * 100}%`, minWidth: slice.weight > 0.01 ? "2px" : "0" }}
+              style={{
+                width: `${slice.weight * 100}%`,
+                minWidth: slice.weight > 0.01 ? "2px" : "0",
+              }}
               title={`${slice.name}: ${(slice.weight * 100).toFixed(1)}%`}
             />
           ))}
@@ -198,8 +218,9 @@ export function PortfolioOptimizer({
           {allocations[0]
             ? `Recommended: Allocate ${(allocations[0].weight * 100).toFixed(0)}% to ${allocations[0].name} for best risk-adjusted returns. `
             : ""}
-          Diversify across {Math.min(allocations.length, 4)} protocols to reduce concentration risk.
-          Rebalance when any position drifts &gt;10% from target weights.
+          Diversify across {Math.min(allocations.length, 4)} protocols to reduce
+          concentration risk. Rebalance when any position drifts &gt;10% from
+          target weights.
         </p>
       </div>
     </div>

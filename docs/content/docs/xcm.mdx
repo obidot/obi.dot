@@ -41,12 +41,12 @@ interface IXcm {
 
 The precompile defines four error conditions:
 
-| Error | Condition |
-|-------|-----------|
-| `InvalidDestination()` | The destination location bytes cannot be decoded |
-| `InvalidMessage()` | The XCM message payload cannot be decoded |
-| `Overweight()` | The XCM message exceeds the weight limit |
-| `SendFailure()` | The XCM transport layer failed to route the message |
+| Error                  | Condition                                           |
+| ---------------------- | --------------------------------------------------- |
+| `InvalidDestination()` | The destination location bytes cannot be decoded    |
+| `InvalidMessage()`     | The XCM message payload cannot be decoded           |
+| `Overweight()`         | The XCM message exceeds the weight limit            |
+| `SendFailure()`        | The XCM transport layer failed to route the message |
 
 ### Events
 
@@ -60,10 +60,10 @@ Emitted after a successful XCM dispatch. The `sender` is the EVM address that in
 
 Polkadot uses a **two-dimensional weight model** to meter execution resources:
 
-| Dimension | Unit | Description |
-|-----------|------|-------------|
-| `refTime` | Picoseconds | Execution time consumed on the reference hardware |
-| `proofSize` | Bytes | Proof-of-Validity (PoV) data consumed |
+| Dimension   | Unit        | Description                                       |
+| ----------- | ----------- | ------------------------------------------------- |
+| `refTime`   | Picoseconds | Execution time consumed on the reference hardware |
+| `proofSize` | Bytes       | Proof-of-Validity (PoV) data consumed             |
 
 Both dimensions must be within limits for a message to be accepted. A message that exceeds either limit is considered "overweight" and will be rejected.
 
@@ -160,10 +160,10 @@ function setXcmWeightLimits(uint64 _maxRefTime, uint64 _maxProofSize)
 
 The deployment scripts use these defaults:
 
-| Parameter | Default Value | Human-Readable |
-|-----------|--------------|----------------|
-| `maxXcmRefTime` | `1,000,000,000,000` | 1 trillion picoseconds (1 second) |
-| `maxXcmProofSize` | `1,048,576` | 1 MB |
+| Parameter         | Default Value       | Human-Readable                    |
+| ----------------- | ------------------- | --------------------------------- |
+| `maxXcmRefTime`   | `1,000,000,000,000` | 1 trillion picoseconds (1 second) |
+| `maxXcmProofSize` | `1,048,576`         | 1 MB                              |
 
 These are conservative limits suitable for most XCM operations. Complex multi-hop messages or messages that interact with many storage items may need higher limits.
 
@@ -219,15 +219,15 @@ The `MultiLocation` library (`src/libraries/MultiLocation.sol`) provides pure So
 
 XCM locations follow the Polkadot SCALE codec specification:
 
-| Type | Encoding |
-|------|----------|
-| Enum variant | Single byte prefix |
-| `u8` | 1 byte |
-| `u32` | 4 bytes little-endian |
-| `Compact<u32>` | Variable-length (1/2/4 bytes, two LSBs encode mode) |
-| `Compact<u128>` | Variable-length (1/2/4/8/16 bytes) |
-| `Option<T>` | `0x00` = None, `0x01 ++ encoded(T)` = Some |
-| `Vec<u8>` | Compact-length prefix ++ raw bytes |
+| Type            | Encoding                                            |
+| --------------- | --------------------------------------------------- |
+| Enum variant    | Single byte prefix                                  |
+| `u8`            | 1 byte                                              |
+| `u32`           | 4 bytes little-endian                               |
+| `Compact<u32>`  | Variable-length (1/2/4 bytes, two LSBs encode mode) |
+| `Compact<u128>` | Variable-length (1/2/4/8/16 bytes)                  |
+| `Option<T>`     | `0x00` = None, `0x01 ++ encoded(T)` = Some          |
+| `Vec<u8>`       | Compact-length prefix ++ raw bytes                  |
 
 ### Versioned Locations
 
@@ -244,13 +244,13 @@ The version byte is prepended to every encoded location. Obidot uses V4 by defau
 
 Junctions identify specific entities within the Polkadot consensus hierarchy:
 
-| Variant | Index | Description |
-|---------|-------|-------------|
-| `Parachain` | `0x00` | Identifies a parachain by its `u32` ID |
-| `AccountId32` | `0x01` | A 32-byte account (Substrate-style) |
-| `AccountKey20` | `0x03` | A 20-byte account (Ethereum-style) |
-| `PalletInstance` | `0x04` | A pallet within a chain |
-| `GeneralIndex` | `0x05` | A generic numeric index (e.g., asset ID) |
+| Variant          | Index  | Description                              |
+| ---------------- | ------ | ---------------------------------------- |
+| `Parachain`      | `0x00` | Identifies a parachain by its `u32` ID   |
+| `AccountId32`    | `0x01` | A 32-byte account (Substrate-style)      |
+| `AccountKey20`   | `0x03` | A 20-byte account (Ethereum-style)       |
+| `PalletInstance` | `0x04` | A pallet within a chain                  |
+| `GeneralIndex`   | `0x05` | A generic numeric index (e.g., asset ID) |
 
 ### Builder Functions
 
@@ -346,12 +346,12 @@ function childParachain(uint8 version, uint32 parachainId)
 
 SCALE compact encoding uses the two least-significant bits to indicate the encoding mode:
 
-| Mode | Bits | Range | Byte Length |
-|------|------|-------|-------------|
-| Single-byte | `00` | 0 – 63 | 1 |
-| Two-byte | `01` | 64 – 16,383 | 2 |
-| Four-byte | `10` | 16,384 – 1,073,741,823 | 4 |
-| Big-integer | `11` | > 1,073,741,823 | Variable |
+| Mode        | Bits | Range                  | Byte Length |
+| ----------- | ---- | ---------------------- | ----------- |
+| Single-byte | `00` | 0 – 63                 | 1           |
+| Two-byte    | `01` | 64 – 16,383            | 2           |
+| Four-byte   | `10` | 16,384 – 1,073,741,823 | 4           |
+| Big-integer | `11` | > 1,073,741,823        | Variable    |
 
 The library implements compact encoding for both `u32` and `u128` types:
 
@@ -390,15 +390,15 @@ The `xcmCall` field in the `StrategyIntent` struct contains the complete SCALE-e
 
 Typical strategy payloads might include combinations of:
 
-| Instruction | Purpose |
-|-------------|---------|
-| `WithdrawAsset` | Withdraw assets from the holding register on the destination |
-| `BuyExecution` | Pay for execution weight on the destination chain |
-| `DepositAsset` | Deposit assets into a specific account on the destination |
-| `TransferAsset` | Transfer assets to a beneficiary |
-| `Transact` | Execute an arbitrary call on the destination chain |
-| `ReserveAssetDeposited` | Notify destination of reserve-backed assets |
-| `DepositReserveAsset` | Deposit assets and notify the reserve chain |
+| Instruction             | Purpose                                                      |
+| ----------------------- | ------------------------------------------------------------ |
+| `WithdrawAsset`         | Withdraw assets from the holding register on the destination |
+| `BuyExecution`          | Pay for execution weight on the destination chain            |
+| `DepositAsset`          | Deposit assets into a specific account on the destination    |
+| `TransferAsset`         | Transfer assets to a beneficiary                             |
+| `Transact`              | Execute an arbitrary call on the destination chain           |
+| `ReserveAssetDeposited` | Notify destination of reserve-backed assets                  |
+| `DepositReserveAsset`   | Deposit assets and notify the reserve chain                  |
 
 ### Payload Construction
 
@@ -422,22 +422,22 @@ The policy engine validates the intent's metadata (target parachain, target prot
 
 ## Error Reference
 
-| Error | Condition |
-|-------|-----------|
-| `XcmOverweight(uint64 refTime, uint64 proofSize, uint64 maxRef, uint64 maxProof)` | Adjusted weight exceeds configured limits |
-| `InvalidDestination()` | XCM precompile cannot decode the destination (precompile error) |
-| `InvalidMessage()` | XCM precompile cannot decode the message (precompile error) |
-| `Overweight()` | XCM precompile rejects overweight message (precompile error) |
-| `SendFailure()` | XCM transport layer failed (precompile error) |
-| `InvalidParachainId(uint32 id)` | MultiLocation library: parachain ID out of range |
-| `UnsupportedVersion(uint8 version)` | MultiLocation library: version not V3 or V4 |
+| Error                                                                             | Condition                                                       |
+| --------------------------------------------------------------------------------- | --------------------------------------------------------------- |
+| `XcmOverweight(uint64 refTime, uint64 proofSize, uint64 maxRef, uint64 maxProof)` | Adjusted weight exceeds configured limits                       |
+| `InvalidDestination()`                                                            | XCM precompile cannot decode the destination (precompile error) |
+| `InvalidMessage()`                                                                | XCM precompile cannot decode the message (precompile error)     |
+| `Overweight()`                                                                    | XCM precompile rejects overweight message (precompile error)    |
+| `SendFailure()`                                                                   | XCM transport layer failed (precompile error)                   |
+| `InvalidParachainId(uint32 id)`                                                   | MultiLocation library: parachain ID out of range                |
+| `UnsupportedVersion(uint8 version)`                                               | MultiLocation library: version not V3 or V4                     |
 
 ## Events Reference
 
-| Event | Emitted When |
-|-------|-------------|
+| Event                                                            | Emitted When                                           |
+| ---------------------------------------------------------------- | ------------------------------------------------------ |
 | `XcmWeightLimitsUpdated(uint64 maxRefTime, uint64 maxProofSize)` | Admin updates weight limits via `setXcmWeightLimits()` |
-| `XcmSent(address indexed sender, bytes dest, bytes message)` | XCM precompile successfully dispatches a message |
+| `XcmSent(address indexed sender, bytes dest, bytes message)`     | XCM precompile successfully dispatches a message       |
 
 ## Design Rationale
 
@@ -472,3 +472,58 @@ The `executeStrategy()` function encodes the destination from the intent's `targ
 1. **Validates the destination** — The vault constructs the destination itself from the policy-validated `targetParachain`, ensuring the XCM message is actually sent to the whitelisted chain
 2. **Allows flexible payloads** — The strategist can construct arbitrary XCM instruction sequences appropriate for the target protocol
 3. **Separates concerns** — Location encoding is a mechanical transformation; message construction requires protocol-specific knowledge that belongs in the AI agent
+
+## AssetHub Teleport (Testnet Proof)
+
+The `E2EAssetHubXcm.s.sol` script (`script/E2EAssetHubXcm.s.sol`) demonstrates a **V5 XCM InitiateTeleport** from Polkadot Hub to AssetHub (parachain 1000) dispatched directly from an admin EOA via the XCM precompile. AssetHub is the only Paseo testnet parachain with a confirmed open HRMP channel and live relay-native PAS token.
+
+### AssetHubTeleportEncoder Library
+
+The script includes an `AssetHubTeleportEncoder` Solidity library with pure SCALE-encoding helpers:
+
+```solidity
+library AssetHubTeleportEncoder {
+    /// Build a V5 XCM message that teleports `amount` planck of the native token
+    /// to `beneficiary` (AccountId32) on AssetHub (para 1000).
+    ///
+    /// Returns:
+    ///   xcm  — SCALE-encoded VersionedXcm (V5)
+    ///   dest — SCALE-encoded VersionedLocation pointing to AssetHub
+    function buildTeleport(uint256 amount, bytes32 beneficiary)
+        internal pure returns (bytes memory xcm, bytes memory dest);
+}
+```
+
+### XCM Message Structure
+
+The encoded message follows XCM V5 format with 4 instructions:
+
+| Instruction                                                                           | Purpose                                                         |
+| ------------------------------------------------------------------------------------- | --------------------------------------------------------------- |
+| `WithdrawAsset [{ id: Here, fun: Fungible(amount) }]`                                 | Withdraw native PAS from Hub sovereign account                  |
+| `BuyExecution { fees: { id: Here, fun: Fungible(amount) }, weight_limit: Unlimited }` | Pay for execution on AssetHub                                   |
+| `InitiateTeleport { assets: Wild(All), dest: AssetHub, xcm: [DepositAsset] }`         | Teleport assets to AssetHub with inner DepositAsset instruction |
+| `RefundSurplus`                                                                       | Return unused execution fees to caller                          |
+
+### Running the Script
+
+```sh
+source .env && export PRIVATE_KEY="0x${PRIVATE_KEY}"
+forge script script/E2EAssetHubXcm.s.sol:E2EAssetHubXcm \
+  --rpc-url polkadot_hub_testnet --broadcast --skip-simulation --non-interactive
+# Verify delivery: check XcmSent event on Polkadot Hub explorer, then
+# check https://assethub-paseo.subscan.io/xcm for incoming message from para 0 (Hub)
+```
+
+The script runs in three phases:
+
+1. **Phase A — Static checks:** Reads sender balance, verifies sufficient native PAS for delivery fees
+2. **Phase B — Build calldata:** Encodes the V5 XCM message and prints hex for off-chain use
+3. **Phase C — Dispatch:** Calls `IXcm(0xA0000).send(dest, xcm)` directly from the admin EOA
+
+### Testnet Notes
+
+- Teleport amount: `1e8` planck = 0.01 PAS (10-decimal native token)
+- Beneficiary: admin EOA address zero-padded to 32 bytes (acceptable for testnet proof)
+- `weighMessage()` may fail for teleport messages on Paseo — `skipWeightCheck` is enabled for testnet
+- Hydration/Bifrost XCM adapters are correct for mainnet but cannot be tested on Paseo (no Omnipool liquidity on Hydration Paseo testnet)

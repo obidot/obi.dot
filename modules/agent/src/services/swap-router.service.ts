@@ -17,8 +17,17 @@ import {
   HYDRATION_ADAPTER_ADDRESS,
   ASSET_HUB_ADAPTER_ADDRESS,
   BIFROST_DEX_ADAPTER_ADDRESS,
+  TOKEN_SYMBOLS,
+  UV2_PAIRS,
+  UV2_PAIR_ABI,
 } from "../config/constants.js";
-import { PoolType, POOL_TYPE_LABELS, type SwapQuote } from "../types/index.js";
+import {
+  PoolType,
+  POOL_TYPE_LABELS,
+  type SwapQuote,
+  type RouteHop,
+  type SwapRouteResult,
+} from "../types/index.js";
 import { swapLog } from "../utils/logger.js";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -446,5 +455,293 @@ export class SwapRouterService {
     } catch {
       return false;
     }
+  }
+
+  // ─────────────────────────────────────────────────────────────────────
+  //  Route Finder — V2 Graph Path Finder + Cross-chain Stubs
+  // ─────────────────────────────────────────────────────────────────────
+
+  /**
+   * Find all viable swap routes from tokenIn to tokenOut for a given amountIn.
+   *
+   * Reads live V2 pair reserves via multicall, builds a token adjacency graph,
+   * enumerates single- and multi-hop paths (up to depth 3), simulates AMM math
+   * for each path, and appends cross-chain stub routes.
+   *
+   * @param tokenIn  Input token address (any casing).
+   * @param tokenOut Output token address (any casing).
+   * @param amountIn Amount of tokenIn in wei.
+   * @returns Sorted array of SwapRouteResult (best amountOut first).
+   */
+  async findRoutes(
+    tokenIn: string,
+    tokenOut: string,
+    amountIn: bigint,
+  ): Promise<SwapRouteResult[]> {
+    const tokenInLc = tokenIn.toLowerCase();
+    const tokenOutLc = tokenOut.toLowerCase();
+
+    if (tokenInLc === tokenOutLc) return [];
+
+    // ── 1. Fetch all pair reserves via sequential readContract calls ─────────
+    // (multicall3 is not deployed on Polkadot Hub TestNet)
+    let reservesData: Array<[bigint, bigint, number] | null>;
+    try {
+      const results = await Promise.allSettled(
+        UV2_PAIRS.map((pair) =>
+          this.publicClient.readContract({
+            address: pair.address,
+            abi: UV2_PAIR_ABI,
+            functionName: "getReserves",
+          }),
+        ),
+      );
+
+      reservesData = results.map((r) => {
+        if (r.status === "rejected" || !r.value) return null;
+        const [r0, r1, ts] = r.value as [bigint, bigint, number];
+        return [r0, r1, ts];
+      });
+    } catch (err) {
+      swapLog.error({ err }, "findRoutes: getReserves failed");
+      return [];
+    }
+
+    // ── 2. Build adjacency map: token → [{pairIdx, neighbour, reserveIn, reserveOut}] ──
+    interface PairEdge {
+      pairIdx: number;
+      neighbour: string;
+      reserveIn: bigint;
+      reserveOut: bigint;
+    }
+    const graph = new Map<string, PairEdge[]>();
+
+    for (let i = 0; i < UV2_PAIRS.length; i++) {
+      const pair = UV2_PAIRS[i];
+      const reserves = reservesData[i];
+      if (!reserves) continue;
+      const [r0, r1] = reserves;
+      if (r0 === 0n || r1 === 0n) continue; // skip empty pools
+
+      const t0 = pair.token0.toLowerCase();
+      const t1 = pair.token1.toLowerCase();
+
+      // t0 → t1
+      if (!graph.has(t0)) graph.set(t0, []);
+      graph
+        .get(t0)!
+        .push({ pairIdx: i, neighbour: t1, reserveIn: r0, reserveOut: r1 });
+
+      // t1 → t0
+      if (!graph.has(t1)) graph.set(t1, []);
+      graph
+        .get(t1)!
+        .push({ pairIdx: i, neighbour: t0, reserveIn: r1, reserveOut: r0 });
+    }
+
+    // ── 3. V2 AMM output math ────────────────────────────────────────────────
+    function v2AmountOut(
+      amountIn_: bigint,
+      reserveIn: bigint,
+      reserveOut: bigint,
+    ): bigint {
+      const amountInWithFee = amountIn_ * 997n;
+      const numerator = amountInWithFee * reserveOut;
+      const denominator = reserveIn * 1000n + amountInWithFee;
+      return numerator / denominator;
+    }
+
+    function v2PriceImpactBps(amountIn_: bigint, reserveIn: bigint): bigint {
+      // approximate: impact = amountIn / (reserveIn + amountIn)
+      return (amountIn_ * 10000n) / (reserveIn + amountIn_);
+    }
+
+    // ── 4. DFS to enumerate paths (max depth 3) ──────────────────────────────
+    interface PathStep {
+      pairIdx: number;
+      tokenIn: string;
+      tokenOut: string;
+      amountIn: bigint;
+      amountOut: bigint;
+      reserveIn: bigint;
+    }
+
+    const routes: SwapRouteResult[] = [];
+
+    function dfs(
+      currentToken: string,
+      currentAmount: bigint,
+      path: PathStep[],
+      visited: Set<string>,
+    ): void {
+      if (currentToken === tokenOutLc && path.length > 0) {
+        // We've reached tokenOut — build a SwapRouteResult
+        let totalFee = 0n;
+        let totalImpact = 0n;
+        const hops: RouteHop[] = path.map((step) => {
+          const pair = UV2_PAIRS[step.pairIdx];
+          const feeBps = 30n; // V2 = 0.3%
+          const impactBps = v2PriceImpactBps(step.amountIn, step.reserveIn);
+          totalFee += feeBps;
+          totalImpact += impactBps;
+
+          const tokenInSymbol =
+            TOKEN_SYMBOLS[step.tokenIn] ?? step.tokenIn.slice(0, 8);
+          const tokenOutSymbol =
+            TOKEN_SYMBOLS[step.tokenOut] ?? step.tokenOut.slice(0, 8);
+
+          return {
+            pool: pair.address,
+            poolLabel: pair.label,
+            poolType: POOL_TYPE_LABELS[PoolType.Custom],
+            tokenIn: step.tokenIn,
+            tokenInSymbol,
+            tokenOut: step.tokenOut,
+            tokenOutSymbol,
+            amountIn: step.amountIn.toString(),
+            amountOut: step.amountOut.toString(),
+            feeBps: feeBps.toString(),
+            priceImpactBps: impactBps.toString(),
+          } satisfies RouteHop;
+        });
+
+        const finalAmountOut = path[path.length - 1].amountOut;
+        // 50 bps slippage for minAmountOut
+        const minAmountOut = (finalAmountOut * (10000n - 50n)) / 10000n;
+
+        const hopSymbols = [
+          TOKEN_SYMBOLS[tokenInLc] ?? tokenInLc.slice(0, 8),
+          ...path.map(
+            (s) => TOKEN_SYMBOLS[s.tokenOut] ?? s.tokenOut.slice(0, 8),
+          ),
+        ];
+        const id = hopSymbols.join("→");
+
+        routes.push({
+          id,
+          tokenIn,
+          tokenOut,
+          amountIn: amountIn.toString(),
+          amountOut: finalAmountOut.toString(),
+          minAmountOut: minAmountOut.toString(),
+          hops,
+          totalFeeBps: totalFee.toString(),
+          totalPriceImpactBps: totalImpact.toString(),
+          routeType: "local",
+          status: "live",
+        });
+        return;
+      }
+
+      if (path.length >= 3) return; // max 3 hops
+
+      const edges = graph.get(currentToken) ?? [];
+      for (const edge of edges) {
+        if (visited.has(edge.neighbour)) continue;
+        const out = v2AmountOut(currentAmount, edge.reserveIn, edge.reserveOut);
+        if (out === 0n) continue;
+
+        visited.add(edge.neighbour);
+        path.push({
+          pairIdx: edge.pairIdx,
+          tokenIn: currentToken,
+          tokenOut: edge.neighbour,
+          amountIn: currentAmount,
+          amountOut: out,
+          reserveIn: edge.reserveIn,
+        });
+        dfs(edge.neighbour, out, path, visited);
+        path.pop();
+        visited.delete(edge.neighbour);
+      }
+    }
+
+    const visited = new Set<string>([tokenInLc]);
+    dfs(tokenInLc, amountIn, [], visited);
+
+    // ── 5. Append cross-chain stub routes ────────────────────────────────────
+    const crossChainStubs: SwapRouteResult[] = [
+      {
+        id: "RelayTeleport (XCM)",
+        tokenIn,
+        tokenOut,
+        amountIn: amountIn.toString(),
+        amountOut: "0",
+        minAmountOut: "0",
+        hops: [],
+        totalFeeBps: "0",
+        totalPriceImpactBps: "0",
+        routeType: "xcm",
+        status: "live",
+      },
+      {
+        id: "Hydration Omnipool (XCM)",
+        tokenIn,
+        tokenOut,
+        amountIn: amountIn.toString(),
+        amountOut: "0",
+        minAmountOut: "0",
+        hops: [],
+        totalFeeBps: "30",
+        totalPriceImpactBps: "0",
+        routeType: "xcm",
+        status: "mainnet_only",
+      },
+      {
+        id: "Bifrost DEX (XCM)",
+        tokenIn,
+        tokenOut,
+        amountIn: amountIn.toString(),
+        amountOut: "0",
+        minAmountOut: "0",
+        hops: [],
+        totalFeeBps: "30",
+        totalPriceImpactBps: "0",
+        routeType: "xcm",
+        status: "mainnet_only",
+      },
+      {
+        id: "Snowbridge (BridgeHub → Ethereum)",
+        tokenIn,
+        tokenOut,
+        amountIn: amountIn.toString(),
+        amountOut: "0",
+        minAmountOut: "0",
+        hops: [],
+        totalFeeBps: "0",
+        totalPriceImpactBps: "0",
+        routeType: "bridge",
+        status: "coming_soon",
+      },
+      {
+        id: "ChainFlip (Polkadot → Ethereum)",
+        tokenIn,
+        tokenOut,
+        amountIn: amountIn.toString(),
+        amountOut: "0",
+        minAmountOut: "0",
+        hops: [],
+        totalFeeBps: "0",
+        totalPriceImpactBps: "0",
+        routeType: "bridge",
+        status: "coming_soon",
+      },
+    ];
+
+    // ── 6. Sort live routes by amountOut desc, then append stubs ─────────────
+    const liveRoutes = routes.sort((a, b) =>
+      Number(BigInt(b.amountOut) - BigInt(a.amountOut)),
+    );
+
+    swapLog.debug(
+      {
+        tokenIn: TOKEN_SYMBOLS[tokenInLc] ?? tokenInLc,
+        tokenOut: TOKEN_SYMBOLS[tokenOutLc] ?? tokenOutLc,
+        liveCount: liveRoutes.length,
+      },
+      "findRoutes complete",
+    );
+
+    return [...liveRoutes, ...crossChainStubs];
   }
 }

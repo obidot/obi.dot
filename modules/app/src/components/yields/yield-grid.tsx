@@ -2,12 +2,12 @@
 
 import { useState, useMemo } from "react";
 import type { ProtocolYield, BifrostYield } from "@/types";
-import { ProtocolCard } from "@/components/yields/protocol-card";
-import { cn } from "@/lib/format";
-import { Search } from "lucide-react";
+import { cn, formatApy, formatUsdNumber } from "@/lib/format";
+import { Search, ChevronUp, ChevronDown } from "lucide-react";
 
 type SourceFilter = "all" | "bifrost" | "defi";
 type SortKey = "apy" | "tvl" | "name";
+type SortDir = "asc" | "desc";
 
 const FILTER_TABS: { key: SourceFilter; label: string }[] = [
   { key: "all", label: "All Sources" },
@@ -15,11 +15,71 @@ const FILTER_TABS: { key: SourceFilter; label: string }[] = [
   { key: "defi", label: "DeFi Protocols" },
 ];
 
-const SORT_OPTIONS: { key: SortKey; label: string }[] = [
-  { key: "apy", label: "APY" },
-  { key: "tvl", label: "TVL" },
-  { key: "name", label: "Name" },
+// Protocol initials color palette (cycles through a set)
+const PROTOCOL_COLORS = [
+  "bg-primary/20 text-primary",
+  "bg-secondary/20 text-secondary",
+  "bg-accent/20 text-accent",
+  "bg-warning/20 text-warning",
+  "bg-bull/20 text-bull",
 ];
+
+function protocolColor(name: string): string {
+  let hash = 0;
+  for (let i = 0; i < name.length; i++)
+    hash = name.charCodeAt(i) + ((hash << 5) - hash);
+  return PROTOCOL_COLORS[Math.abs(hash) % PROTOCOL_COLORS.length];
+}
+
+// ── Sort icon ─────────────────────────────────────────────────────────────
+
+function SortIcon({ active, dir }: { active: boolean; dir: SortDir }) {
+  return (
+    <span
+      className={cn(
+        "inline-flex flex-col ml-1 opacity-40",
+        active && "opacity-100",
+      )}
+    >
+      <ChevronUp
+        className={cn(
+          "h-2.5 w-2.5 -mb-0.5",
+          active && dir === "asc" ? "text-primary" : "text-text-muted",
+        )}
+      />
+      <ChevronDown
+        className={cn(
+          "h-2.5 w-2.5",
+          active && dir === "desc" ? "text-primary" : "text-text-muted",
+        )}
+      />
+    </span>
+  );
+}
+
+// ── Type pill ─────────────────────────────────────────────────────────────
+
+function TypePill({ category }: { category?: string }) {
+  if (!category) return <span className="text-text-muted">—</span>;
+
+  const styles: Record<string, string> = {
+    SLP: "bg-primary/10 text-primary border-primary/20",
+    DEX: "bg-accent/10 text-accent border-accent/20",
+    Farming: "bg-bull/10 text-bull border-bull/20",
+    SALP: "bg-secondary/10 text-secondary border-secondary/20",
+  };
+
+  return (
+    <span
+      className={cn(
+        "pill border text-[10px]",
+        styles[category] ?? "bg-surface-hover text-text-muted border-border",
+      )}
+    >
+      {category}
+    </span>
+  );
+}
 
 interface YieldGridProps {
   yields: ProtocolYield[];
@@ -29,7 +89,17 @@ interface YieldGridProps {
 export function YieldGrid({ yields, bifrostYields }: YieldGridProps) {
   const [filter, setFilter] = useState<SourceFilter>("all");
   const [sortBy, setSortBy] = useState<SortKey>("apy");
+  const [sortDir, setSortDir] = useState<SortDir>("desc");
   const [search, setSearch] = useState("");
+
+  function handleSort(key: SortKey) {
+    if (sortBy === key) {
+      setSortDir((d) => (d === "desc" ? "asc" : "desc"));
+    } else {
+      setSortBy(key);
+      setSortDir("desc");
+    }
+  }
 
   const combined = useMemo(() => {
     type YieldItem = {
@@ -65,20 +135,23 @@ export function YieldGrid({ yields, bifrostYields }: YieldGridProps) {
 
     // Sort
     items.sort((a, b) => {
+      let cmp = 0;
       switch (sortBy) {
         case "apy":
-          return b.yield_.apyPercent - a.yield_.apyPercent;
+          cmp = a.yield_.apyPercent - b.yield_.apyPercent;
+          break;
         case "tvl":
-          return b.yield_.tvlUsd - a.yield_.tvlUsd;
+          cmp = a.yield_.tvlUsd - b.yield_.tvlUsd;
+          break;
         case "name":
-          return a.yield_.name.localeCompare(b.yield_.name);
-        default:
-          return 0;
+          cmp = a.yield_.name.localeCompare(b.yield_.name);
+          break;
       }
+      return sortDir === "desc" ? -cmp : cmp;
     });
 
     return items;
-  }, [yields, bifrostYields, filter, sortBy, search]);
+  }, [yields, bifrostYields, filter, sortBy, sortDir, search]);
 
   if (yields.length === 0 && bifrostYields.length === 0) {
     return (
@@ -99,42 +172,20 @@ export function YieldGrid({ yields, bifrostYields }: YieldGridProps) {
     <div className="panel overflow-hidden rounded-lg">
       {/* Toolbar */}
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-4 py-3">
-        <div className="flex items-center gap-3">
-          <div className="tab-group">
-            {FILTER_TABS.map((tab) => (
-              <button
-                key={tab.key}
-                type="button"
-                onClick={() => setFilter(tab.key)}
-                className={cn("tab-item", filter === tab.key && "active")}
-              >
-                {tab.label}
-              </button>
-            ))}
-          </div>
-
-          <div className="flex items-center gap-1 border-l border-border pl-3">
-            <span className="text-[10px] uppercase tracking-wider text-text-muted">
-              Sort:
-            </span>
-            {SORT_OPTIONS.map((opt) => (
-              <button
-                key={opt.key}
-                type="button"
-                onClick={() => setSortBy(opt.key)}
-                className={cn(
-                  "rounded px-2 py-0.5 font-mono text-[10px] transition-colors",
-                  sortBy === opt.key
-                    ? "bg-primary/10 text-primary"
-                    : "text-text-muted hover:text-text-secondary",
-                )}
-              >
-                {opt.label}
-              </button>
-            ))}
-          </div>
+        <div className="tab-group">
+          {FILTER_TABS.map((tab) => (
+            <button
+              key={tab.key}
+              type="button"
+              onClick={() => setFilter(tab.key)}
+              className={cn("tab-item", filter === tab.key && "active")}
+            >
+              {tab.label}
+            </button>
+          ))}
         </div>
 
+        {/* Search */}
         <div className="relative">
           <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-text-muted" />
           <input
@@ -148,16 +199,125 @@ export function YieldGrid({ yields, bifrostYields }: YieldGridProps) {
         </div>
       </div>
 
-      {/* Dense grid of cards */}
-      <div className="grid grid-cols-1 gap-px bg-border md:grid-cols-2 lg:grid-cols-3">
-        {combined.map((item) => (
-          <ProtocolCard
-            key={`${item.yield_.protocol}-${item.yield_.name}-${item.isBifrost}`}
-            yield_={item.yield_}
-            isBifrost={item.isBifrost}
-            category={item.category}
-          />
-        ))}
+      {/* Table */}
+      <div className="overflow-x-auto">
+        <table className="table-pro">
+          <thead>
+            <tr>
+              {/* Protocol */}
+              <th
+                className="cursor-pointer select-none"
+                onClick={() => handleSort("name")}
+              >
+                Protocol
+                <SortIcon active={sortBy === "name"} dir={sortDir} />
+              </th>
+
+              {/* Asset */}
+              <th>Asset</th>
+
+              {/* APR */}
+              <th
+                className="cursor-pointer select-none text-right"
+                onClick={() => handleSort("apy")}
+              >
+                APR
+                <SortIcon active={sortBy === "apy"} dir={sortDir} />
+              </th>
+
+              {/* TVL */}
+              <th
+                className="cursor-pointer select-none text-right"
+                onClick={() => handleSort("tvl")}
+              >
+                TVL
+                <SortIcon active={sortBy === "tvl"} dir={sortDir} />
+              </th>
+
+              {/* Type */}
+              <th>Type</th>
+
+              {/* Action */}
+              <th />
+            </tr>
+          </thead>
+
+          <tbody>
+            {combined.map((item) => {
+              const y = item.yield_;
+              const initials = y.protocol.slice(0, 2).toUpperCase();
+              const colors = protocolColor(y.protocol);
+              const isHighApr = y.apyPercent >= 10;
+
+              return (
+                <tr key={`${y.protocol}-${y.name}-${item.isBifrost}`}>
+                  {/* Protocol cell */}
+                  <td>
+                    <div className="flex items-center gap-2">
+                      <span
+                        className={cn(
+                          "flex h-6 w-6 shrink-0 items-center justify-center rounded text-[10px] font-bold",
+                          colors,
+                        )}
+                      >
+                        {initials}
+                      </span>
+                      <span className="text-text-secondary font-sans text-[12px] truncate max-w-[120px]">
+                        {y.protocol}
+                      </span>
+                    </div>
+                  </td>
+
+                  {/* Asset cell */}
+                  <td>
+                    <span className="text-text-primary font-medium text-[12px]">
+                      {y.name}
+                    </span>
+                  </td>
+
+                  {/* APR cell */}
+                  <td className="text-right">
+                    <span
+                      className={cn(
+                        "font-mono font-semibold text-[13px]",
+                        isHighApr ? "text-primary" : "text-bull",
+                      )}
+                    >
+                      {formatApy(y.apyPercent)}
+                    </span>
+                  </td>
+
+                  {/* TVL cell */}
+                  <td className="text-right">
+                    <span className="font-mono text-text-secondary text-[12px]">
+                      {formatUsdNumber(y.tvlUsd, true)}
+                    </span>
+                  </td>
+
+                  {/* Type cell */}
+                  <td>
+                    <TypePill
+                      category={item.isBifrost ? item.category : undefined}
+                    />
+                  </td>
+
+                  {/* Earn button */}
+                  <td>
+                    <button
+                      type="button"
+                      className={cn(
+                        "rounded border px-2.5 py-1 font-mono text-[10px] font-semibold transition-colors",
+                        "border-primary/30 text-primary hover:bg-primary/10",
+                      )}
+                    >
+                      + Earn
+                    </button>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
       </div>
 
       {/* Footer */}

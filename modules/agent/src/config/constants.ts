@@ -1024,3 +1024,93 @@ export const MAX_SATELLITE_SYNC_AGE = 3600; // 1 hour
 /** Placeholder XCM call payload — in production, encode real XCM instructions. */
 export const PLACEHOLDER_XCM_CALL =
   "0x0304000100a10f04000101000700e8764817040d0100040001010070c2eb0b1abf691cc65a18bd0a3b005cc190a0ecbfdd2b69cb15157c2a841e6d" as Hex;
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  V2 DEX — Token & Pair Registry (Polkadot Hub TestNet)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Known token addresses on Polkadot Hub TestNet. */
+export const TOKEN_ADDRESSES = {
+  tDOT: "0x2402C804aD8a6217BF73D8483dA7564065c56083" as Address,
+  TKA: "0xD8913B1a14Db9CD4B29C05c5E7E105cDA34ebF9f" as Address,
+  TKB: "0x3E8D34E94e22BdBaa9aD6D575a239D722973D2Bc" as Address,
+  tUSDC: "0x5298FDe9E288371ECA21db04Ac5Ddba00C1ea626" as Address,
+  tETH: "0xd92a5325fB3A56f5012F1EBD1bd37573d981144e" as Address,
+} as const;
+
+/** Lowercase-address → symbol map for route display. */
+export const TOKEN_SYMBOLS: Record<string, string> = {
+  "0x2402c804ad8a6217bf73d8483da7564065c56083": "tDOT",
+  "0xd8913b1a14db9cd4b29c05c5e7e105cda34ebf9f": "TKA",
+  "0x3e8d34e94e22bdbaa9ad6d575a239d722973d2bc": "TKB",
+  "0x5298fde9e288371eca21db04ac5ddba00c1ea626": "tUSDC",
+  "0xd92a5325fb3a56f5012f1ebd1bd37573d981144e": "tETH",
+};
+
+/** All live UniswapV2 pairs deployed on Hub testnet (token0 < token1 by address). */
+export const UV2_PAIRS: Array<{
+  address: Address;
+  token0: Address;
+  token1: Address;
+  label: string;
+}> = [
+  {
+    address: "0xdd59E6121315237ACc953cd6aF1924F4320778dF" as Address,
+    token0: "0x3E8D34E94e22BdBaa9aD6D575a239D722973D2Bc" as Address,
+    token1: "0xD8913B1a14Db9CD4B29C05c5E7E105cDA34ebF9f" as Address,
+    label: "TKB/TKA",
+  },
+  {
+    address: "0x9E628e8F4f26771F3208E2B9071d843cFeF45b1a" as Address,
+    token0: "0x5298FDe9E288371ECA21db04Ac5Ddba00C1ea626" as Address,
+    token1: "0xd92a5325fB3A56f5012F1EBD1bd37573d981144e" as Address,
+    label: "tUSDC/tETH",
+  },
+  {
+    address: "0xe01503Aeac95Ca39E8001aDa83121f1F8743e491" as Address,
+    token0: "0x2402C804aD8a6217BF73D8483dA7564065c56083" as Address,
+    token1: "0x3E8D34E94e22BdBaa9aD6D575a239D722973D2Bc" as Address,
+    label: "tDOT/TKB",
+  },
+  {
+    address: "0x84864aff1aac120809f3a2ebf0be0f2cc3a51528" as Address,
+    token0: "0x2402C804aD8a6217BF73D8483dA7564065c56083" as Address,
+    token1: "0x5298FDe9E288371ECA21db04Ac5Ddba00C1ea626" as Address,
+    label: "tDOT/tUSDC",
+  },
+  {
+    address: "0x412cfeb621f5a43a08adda9c8d09f29651570a01" as Address,
+    token0: "0x2402C804aD8a6217BF73D8483dA7564065c56083" as Address,
+    token1: "0xd92a5325fB3A56f5012F1EBD1bd37573d981144e" as Address,
+    label: "tDOT/tETH",
+  },
+];
+
+/** Minimal ABI for reading UniswapV2 pair reserves. */
+export const UV2_PAIR_ABI = [
+  {
+    type: "function",
+    name: "getReserves",
+    inputs: [],
+    outputs: [
+      { name: "reserve0", type: "uint112" },
+      { name: "reserve1", type: "uint112" },
+      { name: "blockTimestampLast", type: "uint32" },
+    ],
+    stateMutability: "view",
+  },
+  {
+    type: "function",
+    name: "token0",
+    inputs: [],
+    outputs: [{ name: "", type: "address" }],
+    stateMutability: "view",
+  },
+  {
+    type: "function",
+    name: "token1",
+    inputs: [],
+    outputs: [{ name: "", type: "address" }],
+    stateMutability: "view",
+  },
+] as const;

@@ -3,6 +3,7 @@
 import { useAgentLog } from "@/hooks/use-agent-log";
 import { DecisionFeed } from "@/components/agent/decision-feed";
 import { AgentStatus } from "@/components/agent/agent-status";
+import { LiveEvents } from "@/components/agent/live-events";
 import { PanelSkeleton } from "@/components/ui/skeleton";
 import { PageHero, HeroStat } from "@/components/ui/page-hero";
 import { Activity, Cpu, RefreshCw } from "lucide-react";
@@ -61,7 +62,10 @@ export default function AgentPage() {
           </button>
         </div>
       ) : (
-        <DecisionFeed decisions={decisions ?? []} />
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_320px]">
+          <DecisionFeed decisions={decisions ?? []} />
+          <LiveEvents />
+        </div>
       )}
     </div>
   );

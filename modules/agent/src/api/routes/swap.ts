@@ -121,4 +121,109 @@ export function registerSwapRoutes(
       return { success: false, error: msg };
     }
   });
+
+  /**
+   * GET /api/routes — Find all swap routes from tokenIn to tokenOut.
+   *
+   * Reads live V2 pair reserves, enumerates single/multi-hop paths, and
+   * appends cross-chain stub routes. Results are sorted best-first.
+   *
+   * Query params:
+   *   tokenIn  - Input token address (0x…)
+   *   tokenOut - Output token address (0x…)
+   *   amountIn - Amount in wei (string)
+   */
+  app.get<{
+    Querystring: { tokenIn: string; tokenOut: string; amountIn: string };
+  }>("/api/routes", async (request) => {
+    try {
+      const { tokenIn, tokenOut, amountIn } = request.query;
+
+      if (!tokenIn || !tokenOut || !amountIn) {
+        return {
+          success: false,
+          error: "Missing required query params: tokenIn, tokenOut, amountIn",
+        };
+      }
+
+      let amountInBig: bigint;
+      try {
+        amountInBig = BigInt(amountIn);
+        if (amountInBig <= 0n) throw new Error("amountIn must be positive");
+      } catch {
+        return { success: false, error: "amountIn must be a positive integer" };
+      }
+
+      const routes = await swapRouterService.findRoutes(
+        tokenIn,
+        tokenOut,
+        amountInBig,
+      );
+
+      return {
+        success: true,
+        data: {
+          routes,
+          timestamp: new Date().toISOString(),
+        },
+      };
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : String(error);
+      return { success: false, error: msg };
+    }
+  });
+
+  /**
+   * GET /api/quote — Return the single best route for a token pair.
+   *
+   * Same as /api/routes but returns only the top result.
+   *
+   * Query params:
+   *   tokenIn  - Input token address (0x…)
+   *   tokenOut - Output token address (0x…)
+   *   amountIn - Amount in wei (string)
+   */
+  app.get<{
+    Querystring: { tokenIn: string; tokenOut: string; amountIn: string };
+  }>("/api/quote", async (request) => {
+    try {
+      const { tokenIn, tokenOut, amountIn } = request.query;
+
+      if (!tokenIn || !tokenOut || !amountIn) {
+        return {
+          success: false,
+          error: "Missing required query params: tokenIn, tokenOut, amountIn",
+        };
+      }
+
+      let amountInBig: bigint;
+      try {
+        amountInBig = BigInt(amountIn);
+        if (amountInBig <= 0n) throw new Error("amountIn must be positive");
+      } catch {
+        return { success: false, error: "amountIn must be a positive integer" };
+      }
+
+      const routes = await swapRouterService.findRoutes(
+        tokenIn,
+        tokenOut,
+        amountInBig,
+      );
+
+      // First live route is best (sorted by amountOut desc)
+      const bestRoute =
+        routes.find((r) => r.status === "live" && r.amountOut !== "0") ?? null;
+
+      return {
+        success: true,
+        data: {
+          bestRoute,
+          timestamp: new Date().toISOString(),
+        },
+      };
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : String(error);
+      return { success: false, error: msg };
+    }
+  });
 }

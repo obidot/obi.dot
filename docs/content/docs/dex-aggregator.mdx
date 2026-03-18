@@ -24,24 +24,34 @@ HydrationOmnipool   AssetHubPair    BifrostDEX
     via XCM             local           via XCM
 ```
 
-| Contract                   | Address                                      | Purpose                                                           |
-| -------------------------- | -------------------------------------------- | ----------------------------------------------------------------- |
-| `SwapRouter`               | `0xeABB7c2C02eD819BDee9336cD12e9668A33ab924` | Execution: single-hop, multi-hop, split-route, multicall          |
-| `SwapQuoter`               | `0x81d7aCFEF474DA6c76eC1b5A05a137cB9f3A5Db1` | Read-only: best quote, all quotes, multi-hop quote, buildBestSwap |
-| `HydrationOmnipoolAdapter` | `0xBF9e3ad0818719F0DF26075005A978793248f523` | Routes swaps to Hydration Omnipool (parachain 2034) via XCM       |
-| `AssetHubPairAdapter`      | `0x67E0B572A7761C13D7C9A3f737C825A506a85CF4` | Routes swaps through AssetHub native asset pairs                  |
-| `BifrostDEXAdapter`        | `0x386FC9514594c589ad7481AFC3eC36216DE91dC0` | Routes swaps to Bifrost DEX (parachain 2030) via XCM              |
+| Contract                   | Address                                      | Purpose                                                                      |
+| -------------------------- | -------------------------------------------- | ---------------------------------------------------------------------------- |
+| `SwapRouter`               | `0x60a72d1e20c5dc40Bb5a24394f0583d863201A3c` | Execution: single-hop, multi-hop, split-route, multicall                     |
+| `SwapQuoter`               | `0x81d7aCFEF474DA6c76eC1b5A05a137cB9f3A5Db1` | Read-only: best quote, all quotes, multi-hop quote, buildBestSwap            |
+| `HydrationOmnipoolAdapter` | `0xF0E1c10f97446C032A86C9643258Bb26d6129933` | Routes swaps to Hydration Omnipool (parachain 2034) via XCM                  |
+| `AssetHubPairAdapter`      | `0x67E0B572A7761C13D7C9A3f737C825A506a85CF4` | Routes swaps through AssetHub native asset pairs                             |
+| `BifrostDEXAdapter`        | `0x386FC9514594c589ad7481AFC3eC36216DE91dC0` | Routes swaps to Bifrost DEX (parachain 2030) via XCM                         |
+| `UniswapV2PoolAdapter`     | `0xF06Af9a8fcdf56d69E356A58d4dC5217395918c3` | Routes swaps through any UniswapV2-compatible pair (PoolType.Custom, slot 3) |
+| `RelayTeleportAdapter`     | `0x9eF954F520B1f4F316eaaCE971848D1F8dd0616A` | XCM InitiateTeleport to relay chain (DOT/PAS, slot 5)                        |
+| `KaruraAdapter`            | `0xd5352f2363b8f6cd8B3719170B4Cb395846F3DB1` | Karura DEX via XCM Transact (parachain 2000, slot 6)                         |
+| `MoonbeamAdapter`          | `0x4a6573c6EDc817bFd7eaFf23D892F429A87E1aB8` | Moonbeam EVM call via XCM Transact (parachain 2004, slot 7)                  |
+| `InterlayAdapter`          | `0x226337160C62EC00c2EEdB23BD5Ed54b576c32B1` | Interlay Loans.mint via XCM Transact (parachain 2032, slot 8)                |
 
 ## Pool Types
 
-The router defines four pool types via the `PoolType` enum:
+The router defines nine pool types via the `PoolType` enum:
 
-| Value | Name                | Target                     | Mechanism                         |
-| ----- | ------------------- | -------------------------- | --------------------------------- |
-| `0`   | `HydrationOmnipool` | Hydration (parachain 2034) | XCM V4 to Omnipool                |
-| `1`   | `AssetHubPair`      | Polkadot Hub / AssetHub    | Direct ERC-20 pair swap           |
-| `2`   | `BifrostDEX`        | Bifrost (parachain 2030)   | XCM V4 to Bifrost DEX             |
-| `3`   | `Custom`            | User-registered            | Extensible — any future pool type |
+| Value | Name                | Target                     | Mechanism                             |
+| ----- | ------------------- | -------------------------- | ------------------------------------- |
+| `0`   | `HydrationOmnipool` | Hydration (parachain 2034) | XCM V5 to Omnipool                    |
+| `1`   | `AssetHubPair`      | Polkadot Hub / AssetHub    | Direct ERC-20 pair swap               |
+| `2`   | `BifrostDEX`        | Bifrost (parachain 2030)   | XCM V4 to Bifrost DEX                 |
+| `3`   | `Custom`            | User-registered            | Extensible — any UniswapV2-compat AMM |
+| `4`   | `Bridge`            | Test/cross-chain sim       | Lock-and-mint bridge simulation       |
+| `5`   | `RelayTeleport`     | Relay chain (DOT/PAS)      | XCM InitiateTeleport                  |
+| `6`   | `Karura`            | Karura (parachain 2000)    | XCM Transact → Dex pallet 56          |
+| `7`   | `Moonbeam`          | Moonbeam (parachain 2004)  | XCM Transact → Ethereum pallet 4      |
+| `8`   | `Interlay`          | Interlay (parachain 2032)  | XCM Transact → Loans pallet 59        |
 
 ## Data Types
 
@@ -281,6 +291,41 @@ interface IPoolAdapter {
 
 The router approves each adapter with `forceApprove` immediately before calling `swap()`. Adapters are responsible for transferring `tokenOut` to the `to` address.
 
+## Built-in Adapters
+
+### UniswapV2PoolAdapter (PoolType.Custom — slot 3)
+
+`UniswapV2PoolAdapter` (`src/adapters/UniswapV2PoolAdapter.sol`, deployed at `0xF06Af9a8fcdf56d69E356A58d4dC5217395918c3`) routes swaps through any UniswapV2-compatible pair contract (constant-product AMM).
+
+**Push-model:** The router transfers `amountIn` to the adapter before calling `swap()`. The adapter then transfers tokens to the pair and calls `pair.swap()`.
+
+**Stack-too-deep fix:** `swap()` delegates validation to a `_computeAndValidate()` internal helper to stay within the PolkaVM `via_ir=false` stack limit.
+
+```solidity
+// Register a UniswapV2 pair
+adapter.registerPair(tokenA, tokenB, pairAddress, feeBps);
+
+// Swap through the registered pair
+uint256 out = swapRouter.swap(SwapParams({
+    route: Route({ poolType: PoolType.Custom, pool: pairAddress, tokenIn: tokenA, tokenOut: tokenB, feeBps: 30, data: "" }),
+    amountIn: 1e18, minAmountOut: 0.99e18, to: recipient, deadline: block.timestamp + 300
+}));
+```
+
+### MockBridgeAdapter (PoolType.Bridge — slot 4, test only)
+
+`MockBridgeAdapter` (`test/mocks/MockBridgeAdapter.sol`, deployed at `0x515e3d05c72F0E3a6599d7383D575AF22dee830f`) wraps `MockCrossChainBridge` for use in tests. It simulates a lock-and-mint bridge: tokens are locked in the bridge and a `WrappedToken` is minted 1:1 to the recipient.
+
+```solidity
+// Constructor signature (3 args — note: includes bridge address)
+MockBridgeAdapter adapter = new MockBridgeAdapter(admin, routerAddress, bridgeAddress);
+
+// Grant CALLER_ROLE to the adapter on the bridge before swapping
+bridge.grantRole(bridge.CALLER_ROLE(), address(adapter));
+```
+
+`MockCrossChainBridge` (`test/mocks/MockCrossChainBridge.sol`) deploys a new `WrappedToken` per pair on first use and mints 1:1. Used in `test/PoolAdapters.t.sol` (46 tests).
+
 ## Access Control
 
 | Role                 | Holder              | Capabilities                                                  |
@@ -313,7 +358,7 @@ The vault:
 6. Calls `ISwapRouter(swapRouter).swap(swapParams)`
 7. Updates `protocolExposure[intent.targetProtocol]`
 
-> **Known blocker:** `vault.setSwapRouter()` cannot be called on the currently deployed `ObidotVault` at `0x37D7959f5f97D37799E0d04b7684c41CB2Ff878d`. That contract is Phase 1 bytecode (~30 KB) which predates this setter. The vault must be redeployed (after code-size reduction via `via_ir=true` or extraction) before the router can be wired in. `SwapRouter` is fully callable directly in the meantime.
+> The currently deployed `ObidotVault` v3 at `0x03473a95971Ba0496786a615e21b1e87bDFf0025` supports `setSwapRouter()`. The SwapRouter (`0x60a72d1e20c5dc40Bb5a24394f0583d863201A3c`) is wired in and all 9 production adapter slots (0–8) are registered.
 
 ## Events
 
