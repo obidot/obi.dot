@@ -6,19 +6,7 @@ import { useMarketPrice } from "@/hooks/use-market-price";
 import { TOKENS } from "@/shared/trade/swap";
 import { Clock3, TrendingUp, TrendingDown } from "lucide-react";
 import TokenPicker from "./token-picker";
-
-// ── Types ─────────────────────────────────────────────────────────────────
-
-interface PendingOrder {
-  id: string;
-  tokenInSymbol: string;
-  tokenOutSymbol: string;
-  amountIn: string;
-  targetPrice: string;
-  expiry: number;
-  marketPriceAtOrder: string;
-  createdAt: number;
-}
+import type { PendingOrder } from "@/types";
 
 // ── Expiry options ─────────────────────────────────────────────────────────
 
@@ -79,6 +67,8 @@ export default function LimitOrderPanel() {
       id: `${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
       tokenInSymbol: tokenIn.symbol,
       tokenOutSymbol: tokenOut.symbol,
+      tokenInAddress: tokenIn.address,
+      tokenOutAddress: tokenOut.address,
       amountIn,
       targetPrice,
       expiry: Date.now() + EXPIRY_OPTIONS[expiryIdx].ms,
