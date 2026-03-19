@@ -3,17 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { cn } from "@/lib/format";
 import { Clock3, Trash2, ClipboardList } from "lucide-react";
-
-interface PendingOrder {
-  id: string;
-  tokenInSymbol: string;
-  tokenOutSymbol: string;
-  amountIn: string;
-  targetPrice: string;
-  expiry: number;
-  marketPriceAtOrder: string;
-  createdAt: number;
-}
+import type { PendingOrder } from "@/types";
 
 const LS_KEY = "obidot_limit_orders";
 
