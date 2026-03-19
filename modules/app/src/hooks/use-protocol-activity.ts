@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
   getIndexedVaultStats,
@@ -77,6 +77,11 @@ export function useProtocolActivity() {
   }, []);
 
   const { connected } = useSwapSubscription(handleSwapEvent);
+
+  // Reset live counter each time the server data refreshes (prevents double-counting)
+  useEffect(() => {
+    setLiveSwapCount(0);
+  }, [stats]);
 
   const allSwaps = [
     ...liveSwaps,
