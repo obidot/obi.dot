@@ -51,8 +51,8 @@ function StatCard({
 }
 
 function SwapFeedRow({ swap }: { swap: IndexedSwapExecution }) {
-  const amtIn = parseFloat(formatUnits(BigInt(swap.amountIn), 18)).toFixed(4);
-  const amtOut = parseFloat(formatUnits(BigInt(swap.amountOut), 18)).toFixed(4);
+  const amtIn = (() => { try { return parseFloat(formatUnits(BigInt(swap.amountIn), 18)).toFixed(4); } catch { return "—"; } })();
+  const amtOut = (() => { try { return parseFloat(formatUnits(BigInt(swap.amountOut), 18)).toFixed(4); } catch { return "—"; } })();
   return (
     <div className="flex items-center justify-between py-2.5 border-b border-border/40 last:border-0">
       <div className="min-w-0">
