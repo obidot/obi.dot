@@ -106,6 +106,25 @@ export interface ChatMessage {
   timestamp: string;
 }
 
+/** Limit order stored in localStorage under key "obidot_limit_orders" */
+export interface PendingOrder {
+  id: string;
+  tokenInSymbol: string;
+  tokenOutSymbol: string;
+  /** ERC-20 address of tokenIn — used for fill detection */
+  tokenInAddress: string;
+  /** ERC-20 address of tokenOut — used for fill detection */
+  tokenOutAddress: string;
+  /** Human-readable amount (e.g. "10.5") */
+  amountIn: string;
+  targetPrice: string;
+  expiry: number;
+  marketPriceAtOrder: string;
+  createdAt: number;
+  /** Set to "filled" by fill-detection logic when a matching SwapExecuted event arrives */
+  status?: "pending" | "filled";
+}
+
 // ── DEX Aggregator Types ──────────────────────────────────────────────────
 
 /** Pool type enum (matches on-chain PoolType) */
@@ -133,6 +152,21 @@ export const POOL_TYPE_LABELS: Record<PoolType, string> = {
   [PoolType.Moonbeam]: "Moonbeam EVM",
   [PoolType.Interlay]: "Interlay Loans",
 };
+
+/**
+ * Resolve a pool type value to its numeric PoolType.
+ * Accepts either a numeric string ("3"), a number (3), or a label ("UniswapV2").
+ * Returns undefined if unrecognized.
+ */
+export function resolvePoolType(value: string | number): PoolType | undefined {
+  if (typeof value === "number") return value as PoolType;
+  const n = Number(value);
+  if (!isNaN(n)) return n as PoolType;
+  // Reverse label lookup
+  const entry = Object.entries(POOL_TYPE_LABELS).find(([, label]) => label === value);
+  if (entry) return Number(entry[0]) as PoolType;
+  return undefined;
+}
 
 /** Swap quote result from agent API */
 export interface SwapQuoteResult {
