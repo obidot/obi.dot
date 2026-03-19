@@ -134,17 +134,17 @@ export function PortfolioOptimizer({
             <PieChart className="h-3.5 w-3.5 text-primary" />
           </div>
           <div>
-            <h3 className="text-sm font-semibold text-text-primary">
+            <h3 className="text-base font-semibold text-text-primary">
               Portfolio Optimizer
             </h3>
-            <p className="font-mono text-[9px] text-text-muted">
+            <p className="font-mono text-xs text-text-muted">
               Risk-adjusted allocation for {formatUsdNumber(totalUsd, true)}{" "}
               portfolio
             </p>
           </div>
         </div>
         <div className="text-right">
-          <p className="text-[9px] uppercase tracking-wider text-text-muted">
+          <p className="text-xs uppercase tracking-wider text-text-muted">
             Weighted APY
           </p>
           <p className="stat-number text-lg text-primary">
@@ -214,7 +214,7 @@ export function PortfolioOptimizer({
       {/* Recommendation */}
       <div className="flex items-start gap-2.5 border-t border-border px-4 py-3">
         <Lightbulb className="mt-0.5 h-3.5 w-3.5 shrink-0 text-warning" />
-        <p className="font-mono text-[10px] leading-relaxed text-text-secondary">
+        <p className="font-mono text-xs leading-relaxed text-text-secondary">
           {allocations[0]
             ? `Recommended: Allocate ${(allocations[0].weight * 100).toFixed(0)}% to ${allocations[0].name} for best risk-adjusted returns. `
             : ""}
