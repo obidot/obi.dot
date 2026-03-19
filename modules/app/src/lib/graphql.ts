@@ -159,6 +159,21 @@ export async function getIndexedSwapExecutions(
   return data.swapExecutions;
 }
 
+/**
+ * Fetch recent swap executions filtered to a specific recipient address.
+ * Fetches the last 50 swaps and filters client-side (indexer may not support
+ * recipient param on swapExecutions query).
+ */
+export async function getSwapExecutionsByRecipient(
+  recipient: string,
+  limit = 20,
+): Promise<IndexedSwapExecution[]> {
+  const all = await getIndexedSwapExecutions(50);
+  return all
+    .filter((s) => s.recipient.toLowerCase() === recipient.toLowerCase())
+    .slice(0, limit);
+}
+
 export async function getIndexedStrategyExecutions(
   limit = 10,
   offset = 0,
