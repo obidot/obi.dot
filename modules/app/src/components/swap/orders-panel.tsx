@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import { parseUnits } from "viem";
 import { cn } from "@/lib/format";
 import { Clock3, Trash2, ClipboardList, CheckCircle2 } from "lucide-react";
 import type { PendingOrder } from "@/types";
@@ -158,8 +159,9 @@ export default function OrdersPanel() {
             event.tokenIn.toLowerCase() === o.tokenInAddress.toLowerCase();
           const tokenOutMatch =
             event.tokenOut.toLowerCase() === o.tokenOutAddress.toLowerCase();
+          const amountInWei = parseUnits(o.amountIn, 18);
           const amountInMatch =
-            BigInt(event.amountIn) >= (BigInt(o.amountIn) * 95n) / 100n;
+            BigInt(event.amountIn) >= (amountInWei * 95n) / 100n;
           if (tokenInMatch && tokenOutMatch && amountInMatch) {
             changed = true;
             return { ...o, status: "filled" as const };
