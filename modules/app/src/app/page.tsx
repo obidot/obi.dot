@@ -5,6 +5,7 @@ import { HealthIndicators } from "@/components/dashboard/health-indicators";
 import { QuickStats } from "@/components/dashboard/quick-stats";
 import { VaultActions } from "@/components/dashboard/vault-actions";
 import { PnlChart } from "@/components/dashboard/pnl-chart";
+import { UserPosition } from "@/components/dashboard/user-position";
 import { useQuery } from "@tanstack/react-query";
 import {
   getIndexedDeposits,
@@ -158,9 +159,10 @@ export default function DashboardPage() {
           <PnlChart />
         </div>
 
-        {/* Right: Trade form + health */}
+        {/* Right: Trade form + position + health */}
         <div className="flex flex-col bg-surface">
           <VaultActions />
+          <UserPosition />
           <div className="border-t border-border">
             <HealthIndicators />
           </div>
