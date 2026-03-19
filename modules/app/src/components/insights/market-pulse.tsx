@@ -15,6 +15,7 @@ interface MarketPulseProps {
   decisions: AgentDecision[];
   yields: ProtocolYield[];
   bifrostYields: BifrostYield[];
+  recentSwapCount: number;
 }
 
 interface PulseMetrics {
@@ -40,6 +41,7 @@ function computePulse(
   decisions: AgentDecision[],
   yields: ProtocolYield[],
   bifrostYields: BifrostYield[],
+  recentSwapCount: number,
 ): PulseMetrics {
   const factors: PulseFactor[] = [];
 
@@ -85,6 +87,14 @@ function computePulse(
     description: `${sourceCount} yield sources tracked — ${diversitySignal > 0 ? "well diversified" : "limited options"}`,
   });
 
+  // Factor 5: On-chain swap volume — more swaps = more active ecosystem
+  const volumeSignal = recentSwapCount > 100 ? 20 : recentSwapCount > 30 ? 10 : recentSwapCount > 5 ? 0 : -10;
+  factors.push({
+    name: "Swap Volume",
+    value: volumeSignal,
+    description: `${recentSwapCount} swaps recorded on-chain — ${volumeSignal > 0 ? "high activity" : "low activity"}`,
+  });
+
   const sentiment = factors.reduce((a, f) => a + f.value, 0);
   const clamped = Math.max(-100, Math.min(100, sentiment));
 
@@ -107,10 +117,11 @@ export function MarketPulse({
   decisions,
   yields,
   bifrostYields,
+  recentSwapCount,
 }: MarketPulseProps) {
   const pulse = useMemo(
-    () => computePulse(decisions, yields, bifrostYields),
-    [decisions, yields, bifrostYields],
+    () => computePulse(decisions, yields, bifrostYields, recentSwapCount),
+    [decisions, yields, bifrostYields, recentSwapCount],
   );
 
   const SentimentIcon =
