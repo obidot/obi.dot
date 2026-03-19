@@ -2,8 +2,12 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { cn } from "@/lib/format";
-import { Clock3, Trash2, ClipboardList } from "lucide-react";
+import { Clock3, Trash2, ClipboardList, CheckCircle2 } from "lucide-react";
 import type { PendingOrder } from "@/types";
+import {
+  useSwapSubscription,
+  type SwapEvent,
+} from "@/hooks/use-graphql-subscription";
 
 const LS_KEY = "obidot_limit_orders";
 
@@ -34,6 +38,28 @@ function priceDelta(target: string, market: string): number {
   const m = Number(market);
   if (!m || !t) return 0;
   return ((t - m) / m) * 100;
+}
+
+function FilledRow({ order }: { order: PendingOrder }) {
+  return (
+    <div className="border border-border bg-surface p-3 flex items-start justify-between gap-2 opacity-80">
+      <div className="space-y-0.5 min-w-0">
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="font-mono text-[13px] text-text-primary font-semibold">
+            {order.amountIn} {order.tokenInSymbol} → {order.tokenOutSymbol}
+          </span>
+          <span className="font-mono text-[11px] text-bull border border-bull/30 px-1 py-0.5 flex items-center gap-1">
+            <CheckCircle2 className="h-3 w-3" />
+            FILLED
+          </span>
+        </div>
+        <p className="text-[12px] text-text-muted font-mono">
+          At: {Number(order.targetPrice).toFixed(6)} {order.tokenOutSymbol} /{" "}
+          {order.tokenInSymbol}
+        </p>
+      </div>
+    </div>
+  );
 }
 
 function OrderRow({
@@ -115,14 +141,44 @@ export default function OrdersPanel() {
 
   const handleClearExpired = useCallback(() => {
     setOrders((prev) => {
-      const next = prev.filter((o) => o.expiry > Date.now());
+      const next = prev.filter((o) => o.expiry > Date.now() || o.status === "filled");
       saveOrders(next);
       return next;
     });
   }, []);
 
-  const activeOrders = orders.filter((o) => o.expiry > Date.now());
-  const expiredOrders = orders.filter((o) => o.expiry <= Date.now());
+  // Fill detection: match SwapExecuted events by tokenIn + tokenOut + amountIn (±5%)
+  const handleSwapEvent = useCallback((event: SwapEvent) => {
+    setOrders((prev) => {
+      let changed = false;
+      const next = prev.map((o) => {
+        if (o.status === "filled") return o;
+        try {
+          const tokenInMatch =
+            event.tokenIn.toLowerCase() === o.tokenInAddress.toLowerCase();
+          const tokenOutMatch =
+            event.tokenOut.toLowerCase() === o.tokenOutAddress.toLowerCase();
+          const amountInMatch =
+            BigInt(event.amountIn) >= (BigInt(o.amountIn) * 95n) / 100n;
+          if (tokenInMatch && tokenOutMatch && amountInMatch) {
+            changed = true;
+            return { ...o, status: "filled" as const };
+          }
+        } catch {
+          // Never corrupt localStorage on match errors
+        }
+        return o;
+      });
+      if (changed) saveOrders(next);
+      return next;
+    });
+  }, []);
+
+  useSwapSubscription(handleSwapEvent);
+
+  const filledOrders = orders.filter((o) => o.status === "filled");
+  const activeOrders = orders.filter((o) => o.status !== "filled" && o.expiry > Date.now());
+  const expiredOrders = orders.filter((o) => o.status !== "filled" && o.expiry <= Date.now());
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
@@ -141,7 +197,7 @@ export default function OrdersPanel() {
       </div>
 
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
-        {orders.length === 0 && (
+        {orders.length === 0 && filledOrders.length === 0 && (
           <div className="flex flex-col items-center justify-center gap-3 h-full py-16 text-center">
             <div className="h-12 w-12 border border-border bg-surface-hover flex items-center justify-center">
               <ClipboardList className="h-6 w-6 text-text-muted" />
@@ -154,6 +210,17 @@ export default function OrdersPanel() {
                 Place a limit order to get started
               </p>
             </div>
+          </div>
+        )}
+
+        {filledOrders.length > 0 && (
+          <div className="space-y-2">
+            <p className="text-[12px] text-bull uppercase tracking-wider">
+              Filled ({filledOrders.length})
+            </p>
+            {filledOrders.map((o) => (
+              <FilledRow key={o.id} order={o} />
+            ))}
           </div>
         )}
 

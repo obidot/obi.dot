@@ -14,9 +14,10 @@ import SwapPanel from "@/components/swap/swap-panel";
 import { RouteDiagram } from "@/components/swap/route-diagram";
 import InfoBanners from "@/components/swap/info-banners";
 import OrdersPanel from "@/components/swap/orders-panel";
+import { TradeHistory } from "@/components/swap/trade-history";
 import { useSwapRoutes } from "@/hooks/use-swap";
 import type { SwapRouteResult, SplitRouteSelection, TradeActionType, SwapRoutesResponse } from "@/types";
-import { Network } from "lucide-react";
+import { Network, ClipboardList, History } from "lucide-react";
 
 function RightPanelIdle({ routes }: { routes: SwapRoutesResponse | undefined }) {
   return (
@@ -118,6 +119,7 @@ export default function TradePage() {
 
   const [selectedRoute, setSelectedRoute] = useState<SwapRouteResult | null>(null);
   const [selectedSplitRoutes, setSelectedSplitRoutes] = useState<SplitRouteSelection[]>([]);
+  const [limitRightTab, setLimitRightTab] = useState<"orders" | "history">("orders");
 
   const { data: routes } = useSwapRoutes();
 
@@ -179,8 +181,44 @@ export default function TradePage() {
             )
           )}
 
-          {/* Limit tab: orders panel */}
-          {activeTab === "limit" && <OrdersPanel />}
+          {/* Limit tab: orders panel + history tab switcher */}
+          {activeTab === "limit" && (
+            <div className="flex flex-col h-full overflow-hidden">
+              {/* Tab bar */}
+              <div className="flex border-b border-border shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setLimitRightTab("orders")}
+                  className={cn(
+                    "flex items-center gap-1.5 px-4 py-3 text-[13px] font-medium border-b-2 -mb-px transition-colors",
+                    limitRightTab === "orders"
+                      ? "border-primary text-text-primary"
+                      : "border-transparent text-text-muted hover:text-text-secondary",
+                  )}
+                >
+                  <ClipboardList className="h-3.5 w-3.5" />
+                  Open Positions
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setLimitRightTab("history")}
+                  className={cn(
+                    "flex items-center gap-1.5 px-4 py-3 text-[13px] font-medium border-b-2 -mb-px transition-colors",
+                    limitRightTab === "history"
+                      ? "border-primary text-text-primary"
+                      : "border-transparent text-text-muted hover:text-text-secondary",
+                  )}
+                >
+                  <History className="h-3.5 w-3.5" />
+                  History
+                </button>
+              </div>
+              {/* Panel content */}
+              <div className="flex-1 overflow-hidden">
+                {limitRightTab === "orders" ? <OrdersPanel /> : <TradeHistory />}
+              </div>
+            </div>
+          )}
 
           {/* Cross-chain tab: idle */}
           {activeTab === "crosschain" && <RightPanelIdle routes={routes} />}
