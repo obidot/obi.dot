@@ -71,11 +71,13 @@ function StatusPill({ status }: { status: SwapRouteResult["status"] }) {
     live: "bg-primary/10 text-primary border-primary/20",
     mainnet_only: "bg-warning/10 text-warning border-warning/20",
     coming_soon: "bg-surface-hover text-text-muted border-border",
+    no_liquidity: "bg-danger/10 text-danger border-danger/20",
   };
   const l: Record<SwapRouteResult["status"], string> = {
     live: "LIVE",
     mainnet_only: "MAINNET ONLY",
     coming_soon: "COMING SOON",
+    no_liquidity: "NO LIQUIDITY",
   };
   return (
     <span className={cn("font-mono text-[12px] border px-1.5 py-0.5 tracking-wide", s[status])}>

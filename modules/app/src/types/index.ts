@@ -248,7 +248,8 @@ export interface SwapRouteResult {
   totalFeeBps: string;
   totalPriceImpactBps: string;
   routeType: "local" | "xcm" | "bridge";
-  status: "live" | "mainnet_only" | "coming_soon";
+  /** "no_liquidity" — path exists in UV2 but pool reserves are 0 (not yet seeded). */
+  status: "live" | "mainnet_only" | "coming_soon" | "no_liquidity";
 }
 
 // ── Split Route Types ─────────────────────────────────────────────────────

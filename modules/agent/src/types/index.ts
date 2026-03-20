@@ -269,8 +269,13 @@ export interface SwapRouteResult {
   totalPriceImpactBps: string;
   /** Route category. */
   routeType: "local" | "xcm" | "bridge";
-  /** Execution availability. */
-  status: "live" | "mainnet_only" | "coming_soon";
+  /** Execution availability.
+   *  - "live"          — ready to trade (pool has reserves)
+   *  - "no_liquidity"  — path exists in UV2 but pool has zero reserves (needs seeding)
+   *  - "mainnet_only"  — adapter deployed on mainnet only
+   *  - "coming_soon"   — adapter not yet deployed
+   */
+  status: "live" | "mainnet_only" | "coming_soon" | "no_liquidity";
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

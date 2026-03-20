@@ -22,11 +22,13 @@ function StatusBadge({ status }: { status: SwapRouteResult["status"] }) {
     live: "bg-primary/10 text-primary border-primary/20",
     mainnet_only: "bg-warning/10 text-warning border-warning/20",
     coming_soon: "bg-surface-hover text-text-muted border-border",
+    no_liquidity: "bg-danger/10 text-danger border-danger/20",
   };
   const labels: Record<SwapRouteResult["status"], string> = {
     live: "LIVE",
     mainnet_only: "MAINNET ONLY",
     coming_soon: "COMING SOON",
+    no_liquidity: "NO LIQUIDITY",
   };
   return (
     <span className={cn("font-mono text-[12px] border px-1.5 py-0.5 tracking-wide", styles[status])}>
@@ -249,27 +251,31 @@ function LocalRouteCard({
   route, rank, tokenOutDecimals = 18, selected, splitSelected, splitWeight, splitMode,
   onSelect, onSplitToggle, onWeightChange,
 }: LocalRouteCardProps) {
-  const amountOutDisplay = formatTokenAmount(route.amountOut, tokenOutDecimals, 6);
+  const isNoLiquidity = route.status === "no_liquidity";
+  const amountOutDisplay = isNoLiquidity ? "—" : formatTokenAmount(route.amountOut, tokenOutDecimals, 6);
   const impactBps = Number(route.totalPriceImpactBps);
   const impactPct = (impactBps / 100).toFixed(2);
   const feePct = (Number(route.totalFeeBps) / 100).toFixed(2);
-  const isBest = rank === 0;
+  const isBest = rank === 0 && !isNoLiquidity;
+  // No-liquidity routes cannot be selected
+  const canSelect = !isNoLiquidity && !splitMode && !!onSelect;
 
   return (
     <div
-      role={!splitMode && onSelect ? "button" : undefined}
-      tabIndex={!splitMode && onSelect ? 0 : undefined}
-      onClick={() => !splitMode && onSelect?.(route)}
-      onKeyDown={(e) => !splitMode && e.key === "Enter" && onSelect?.(route)}
+      role={canSelect ? "button" : undefined}
+      tabIndex={canSelect ? 0 : undefined}
+      onClick={() => canSelect && onSelect?.(route)}
+      onKeyDown={(e) => canSelect && e.key === "Enter" && onSelect?.(route)}
       className={cn(
         "border p-3 transition-colors",
-        !splitMode && onSelect && "cursor-pointer",
+        canSelect && "cursor-pointer",
+        isNoLiquidity && "opacity-60",
         splitSelected || selected
           ? "border-primary bg-primary/15 ring-1 ring-primary/40"
           : isBest
             ? "border-primary/50 bg-primary/10"
             : "border-border/80 bg-surface",
-        !splitMode && !selected && !splitSelected && onSelect && "hover:border-primary/50 hover:bg-primary/5",
+        canSelect && !selected && !splitSelected && "hover:border-primary/50 hover:bg-primary/5",
       )}
     >
       {/* Header: left = status badges, right = fill probability + amount */}
@@ -420,15 +426,18 @@ export function RouteDiagram({
   const [splitSelections, setSplitSelections] = useState<SplitRouteSelection[]>([]);
 
   // Routes with actual hops go into on-chain section; stubs (no hops) go into cross-chain section
+  // Include "no_liquidity" dry paths in localRoutes so the hop diagram is visible
   const localRoutes = routes.filter((r) => r.routeType === "local" && r.hops.length > 0);
+  const liveLocalRoutes = localRoutes.filter((r) => r.status === "live");
   const localStubs = routes.filter((r) => r.routeType === "local" && r.hops.length === 0);
   const crossChainRoutes = [...routes.filter((r) => r.routeType !== "local"), ...localStubs];
 
-  // Auto-select the best local route when routes load and none is selected.
+  // Auto-select the best live local route when routes load and none is selected.
   // On testnet, skip mainnet_only routes since they aren't functional.
+  // Never auto-select a no_liquidity route.
   useEffect(() => {
     if (splitMode || !onSelectRoute) return;
-    const best = localRoutes.find(
+    const best = liveLocalRoutes.find(
       (r) => (!isTestnet || r.status === "live"),
     );
     if (best && !selectedRouteId) {
@@ -500,7 +509,7 @@ export function RouteDiagram({
         </div>
         <div className="flex items-center gap-2">
           {isLoading && <Loader2 className="h-3.5 w-3.5 animate-spin text-text-muted" />}
-          {localRoutes.length >= 2 && onSelectSplitRoutes && (
+          {liveLocalRoutes.length >= 2 && onSelectSplitRoutes && (
             <button
               type="button"
               onClick={handleSplitModeToggle}
@@ -538,10 +547,10 @@ export function RouteDiagram({
         <p className="text-[13px] text-text-muted text-center py-4">No routes found for this pair</p>
       )}
 
-      {/* All-quotes comparison table — uses route finder data for accurate amounts */}
-      {!isLoading && localRoutes.length > 0 && (
+      {/* All-quotes comparison table — only live routes with actual amounts */}
+      {!isLoading && liveLocalRoutes.length > 0 && (
         <AllQuotesTable
-          localRoutes={localRoutes}
+          localRoutes={liveLocalRoutes}
           tokenOutDecimals={tokenOutDecimals}
           tokenOutSymbol={tokenOutSymbol}
         />
