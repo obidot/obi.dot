@@ -39,14 +39,14 @@ Add full add/remove liquidity support for the 5 UniswapV2 pairs on Polkadot Hub 
 
 ### `LiquidityPair.sol`
 
-Ported from `examples/uniswap-v2-polkadot/contracts/UniswapV2Pair.sol`. Changes from the example:
+Ported from `examples/uniswap-v2-polkadot/contracts/UniswapV2Pair.sol` (at `obi.router/examples/uniswap-v2-polkadot/contracts/UniswapV2Pair.sol`). Changes from the example:
 
 - `pragma solidity 0.8.28` (matches project standard)
 - Inherits OpenZeppelin `ERC20` for LP tokens instead of the custom `UniswapV2ERC20` — LP token name = `"Obidot LP"`, symbol = `"OBI-LP"`, decimals = 18
 - Uses OpenZeppelin `SafeERC20` for all token transfers (no raw `.call()`)
 - Removes `SafeMath` (overflow is built-in in 0.8.x)
-- Keeps `factory` address + `initialize(token0, token1)` pattern — compatible with the existing `UniswapV2Factory` already deployed at `0xbF4f500e4a7d8c4396b0DE9c456135e0A013F7A0`
-- `feeTo` disabled — `_mintFee` always returns `feeOn = false` (no protocol fee on testnet)
+- **Uses constructor pattern** — `constructor(address _token0, address _token1)` sets tokens as immutables. No `factory` field, no `initialize()`. The existing factory at `0xbF4f...` deploys old bytecode and cannot be changed; pairs are deployed directly.
+- `_mintFee` is replaced with a no-op that always returns `feeOn = false` (hardcoded — does not call any factory). No protocol fee on testnet.
 - Keeps reentrancy `lock` modifier
 - Keeps `MINIMUM_LIQUIDITY = 1000` burned to `address(0)` on first mint
 
@@ -115,8 +115,8 @@ function quote(
 - Call `pair.mint(to)` → get `liquidity`
 
 `removeLiquidity` logic:
-- `pair.transferFrom(msg.sender, pair, liquidity)` — LP token to pair
-- Call `pair.burn(to)` → get `(amount0, amount1)`
+- `IERC20(pair).safeTransferFrom(msg.sender, pair, liquidity)` — LP token (the pair itself is an ERC-20) transferred to the pair contract using `SafeERC20`
+- Call `ILiquidityPair(pair).burn(to)` → get `(amount0, amount1)`
 - Enforce `amount0 >= amountAMin`, `amount1 >= amountBMin`
 
 ---
@@ -124,7 +124,7 @@ function quote(
 ### `DeployLiquidityPairs.s.sol`
 
 1. Deploy `LiquidityRouter` (no constructor args)
-2. Use the **existing** `UniswapV2Factory` (`0xbF4f500e4a7d8c4396b0DE9c456135e0A013F7A0`) to `createPair()` for each of the 5 token pairs:
+2. Deploy 5 `LiquidityPair` instances directly via `new LiquidityPair(token0, token1)` — **not** via factory (the existing factory at `0xbF4f...` deploys old bytecode and cannot be changed):
    - tDOT / TKB
    - tDOT / tUSDC
    - tDOT / tETH
@@ -133,11 +133,8 @@ function quote(
 3. Seed each pair by minting test tokens → transfer to pair → call `pair.mint(deployer)`
    - Seed amount: same scale as existing MinimalV2Pair seeding
 4. Call `UniswapV2PoolAdapter.setPairRegistered(newPairAddr, true)` for each pair
+   - **Prerequisite:** deployer must hold `DEFAULT_ADMIN_ROLE` on the adapter contract at `0xF06Af9a8fcdf56d69E356A58d4dC5217395918c3`
 5. Log all deployed addresses for copy-paste into `constants.ts`
-
-**Note:** The factory's `createPair()` will deploy `LiquidityPair` instances (since the factory is already deployed with `UniswapV2Pair` as its bytecode). Wait — the existing factory at `0xbF4f...` was deployed with the **example** `UniswapV2Pair` bytecode. We cannot change what the factory deploys. **Therefore:** deploy `LiquidityPair` directly (not via factory), using a constructor that takes `token0`, `token1` directly. Set `factory = address(0)` or `factory = msg.sender`.
-
-This means `LiquidityPair` uses a **constructor** pattern (not `initialize`) — simpler and avoids the factory constraint.
 
 ---
 
@@ -186,11 +183,11 @@ export const CONTRACTS = {
 } as const;
 
 export const LP_PAIRS: LiquidityPairMeta[] = [
-  { label: "tDOT/TKB",   address: "0x...", token0: TOKENS.tDOT, token1: TOKENS.TKB   },
-  { label: "tDOT/tUSDC", address: "0x...", token0: TOKENS.tDOT, token1: TOKENS.tUSDC },
-  { label: "tDOT/tETH",  address: "0x...", token0: TOKENS.tDOT, token1: TOKENS.tETH  },
-  { label: "tUSDC/tETH", address: "0x...", token0: TOKENS.tUSDC, token1: TOKENS.tETH },
-  { label: "TKB/TKA",    address: "0x...", token0: TOKENS.TKB,  token1: TOKENS.TKA   },
+  { label: "tDOT/TKB",   address: "0x...", token0: TOKENS.tDOT,  token1: TOKENS.TKB,   token0Symbol: "tDOT",  token1Symbol: "TKB"   },
+  { label: "tDOT/tUSDC", address: "0x...", token0: TOKENS.tDOT,  token1: TOKENS.tUSDC, token0Symbol: "tDOT",  token1Symbol: "tUSDC" },
+  { label: "tDOT/tETH",  address: "0x...", token0: TOKENS.tDOT,  token1: TOKENS.tETH,  token0Symbol: "tDOT",  token1Symbol: "tETH"  },
+  { label: "tUSDC/tETH", address: "0x...", token0: TOKENS.tUSDC, token1: TOKENS.tETH,  token0Symbol: "tUSDC", token1Symbol: "tETH"  },
+  { label: "TKB/TKA",    address: "0x...", token0: TOKENS.TKB,   token1: TOKENS.TKA,   token0Symbol: "TKB",   token1Symbol: "TKA"   },
 ];
 
 // GAS_LIMITS additions
@@ -291,14 +288,15 @@ Rendered as a right-side overlay panel (not a full modal — inline positioned a
 ### Wiring into `/yields` page
 
 **`yield-grid.tsx`:**
-- `onEarn` callback is already plumbed in from the previous session
-- Change: when `item.isUniswap === true`, call `onEarn(y.name, y.apyPercent, pairMeta)` (add `pairMeta?: LiquidityPairMeta` to callback signature) instead of scrolling to VaultActions
-- The page decides what to do based on whether `pairMeta` is present
+- Update the `onEarn` prop type in `YieldGridProps` from `(name: string, apy: number) => void` to `(name: string, apy: number, pairMeta?: LiquidityPairMeta) => void`
+- The call site `onEarn?.(y.name, y.apyPercent)` must also be updated: when `item.isUniswap === true`, pass the matching `LiquidityPairMeta` from `LP_PAIRS` as the third argument; for non-UV2 rows, pass `undefined` (existing behavior unchanged)
+- The page decides what to do based on whether `pairMeta` is defined
 
 **`yields/page.tsx`:**
+- Update `handleEarn` signature from `(name: string, apy: number)` to `(name: string, apy: number, pairMeta?: LiquidityPairMeta)`
 - Add `selectedLpPair: LiquidityPairMeta | null` state
-- `handleEarn(name, apy, pairMeta?)`: if `pairMeta` → set `selectedLpPair`; else → existing scroll+hint flow
-- Render `<LiquidityPanel pair={selectedLpPair} open={!!selectedLpPair} onClose={() => setSelectedLpPair(null)} />` when `selectedLpPair` is set
+- `handleEarn` logic: if `pairMeta` → `setSelectedLpPair(pairMeta)`; else → existing `setEarnHint` + scroll flow
+- Render `<LiquidityPanel pair={selectedLpPair} open={!!selectedLpPair} onClose={() => setSelectedLpPair(null)} />` when `selectedLpPair` is set — as an overlay fixed to the right edge of the viewport (position: fixed, right-0, top-0, h-full), so it slides over the existing sidebar without displacing it
 
 ---
 
