@@ -257,7 +257,7 @@ Four hooks, following the `VaultActions` wagmi pattern (`useWriteContract` + `us
 Props:
 ```typescript
 interface LiquidityPanelProps {
-  pair: LiquidityPairMeta;
+  pair: LiquidityPairMeta | null;
   open: boolean;
   onClose: () => void;
 }
