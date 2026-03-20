@@ -55,4 +55,32 @@ export function registerYieldRoutes(
       return { success: false, error: msg };
     }
   });
+
+  /** GET /api/yields/uniswap — UniswapV2 pair yield data. */
+  app.get("/api/yields/uniswap", async () => {
+    try {
+      const uniswapYields = await yieldService.fetchUniswapV2Yields();
+      return {
+        success: true,
+        data: uniswapYields.map((y) => ({
+          name: y.name,
+          protocolLabel: y.protocolLabel,
+          protocol: y.protocol,
+          address: y.address,
+          token0: y.token0,
+          token1: y.token1,
+          reserve0: y.reserve0,
+          reserve1: y.reserve1,
+          apyPercent: y.apyPercent,
+          tvlUsd: y.tvlUsd,
+          category: y.category,
+          fetchedAt: y.fetchedAt.toISOString(),
+        })),
+        timestamp: Date.now(),
+      };
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : String(error);
+      return { success: false, error: msg };
+    }
+  });
 }

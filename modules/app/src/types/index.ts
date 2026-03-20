@@ -51,6 +51,23 @@ export interface BifrostYield {
   fetchedAt: string;
 }
 
+/** UniswapV2 pair yield data from Polkadot Hub TestNet */
+export interface UniswapV2Yield {
+  name: string;
+  protocolLabel: string;
+  protocol: string;
+  address: string;
+  token0: string;
+  token1: string;
+  reserve0: string;
+  reserve1: string;
+  apyPercent: number;
+  tvlUsd: number;
+  category: "UniswapV2";
+  /** ISO string (agent serializes Date to string) */
+  fetchedAt: string;
+}
+
 /** Satellite chain state */
 export interface SatelliteChainState {
   chainId: string;

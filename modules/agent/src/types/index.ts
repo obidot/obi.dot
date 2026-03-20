@@ -542,6 +542,30 @@ export interface BifrostYield extends ProtocolYield {
 }
 
 /**
+ * On-chain yield data for a UniswapV2 pair on Polkadot Hub TestNet.
+ */
+export interface UniswapV2Yield {
+  /** Pair label e.g. "tDOT/tUSDC" */
+  name: string;
+  /** Always "UniswapV2" */
+  protocolLabel: "UniswapV2";
+  /** Pair contract address */
+  protocol: string;
+  /** Same as protocol */
+  address: string;
+  token0: string;
+  token1: string;
+  /** Raw uint112 reserve as string */
+  reserve0: string;
+  /** Raw uint112 reserve as string */
+  reserve1: string;
+  apyPercent: number;
+  tvlUsd: number;
+  category: "UniswapV2";
+  fetchedAt: Date;
+}
+
+/**
  * Aggregated market data passed to the LLM for decision-making.
  */
 /** Live swap quote from the DEX aggregator for a specific token pair. */

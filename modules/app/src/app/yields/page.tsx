@@ -1,6 +1,6 @@
 "use client";
 
-import { useYields, useBifrostYields } from "@/hooks/use-yields";
+import { useYields, useBifrostYields, useUniswapV2Yields } from "@/hooks/use-yields";
 import { YieldGrid } from "@/components/yields/yield-grid";
 import { PanelSkeleton } from "@/components/ui/skeleton";
 import { RefreshCw } from "lucide-react";
@@ -8,8 +8,9 @@ import { RefreshCw } from "lucide-react";
 export default function YieldsPage() {
   const { data: yields, isLoading: yLoading, error: yError, refetch: yRefetch } = useYields();
   const { data: bifrost, isLoading: bLoading } = useBifrostYields();
+  const { data: uniswap, isLoading: uLoading } = useUniswapV2Yields();
 
-  const isLoading = yLoading || bLoading;
+  const isLoading = yLoading || bLoading || uLoading;
 
   return (
     <div className="space-y-4">
@@ -28,7 +29,7 @@ export default function YieldsPage() {
           </button>
         </div>
       ) : (
-        <YieldGrid yields={yields ?? []} bifrostYields={bifrost ?? []} />
+        <YieldGrid yields={yields ?? []} bifrostYields={bifrost ?? []} uniswapV2Yields={uniswap ?? []} />
       )}
     </div>
   );

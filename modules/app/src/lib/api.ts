@@ -4,6 +4,7 @@ import type {
   VaultPerformance,
   ProtocolYield,
   BifrostYield,
+  UniswapV2Yield,
   CrossChainVaultState,
   StrategyRecord,
   AgentDecision,
@@ -57,6 +58,10 @@ export async function getBifrostYields(): Promise<BifrostYield[]> {
   return fetchJson<BifrostYield[]>("/yields/bifrost");
 }
 
+export async function getUniswapV2Yields(): Promise<UniswapV2Yield[]> {
+  return fetchJson<UniswapV2Yield[]>("/yields/uniswap");
+}
+
 // ── Cross-Chain ───────────────────────────────────────────────────────────
 
 export async function getCrossChainState(): Promise<CrossChainVaultState> {
@@ -75,10 +80,16 @@ export async function getAgentLog(): Promise<AgentDecision[]> {
   return fetchJson<AgentDecision[]>("/agent/log");
 }
 
-export async function sendChatMessage(message: string): Promise<ChatMessage> {
+export async function sendChatMessage(
+  message: string,
+  history: ChatMessage[],
+): Promise<ChatMessage> {
   const data = await fetchJson<{ response: string }>("/chat", {
     method: "POST",
-    body: JSON.stringify({ message }),
+    body: JSON.stringify({
+      message,
+      history: history.map((m) => ({ role: m.role, content: m.content })),
+    }),
   });
   return {
     id: crypto.randomUUID(),

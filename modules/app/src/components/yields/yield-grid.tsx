@@ -1,11 +1,11 @@
 "use client";
 
 import { useState, useMemo } from "react";
-import type { ProtocolYield, BifrostYield } from "@/types";
+import type { ProtocolYield, BifrostYield, UniswapV2Yield } from "@/types";
 import { cn, formatApy, formatUsdNumber } from "@/lib/format";
 import { Search, ChevronUp, ChevronDown } from "lucide-react";
 
-type SourceFilter = "all" | "bifrost" | "defi";
+type SourceFilter = "all" | "bifrost" | "defi" | "uniswap";
 type SortKey = "apy" | "tvl" | "name";
 type SortDir = "asc" | "desc";
 
@@ -13,6 +13,7 @@ const FILTER_TABS: { key: SourceFilter; label: string }[] = [
   { key: "all", label: "All Sources" },
   { key: "bifrost", label: "Bifrost" },
   { key: "defi", label: "DeFi Protocols" },
+  { key: "uniswap", label: "UniswapV2" },
 ];
 
 // Protocol initials color palette (cycles through a set)
@@ -67,6 +68,7 @@ function TypePill({ category }: { category?: string }) {
     DEX: "bg-accent/10 text-accent border-accent/20",
     Farming: "bg-bull/10 text-bull border-bull/20",
     SALP: "bg-secondary/10 text-secondary border-secondary/20",
+    UniswapV2: "bg-warning/10 text-warning border-warning/20",
   };
 
   return (
@@ -84,9 +86,10 @@ function TypePill({ category }: { category?: string }) {
 interface YieldGridProps {
   yields: ProtocolYield[];
   bifrostYields: BifrostYield[];
+  uniswapV2Yields: UniswapV2Yield[];
 }
 
-export function YieldGrid({ yields, bifrostYields }: YieldGridProps) {
+export function YieldGrid({ yields, bifrostYields, uniswapV2Yields }: YieldGridProps) {
   const [filter, setFilter] = useState<SourceFilter>("all");
   const [sortBy, setSortBy] = useState<SortKey>("apy");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
@@ -103,14 +106,15 @@ export function YieldGrid({ yields, bifrostYields }: YieldGridProps) {
 
   const combined = useMemo(() => {
     type YieldItem = {
-      yield_: ProtocolYield | BifrostYield;
+      yield_: ProtocolYield | BifrostYield | UniswapV2Yield;
       isBifrost: boolean;
-      category?: "SLP" | "DEX" | "Farming" | "SALP";
+      isUniswap?: boolean;
+      category?: "SLP" | "DEX" | "Farming" | "SALP" | "UniswapV2";
     };
 
     let items: YieldItem[] = [];
 
-    if (filter !== "defi") {
+    if (filter !== "defi" && filter !== "uniswap") {
       items.push(
         ...bifrostYields.map((y) => ({
           yield_: y,
@@ -119,8 +123,18 @@ export function YieldGrid({ yields, bifrostYields }: YieldGridProps) {
         })),
       );
     }
-    if (filter !== "bifrost") {
+    if (filter !== "bifrost" && filter !== "uniswap") {
       items.push(...yields.map((y) => ({ yield_: y, isBifrost: false })));
+    }
+    if (filter === "all" || filter === "uniswap") {
+      items.push(
+        ...uniswapV2Yields.map((y) => ({
+          yield_: y,
+          isBifrost: false,
+          isUniswap: true,
+          category: "UniswapV2" as const,
+        })),
+      );
     }
 
     // Search filter
@@ -151,9 +165,9 @@ export function YieldGrid({ yields, bifrostYields }: YieldGridProps) {
     });
 
     return items;
-  }, [yields, bifrostYields, filter, sortBy, sortDir, search]);
+  }, [yields, bifrostYields, uniswapV2Yields, filter, sortBy, sortDir, search]);
 
-  if (yields.length === 0 && bifrostYields.length === 0) {
+  if (yields.length === 0 && bifrostYields.length === 0 && uniswapV2Yields.length === 0) {
     return (
       <div className="panel flex min-h-[400px] items-center justify-center rounded-lg p-8">
         <div className="text-center">
@@ -298,7 +312,7 @@ export function YieldGrid({ yields, bifrostYields }: YieldGridProps) {
                   {/* Type cell */}
                   <td>
                     <TypePill
-                      category={item.isBifrost ? item.category : undefined}
+                      category={item.isBifrost || item.isUniswap ? item.category : undefined}
                     />
                   </td>
 
