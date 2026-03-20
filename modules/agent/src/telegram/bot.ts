@@ -238,7 +238,10 @@ export function createTelegramBot(
   }
 
   const bot = new Bot(token);
-  const agent = createAgentRunner(tools);
+  // exclude execute_local_swap — it's the vault-path tool (requires SOLVER_ROLE +
+  // signed StrategyIntent). Telegram users should use execute_direct_swap instead.
+  const botTools = tools.filter((t) => t.name !== "execute_local_swap");
+  const agent = createAgentRunner(botTools);
 
   // ── /start Command ─────────────────────────────────────────────────
 

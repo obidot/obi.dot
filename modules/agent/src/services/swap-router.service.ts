@@ -497,8 +497,15 @@ export class SwapRouterService {
         ),
       );
 
-      reservesData = results.map((r) => {
-        if (r.status === "rejected" || !r.value) return null;
+      reservesData = results.map((r, i) => {
+        if (r.status === "rejected") {
+          swapLog.warn(
+            { pair: UV2_PAIRS[i].label, reason: String(r.reason) },
+            "getReserves rejected — treating as no liquidity",
+          );
+          return null;
+        }
+        if (!r.value) return null;
         const [r0, r1, ts] = r.value as [bigint, bigint, number];
         return [r0, r1, ts];
       });
