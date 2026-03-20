@@ -33,7 +33,8 @@ export const CONTRACTS = {
   // Phase 18 extra test tokens (TKA, TKB — live in UV2 pairs)
   TEST_TKA: "0xD8913B1a14Db9CD4B29C05c5E7E105cDA34ebF9f",
   TEST_TKB: "0x3E8D34E94e22BdBaa9aD6D575a239D722973D2Bc",
-  LIQUIDITY_ROUTER: "0x0000000000000000000000000000000000000000", // TODO: fill after deploy
+  // SP-1 liquidity provision — deployed 2026-03-20
+  LIQUIDITY_ROUTER: "0xe8A26F28207ba060c2fD98Ff5d7dF85347f0EB08",
 } as const;
 
 export const CHAIN = {
@@ -81,7 +82,7 @@ export const SLIPPAGE_OPTIONS = [
 export const LP_PAIRS: LiquidityPairMeta[] = [
   {
     label: "tDOT/TKB",
-    address: "0x0000000000000000000000000000000000000000",
+    address: "0xDc1b4a27d44613aa5072Ca6edC20151D94e7f93A",
     token0: CONTRACTS.TEST_DOT as `0x${string}`,
     token1: CONTRACTS.TEST_TKB as `0x${string}`,
     token0Symbol: "tDOT",
@@ -89,7 +90,7 @@ export const LP_PAIRS: LiquidityPairMeta[] = [
   },
   {
     label: "tDOT/tUSDC",
-    address: "0x0000000000000000000000000000000000000000",
+    address: "0x9576F7b40bC3a8Bb5d236Cd4bEBC29dC40AF0fa4",
     token0: CONTRACTS.TEST_DOT as `0x${string}`,
     token1: CONTRACTS.TEST_USDC as `0x${string}`,
     token0Symbol: "tDOT",
@@ -97,7 +98,7 @@ export const LP_PAIRS: LiquidityPairMeta[] = [
   },
   {
     label: "tDOT/tETH",
-    address: "0x0000000000000000000000000000000000000000",
+    address: "0x4a0183BA79Ab7072240B5Fd8B6A1055E8e60aC83",
     token0: CONTRACTS.TEST_DOT as `0x${string}`,
     token1: CONTRACTS.TEST_ETH as `0x${string}`,
     token0Symbol: "tDOT",
@@ -105,7 +106,7 @@ export const LP_PAIRS: LiquidityPairMeta[] = [
   },
   {
     label: "tUSDC/tETH",
-    address: "0x0000000000000000000000000000000000000000",
+    address: "0x3FBa4A4db176201d3A3a5B25e7561274ceCb6ef5",
     token0: CONTRACTS.TEST_USDC as `0x${string}`,
     token1: CONTRACTS.TEST_ETH as `0x${string}`,
     token0Symbol: "tUSDC",
@@ -113,7 +114,7 @@ export const LP_PAIRS: LiquidityPairMeta[] = [
   },
   {
     label: "TKB/TKA",
-    address: "0x0000000000000000000000000000000000000000",
+    address: "0xd6F5C4b7b3911Db7D062D0457f8b3D4045C86d50",
     token0: CONTRACTS.TEST_TKB as `0x${string}`,
     token1: CONTRACTS.TEST_TKA as `0x${string}`,
     token0Symbol: "TKB",
