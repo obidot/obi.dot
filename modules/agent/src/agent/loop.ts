@@ -439,6 +439,30 @@ export class AutonomousLoop {
         "Strategy executed successfully on-chain",
       );
 
+      // Record in strategy store for API consumers
+      const actionTarget = (() => {
+        if (decision.action === "LOCAL_SWAP") return (decision as { tokenOut: string }).tokenOut;
+        if (decision.action === "REALLOCATE") return (decision as { targetProtocol: string }).targetProtocol;
+        if (decision.action === "BIFROST_STRATEGY") return (decision as { strategyType: number }).strategyType.toString();
+        if (decision.action === "UNIVERSAL_INTENT") return (decision as { tokenOut: string }).tokenOut;
+        return "unknown";
+      })();
+
+      try {
+        strategyStore.addStrategy({
+          id: parsed.data?.nonce?.toString() ?? crypto.randomUUID(),
+          action: decision.action,
+          target: actionTarget,
+          amount: (decision as { amount?: string }).amount?.toString() ?? "0",
+          reasoning: decision.reasoning,
+          status: "pending",
+          txHash: parsed.data?.txHash,
+          timestamp: Date.now(),
+        });
+      } catch (err) {
+        loopLog.warn({ err }, "Failed to record strategy — continuing");
+      }
+
       // Track the executed strategy for outcome verification
       if (parsed.data?.nonce !== undefined) {
         const strategyId = BigInt(parsed.data.nonce);
