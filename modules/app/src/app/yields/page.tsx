@@ -1,5 +1,6 @@
 "use client";
 
+import { useRef, useState } from "react";
 import { useYields, useBifrostYields, useUniswapV2Yields } from "@/hooks/use-yields";
 import { YieldGrid } from "@/components/yields/yield-grid";
 import { VaultOverview } from "@/components/dashboard/vault-overview";
@@ -153,6 +154,14 @@ export default function YieldsPage() {
 
   const isLoading = yLoading || bLoading || uLoading;
 
+  const sidebarRef = useRef<HTMLDivElement>(null);
+  const [earnHint, setEarnHint] = useState<{ name: string; apy: number } | null>(null);
+
+  function handleEarn(name: string, apy: number) {
+    setEarnHint({ name, apy });
+    sidebarRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+
   return (
     <div className="space-y-4">
       {/* Vault hero banner */}
@@ -194,12 +203,35 @@ export default function YieldsPage() {
               yields={yields ?? []}
               bifrostYields={bifrost ?? []}
               uniswapV2Yields={uniswap ?? []}
+              onEarn={handleEarn}
             />
           )}
         </div>
 
         {/* Right sidebar */}
-        <div className="flex flex-col gap-[1px] overflow-hidden rounded-lg border border-border bg-border">
+        <div ref={sidebarRef} className="flex flex-col gap-[1px] overflow-hidden rounded-lg border border-border bg-border">
+          {earnHint && (
+            <div className="bg-primary/5 border-b border-primary/20 px-4 py-2.5 flex items-start justify-between gap-2">
+              <div>
+                <p className="font-mono text-[10px] uppercase tracking-wider text-primary mb-0.5">
+                  Earn with {earnHint.name}
+                </p>
+                <p className="text-[11px] text-text-secondary">
+                  Deposit tDOT below — the agent allocates toward{" "}
+                  <span className="text-primary font-semibold">{earnHint.apy.toFixed(1)}% APY</span>{" "}
+                  protocols automatically.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setEarnHint(null)}
+                aria-label="Dismiss"
+                className="text-text-muted hover:text-text-primary mt-0.5 shrink-0"
+              >
+                ✕
+              </button>
+            </div>
+          )}
           <div className="bg-surface">
             <VaultActions />
           </div>

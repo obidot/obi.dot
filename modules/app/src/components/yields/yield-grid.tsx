@@ -87,9 +87,10 @@ interface YieldGridProps {
   yields: ProtocolYield[];
   bifrostYields: BifrostYield[];
   uniswapV2Yields: UniswapV2Yield[];
+  onEarn?: (name: string, apy: number) => void;
 }
 
-export function YieldGrid({ yields, bifrostYields, uniswapV2Yields }: YieldGridProps) {
+export function YieldGrid({ yields, bifrostYields, uniswapV2Yields, onEarn }: YieldGridProps) {
   const [filter, setFilter] = useState<SourceFilter>("all");
   const [sortBy, setSortBy] = useState<SortKey>("apy");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
@@ -320,9 +321,12 @@ export function YieldGrid({ yields, bifrostYields, uniswapV2Yields }: YieldGridP
                   <td>
                     <button
                       type="button"
+                      onClick={() => onEarn?.(y.name, y.apyPercent)}
                       className={cn(
                         "rounded border px-2.5 py-1 font-mono text-[10px] font-semibold transition-colors",
-                        "border-primary/30 text-primary hover:bg-primary/10",
+                        onEarn
+                          ? "border-primary/30 text-primary hover:bg-primary/10 cursor-pointer"
+                          : "border-border text-text-muted cursor-default",
                       )}
                     >
                       + Earn
