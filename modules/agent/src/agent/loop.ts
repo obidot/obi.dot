@@ -440,15 +440,15 @@ export class AutonomousLoop {
       );
 
       // Record in strategy store for API consumers
-      const actionTarget = (() => {
-        if (decision.action === "LOCAL_SWAP") return (decision as { tokenOut: string }).tokenOut;
-        if (decision.action === "REALLOCATE") return (decision as { targetProtocol: string }).targetProtocol;
-        if (decision.action === "BIFROST_STRATEGY") return (decision as { strategyType: number }).strategyType.toString();
-        if (decision.action === "UNIVERSAL_INTENT") return (decision as { tokenOut: string }).tokenOut;
-        return "unknown";
-      })();
-
       try {
+        const actionTarget = (() => {
+          if (decision.action === "LOCAL_SWAP") return (decision as { tokenOut?: string }).tokenOut ?? "unknown";
+          if (decision.action === "REALLOCATE") return (decision as { targetProtocol?: string }).targetProtocol ?? "unknown";
+          if (decision.action === "BIFROST_STRATEGY") return (decision as { strategyType?: number | string }).strategyType?.toString() ?? "unknown";
+          if (decision.action === "UNIVERSAL_INTENT") return (decision as { tokenOut?: string }).tokenOut ?? "unknown";
+          return "unknown";
+        })();
+
         strategyStore.addStrategy({
           id: parsed.data?.nonce?.toString() ?? crypto.randomUUID(),
           action: decision.action,

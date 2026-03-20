@@ -26,7 +26,7 @@ function agentRecordToIndexed(r: AgentStrategyRecord): IndexedStrategyExecution 
     txHash: r.txHash ?? "",
     blockNumber: 0,
     timestamp: new Date(r.timestamp).toISOString(),
-    executor: "",
+    executor: r.id,
     destination: r.action,
     targetChain: "Polkadot Hub",
     protocol: r.target,
@@ -37,12 +37,12 @@ function agentRecordToIndexed(r: AgentStrategyRecord): IndexedStrategyExecution 
 }
 
 async function fetchStrategies(): Promise<IndexedStrategyExecution[]> {
-  // 1. Try GraphQL indexer first
+  // 1. Try GraphQL indexer — use it if reachable, even if empty
   try {
     const indexed = await getIndexedStrategyExecutions(20);
-    if (indexed.length > 0) return indexed;
+    return indexed; // trust the indexer; don't fall back just because it's empty
   } catch {
-    // indexer offline — fall through to agent API
+    // indexer offline or errored — fall through to agent API
   }
 
   // 2. Fall back to agent in-memory store
