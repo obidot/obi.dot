@@ -1,3 +1,4 @@
+import type { LiquidityPairMeta } from "@/types";
 
 export const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
 export const ZERO_BYTES32 =
@@ -29,6 +30,10 @@ export const CONTRACTS = {
   // Phase 18 test tokens (live in UV2 pair registry)
   TEST_USDC: "0x5298FDe9E288371ECA21db04Ac5Ddba00C1ea626",
   TEST_ETH: "0xd92a5325fB3A56f5012F1EBD1bd37573d981144e",
+  // Phase 18 extra test tokens (TKA, TKB — live in UV2 pairs)
+  TEST_TKA: "0xD8913B1a14Db9CD4B29C05c5E7E105cDA34ebF9f",
+  TEST_TKB: "0x3E8D34E94e22BdBaa9aD6D575a239D722973D2Bc",
+  LIQUIDITY_ROUTER: "0x0000000000000000000000000000000000000000", // TODO: fill after deploy
 } as const;
 
 export const CHAIN = {
@@ -53,8 +58,65 @@ export const GRAPHQL_WS_URL =
 export const GRAPHQL_HTTP_URL =
   process.env.NEXT_PUBLIC_GRAPHQL_HTTP_URL ?? "http://localhost:4350/graphql";
 
+/**
+ * PolkaVM (pallet-revive) gas limits.
+ * eth_estimateGas is unreliable on this chain — it returns ~7774 for a swap
+ * that actually consumes ~49,000 gas. Oversized limits (≥ e18) get rejected
+ * with "Invalid Transaction Contract C". Empirical safe values below.
+ */
+export const GAS_LIMITS = {
+  APPROVE: BigInt(50_000),
+  SWAP: BigInt(300_000),
+  ADD_LIQUIDITY: BigInt(400_000),
+  REMOVE_LIQUIDITY: BigInt(300_000),
+  LP_APPROVE: BigInt(50_000),
+} as const;
+
 export const SLIPPAGE_OPTIONS = [
   { label: "0.5%", bps: 50 },
   { label: "1%", bps: 100 },
   { label: "2%", bps: 200 },
+];
+
+export const LP_PAIRS: LiquidityPairMeta[] = [
+  {
+    label: "tDOT/TKB",
+    address: "0x0000000000000000000000000000000000000000",
+    token0: CONTRACTS.TEST_DOT as `0x${string}`,
+    token1: CONTRACTS.TEST_TKB as `0x${string}`,
+    token0Symbol: "tDOT",
+    token1Symbol: "TKB",
+  },
+  {
+    label: "tDOT/tUSDC",
+    address: "0x0000000000000000000000000000000000000000",
+    token0: CONTRACTS.TEST_DOT as `0x${string}`,
+    token1: CONTRACTS.TEST_USDC as `0x${string}`,
+    token0Symbol: "tDOT",
+    token1Symbol: "tUSDC",
+  },
+  {
+    label: "tDOT/tETH",
+    address: "0x0000000000000000000000000000000000000000",
+    token0: CONTRACTS.TEST_DOT as `0x${string}`,
+    token1: CONTRACTS.TEST_ETH as `0x${string}`,
+    token0Symbol: "tDOT",
+    token1Symbol: "tETH",
+  },
+  {
+    label: "tUSDC/tETH",
+    address: "0x0000000000000000000000000000000000000000",
+    token0: CONTRACTS.TEST_USDC as `0x${string}`,
+    token1: CONTRACTS.TEST_ETH as `0x${string}`,
+    token0Symbol: "tUSDC",
+    token1Symbol: "tETH",
+  },
+  {
+    label: "TKB/TKA",
+    address: "0x0000000000000000000000000000000000000000",
+    token0: CONTRACTS.TEST_TKB as `0x${string}`,
+    token1: CONTRACTS.TEST_TKA as `0x${string}`,
+    token0Symbol: "TKB",
+    token1Symbol: "TKA",
+  },
 ];

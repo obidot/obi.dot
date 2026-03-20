@@ -284,3 +284,13 @@ export interface NavItem {
   href: string;
   icon: string;
 }
+
+/** Metadata for a deployed LiquidityPair (LP-token-enabled UV2 pair). */
+export interface LiquidityPairMeta {
+  label: string;               // e.g. "tDOT/tUSDC"
+  address: `0x${string}`;      // deployed LiquidityPair contract
+  token0: `0x${string}`;       // lower-address token
+  token1: `0x${string}`;       // higher-address token
+  token0Symbol: string;
+  token1Symbol: string;
+}
