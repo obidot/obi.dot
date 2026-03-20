@@ -1130,7 +1130,10 @@ export class FindRoutesTool extends Tool {
     try {
       let params: { tokenIn: string; tokenOut: string; amountIn: string };
       try {
-        params = JSON.parse(input);
+        let raw = JSON.parse(input) as Record<string, unknown>;
+        // LangChain bindTools() wraps args as { input: "<json string>" }
+        if (typeof raw.input === "string") raw = JSON.parse(raw.input) as Record<string, unknown>;
+        params = raw as typeof params;
       } catch {
         return JSON.stringify({
           success: false,
@@ -1245,7 +1248,10 @@ export class DirectSwapTool extends Tool {
         reasoning?: string;
       };
       try {
-        params = JSON.parse(input);
+        let raw = JSON.parse(input) as Record<string, unknown>;
+        // LangChain bindTools() wraps args as { input: "<json string>" }
+        if (typeof raw.input === "string") raw = JSON.parse(raw.input) as Record<string, unknown>;
+        params = raw as typeof params;
       } catch {
         return JSON.stringify({
           success: false,
