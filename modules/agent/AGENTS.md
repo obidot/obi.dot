@@ -120,6 +120,42 @@ import { yieldLog } from "../utils/logger.js";
 | GET    | `/api/swap/quote`        | DEX aggregator quote (pool, tokenIn, tokenOut, amountIn) |
 | GET    | `/api/swap/routes`       | Available pool adapters + router status                  |
 
+### GET /api/swap/routes Response
+
+The `/api/swap/routes` endpoint includes cross-chain stubs appended to all live on-chain routes:
+
+| Stub | routeType | status |
+|------|-----------|--------|
+| RelayTeleport (XCM) | xcm | live |
+| Hydration Omnipool (XCM) | xcm | mainnet_only |
+| Bifrost DEX (XCM) | xcm | mainnet_only |
+| Uniswap V2 (Polkadot Hub) | local | live |
+| Karura DEX (XCM) | xcm | mainnet_only |
+| Interlay Loans (XCM) | xcm | mainnet_only |
+| Moonbeam DEX (XCM) | xcm | coming_soon |
+| Hyperbridge (ISMP) | bridge | mainnet_only |
+| Snowbridge (BridgeHub → Ethereum) | bridge | coming_soon |
+| ChainFlip (Polkadot → Ethereum) | bridge | coming_soon |
+
+Stubs have `amountOut: "0"` and `hops: []`. The UI filters them from on-chain route cards and displays them separately in the cross-chain section.
+
+## UniswapV2 Pairs (SP-1)
+
+`UV2_PAIRS` in `src/config/constants.ts` is the agent's source of truth for UV2 pair labels.
+`LP_PAIRS` in `modules/app/src/lib/constants.ts` must stay in sync — the frontend uses label matching
+(`LP_PAIRS.find(p => p.label === y.name)`) to open the `LiquidityPanel` for UV2 rows.
+
+If you add a new UV2 pair to `UV2_PAIRS`, also add the matching entry to `LP_PAIRS` in the app.
+
+**Deployed LP pairs (Polkadot Hub TestNet, 2026-03-20):**
+| Label | Pair Address |
+|---|---|
+| tDOT/TKB | `0xDc1b4a27d44613aa5072Ca6edC20151D94e7f93A` |
+| tDOT/tUSDC | `0x9576F7b40bC3a8Bb5d236Cd4bEBC29dC40AF0fa4` |
+| tDOT/tETH | `0x4a0183BA79Ab7072240B5Fd8B6A1055E8e60aC83` |
+| tUSDC/tETH | `0x3FBa4A4db176201d3A3a5B25e7561274ceCb6ef5` |
+| TKB/TKA | `0xd6F5C4b7b3911Db7D062D0457f8b3D4045C86d50` |
+
 ## PR Instructions
 
 - Branch/title format: `[@obidot/agent] <Title>`

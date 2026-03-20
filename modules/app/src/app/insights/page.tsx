@@ -11,14 +11,17 @@ import { YieldComparison } from "@/components/insights/yield-comparison";
 import { PortfolioOptimizer } from "@/components/insights/portfolio-optimizer";
 import { MarketPulse } from "@/components/insights/market-pulse";
 import { RefreshCw } from "lucide-react";
+import { useProtocolActivity } from "@/hooks/use-protocol-activity";
+import { ProtocolActivity } from "@/components/insights/protocol-activity";
 
 export default function InsightsPage() {
   const { data: yields, isLoading: yLoading, error: yError, refetch: yRefetch } = useYields();
   const { data: bifrost, isLoading: bLoading } = useBifrostYields();
   const { data: vault } = useVaultState();
   const { data: decisions } = useAgentLog();
+  const { data: activity, isLoading: actLoading, error: actError, connected: actConnected } = useProtocolActivity();
 
-  const isLoading = yLoading || bLoading;
+  const isLoading = yLoading || bLoading || actLoading;
 
   return (
     <div className="space-y-4">
@@ -45,12 +48,21 @@ export default function InsightsPage() {
         </div>
       ) : (
         <div className="space-y-4">
+          {/* Row 0: Protocol Activity (full width) */}
+          <ProtocolActivity
+            data={activity ?? null}
+            isLoading={actLoading}
+            error={actError ?? null}
+            connected={actConnected}
+          />
+
           {/* Row 1: Market Pulse + Opportunity Radar */}
           <div className="grid gap-4 md:grid-cols-2">
             <MarketPulse
               decisions={decisions ?? []}
               yields={yields ?? []}
               bifrostYields={bifrost ?? []}
+              recentSwapCount={activity?.stats.totalSwaps ?? 0}
             />
             <OpportunityRadar
               yields={yields ?? []}

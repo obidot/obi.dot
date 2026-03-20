@@ -8,6 +8,7 @@
     "policy-engine",
     "oracle",
     "dex-aggregator",
+    "liquidity",
     "xcm",
     "cross-chain",
     "bifrost",

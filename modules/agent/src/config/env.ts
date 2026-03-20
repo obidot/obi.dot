@@ -15,7 +15,7 @@ dotenv.config();
 const envSchema = z.object({
   /**
    * LLM provider selection.
-   * "openai" (default) — ChatOpenAI (GPT-4o or configured model).
+   * "openai" (default) — ChatOpenAI (GPT-5-mini or configured model).
    * "anthropic"        — ChatAnthropic (claude-sonnet-4 or configured model).
    * "openrouter"       — OpenRouter proxy (requires OPENAI_API_KEY as the API key).
    */
@@ -25,9 +25,9 @@ const envSchema = z.object({
 
   /**
    * LLM model string.
-   * For openai:      "gpt-4o" (default), "gpt-4o-mini", etc.
+   * For openai:      "gpt-5-mini" (default), "gpt-4o", "gpt-4o-mini", etc.
    * For anthropic:   "claude-sonnet-4-5" (default), "claude-3-5-haiku-20241022", etc.
-   * For openrouter:  e.g. "anthropic/claude-sonnet-4", "openai/gpt-4o"
+   * For openrouter:  e.g. "anthropic/claude-sonnet-4", "openai/gpt-5-mini"
    */
   LLM_MODEL: z.string().min(1).optional(),
 
@@ -72,6 +72,34 @@ const envSchema = z.object({
   LOG_LEVEL: z
     .enum(["fatal", "error", "warn", "info", "debug", "trace"])
     .default("info"),
+
+  /** API host binding. Use 0.0.0.0 to expose on LAN/local docker. */
+  API_HOST: z.string().min(1).default("0.0.0.0"),
+
+  /** Preferred API listening port. */
+  API_PORT: z
+    .string()
+    .transform(Number)
+    .pipe(z.number().int().min(1).max(65_535))
+    .default("3011"),
+
+  /**
+   * Number of consecutive ports to try when the preferred API port is already in use.
+   * Example: API_PORT=3011 and API_PORT_MAX_TRIES=5 attempts 3011-3015.
+   */
+  API_PORT_MAX_TRIES: z
+    .string()
+    .transform(Number)
+    .pipe(z.number().int().min(1).max(100))
+    .default("5"),
+
+  /**
+   * Suppress noisy @polkadot/util duplicate ESM/CJS warnings when they are same-version duplicates.
+   * NOTE: This does not suppress real version mismatches.
+   */
+  POLKADOTJS_DISABLE_ESM_CJS_WARNING: z
+    .enum(["0", "1"])
+    .default("1"),
 
   /** Maximum single strategy deployment in asset units (18-decimal string). */
   MAX_STRATEGY_AMOUNT: z.string().default("100000000000000000000000"), // 100k tokens

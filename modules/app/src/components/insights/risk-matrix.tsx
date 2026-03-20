@@ -41,10 +41,10 @@ export function RiskMatrix({ yields, bifrostYields }: RiskMatrixProps) {
             <Crosshair className="h-3.5 w-3.5 text-secondary" />
           </div>
           <div>
-            <h3 className="text-sm font-semibold text-text-primary">
+            <h3 className="text-base font-semibold text-text-primary">
               Risk / Reward Matrix
             </h3>
-            <p className="font-mono text-[9px] text-text-muted">
+            <p className="font-mono text-xs text-text-muted">
               Interactive scatter — find alpha in the sweet spot quadrant
             </p>
           </div>
@@ -68,10 +68,10 @@ export function RiskMatrix({ yields, bifrostYields }: RiskMatrixProps) {
             className="absolute flex flex-col items-center"
             style={{ left: `${q.x}%`, top: `${100 - q.y}%`, transform: "translate(-50%, -50%)" }}
           >
-            <span className={cn("font-mono text-[9px] font-bold opacity-40", q.color)}>
+            <span className={cn("font-mono text-xs font-bold opacity-40", q.color)}>
               {q.label}
             </span>
-            <span className="font-mono text-[7px] text-text-muted opacity-30">
+            <span className="font-mono text-[10px] text-text-muted opacity-30">
               {q.desc}
             </span>
           </div>
@@ -106,22 +106,22 @@ export function RiskMatrix({ yields, bifrostYields }: RiskMatrixProps) {
               <div className="pointer-events-none absolute bottom-full left-1/2 z-20 mb-2 -translate-x-1/2 scale-0 rounded-md border border-border bg-surface p-2 shadow-lg transition-transform group-hover:scale-100"
                 style={{ width: "180px" }}
               >
-                <p className="truncate text-[10px] font-semibold text-text-primary">
+                <p className="truncate text-xs font-semibold text-text-primary">
                   {profile.name}
                 </p>
                 <div className="mt-1 flex items-center justify-between">
-                  <span className="font-mono text-[9px] text-text-muted">
+                  <span className="font-mono text-xs text-text-muted">
                     Risk: {profile.overallRisk}%
                   </span>
-                  <span className={cn("pill text-[8px]", riskTierBg(profile.tier), riskTierColor(profile.tier))}>
+                  <span className={cn("pill text-[10px]", riskTierBg(profile.tier), riskTierColor(profile.tier))}>
                     {profile.tier}
                   </span>
                 </div>
                 <div className="mt-1 flex items-center justify-between">
-                  <span className="font-mono text-[9px] text-primary">
+                  <span className="font-mono text-xs text-primary">
                     APY: {profile.apy.toFixed(1)}%
                   </span>
-                  <span className="font-mono text-[9px] text-text-muted">
+                  <span className="font-mono text-xs text-text-muted">
                     TVL: {formatUsdNumber(profile.tvl, true)}
                   </span>
                 </div>
@@ -132,12 +132,12 @@ export function RiskMatrix({ yields, bifrostYields }: RiskMatrixProps) {
 
         {/* Axes labels */}
         <div className="absolute -bottom-5 left-1/2 -translate-x-1/2">
-          <span className="font-mono text-[9px] uppercase tracking-wider text-text-muted">
+          <span className="font-mono text-xs uppercase tracking-wider text-text-muted">
             Risk →
           </span>
         </div>
         <div className="absolute -left-4 top-1/2 -translate-y-1/2 -rotate-90">
-          <span className="font-mono text-[9px] uppercase tracking-wider text-text-muted">
+          <span className="font-mono text-xs uppercase tracking-wider text-text-muted">
             Reward →
           </span>
         </div>
@@ -182,7 +182,7 @@ export function RiskMatrix({ yields, bifrostYields }: RiskMatrixProps) {
                   <RiskBar value={p.dimensions.liquidityRisk} />
                 </td>
                 <td className="px-4 py-2 text-center">
-                  <span className={cn("pill text-[9px]", riskTierBg(p.tier), riskTierColor(p.tier))}>
+                  <span className={cn("pill text-[11px]", riskTierBg(p.tier), riskTierColor(p.tier))}>
                     {p.tier}
                   </span>
                 </td>
@@ -202,7 +202,7 @@ function RiskBar({ value }: { value: number }) {
       <div className="h-1.5 w-12 overflow-hidden rounded-full bg-surface-hover">
         <div className={cn("h-full rounded-full", color)} style={{ width: `${value}%` }} />
       </div>
-      <span className="font-mono text-[9px] text-text-muted">{value}</span>
+      <span className="font-mono text-xs text-text-muted">{value}</span>
     </div>
   );
 }

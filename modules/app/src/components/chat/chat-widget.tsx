@@ -49,7 +49,7 @@ export function ChatWidget() {
     setLoading(true);
 
     try {
-      const response = await sendChatMessage(text);
+      const response = await sendChatMessage(text, messages);
       setMessages((prev) => [...prev, response]);
     } catch {
       setMessages((prev) => [
@@ -70,7 +70,7 @@ export function ChatWidget() {
     <>
       {/* Chat window */}
       {open && (
-        <div className="fixed bottom-20 right-6 z-50 flex h-[500px] w-[380px] flex-col overflow-hidden rounded-lg border border-border bg-surface shadow-2xl">
+        <div className="fixed bottom-20 right-6 z-50 flex h-[520px] w-[400px] max-w-[calc(100vw-2rem)] flex-col overflow-hidden rounded-lg border border-border bg-surface shadow-2xl">
           {/* Header */}
           <div className="flex items-center justify-between border-b border-border px-4 py-3">
             <div className="flex items-center gap-2.5">
@@ -78,11 +78,11 @@ export function ChatWidget() {
                 <Bot className="h-3.5 w-3.5 text-primary" />
               </div>
               <div>
-                <p className="text-xs font-semibold text-text-primary">
+                <p className="text-sm font-semibold text-text-primary">
                   Obidot AI
                 </p>
-                <p className="font-mono text-[9px] text-text-muted">
-                  GPT-4o
+                <p className="font-mono text-[11px] text-text-muted">
+                  GPT-5-mini
                 </p>
               </div>
             </div>
@@ -101,7 +101,7 @@ export function ChatWidget() {
               <div className="flex h-full items-center justify-center">
                 <div className="text-center">
                   <Bot className="mx-auto h-6 w-6 text-text-muted" />
-                  <p className="mt-2 font-mono text-xs text-text-muted">
+                  <p className="mt-2 font-mono text-sm text-text-muted">
                     Ask about vault state, yields, or strategies
                   </p>
                 </div>
@@ -122,13 +122,13 @@ export function ChatWidget() {
                 )}
                 <div
                   className={cn(
-                    "max-w-[80%] rounded-md px-3 py-2 font-mono text-xs",
+                    "max-w-[82%] rounded-md px-3 py-2 font-mono text-sm",
                     msg.role === "user"
                       ? "bg-secondary/15 text-text-primary"
                       : "border border-border-subtle bg-background text-text-primary",
                   )}
                 >
-                  <p className="whitespace-pre-wrap leading-relaxed">
+                  <p className="whitespace-pre-wrap leading-6">
                     {msg.content}
                   </p>
                 </div>
@@ -161,15 +161,15 @@ export function ChatWidget() {
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && handleSend()}
-                placeholder="Ask about vault, yields, strategies..."
-                className="input-trading flex-1 py-2 text-xs"
+                placeholder="Ask about vault, yields, strategies…"
+                className="input-trading flex-1 py-2 text-sm"
                 disabled={loading}
               />
               <button
                 type="button"
                 onClick={handleSend}
                 disabled={!input.trim() || loading}
-                className="flex h-8 w-8 items-center justify-center rounded-md bg-primary text-background transition-colors hover:bg-primary/90 disabled:bg-surface-hover disabled:text-text-muted"
+                className="flex h-9 w-9 items-center justify-center rounded-md bg-primary text-background transition-colors hover:bg-primary/90 disabled:bg-surface-hover disabled:text-text-muted"
               >
                 <Send className="h-3.5 w-3.5" />
               </button>

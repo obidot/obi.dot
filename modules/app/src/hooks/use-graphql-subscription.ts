@@ -12,6 +12,13 @@ const GRAPHQL_WS_URL =
 // ─────────────────────────────────────────────────────────────────────────────
 
 let _client: Client | null = null;
+// Track WS connection state independently of data arrival
+let _wsConnected = false;
+const _connListeners = new Set<(v: boolean) => void>();
+function _notifyConn(v: boolean) {
+  _wsConnected = v;
+  for (const fn of _connListeners) fn(v);
+}
 
 function getClient(): Client {
   if (!_client) {
@@ -19,6 +26,11 @@ function getClient(): Client {
       url: GRAPHQL_WS_URL,
       retryAttempts: 10,
       shouldRetry: () => true,
+      on: {
+        connected: () => _notifyConn(true),
+        closed: () => _notifyConn(false),
+        error: () => _notifyConn(false),
+      },
     });
   }
   return _client;
@@ -42,9 +54,23 @@ export function useGraphQLSubscription<T = unknown>(
   onData: (data: T) => void,
   variables?: Record<string, unknown>,
 ): { connected: boolean } {
-  const [connected, setConnected] = useState(false);
+  // Initialise from the current singleton state so the indicator is correct
+  // even before the first data frame arrives.
+  const [connected, setConnected] = useState(() => _wsConnected);
   const onDataRef = useRef(onData);
   onDataRef.current = onData;
+
+  // Mirror WS-level connection state into React state.
+  useEffect(() => {
+    // Ensure the client (and its lifecycle listeners) is created.
+    getClient();
+    // Sync current state in case it changed between render and effect.
+    setConnected(_wsConnected);
+    _connListeners.add(setConnected);
+    return () => {
+      _connListeners.delete(setConnected);
+    };
+  }, []);
 
   const subscribe = useCallback(() => {
     const client = getClient();
@@ -53,7 +79,6 @@ export function useGraphQLSubscription<T = unknown>(
       { query, variables },
       {
         next(value) {
-          setConnected(true);
           if (value.data) {
             // The subscription root field name is the first key
             const payload = Object.values(value.data)[0];
@@ -63,11 +88,10 @@ export function useGraphQLSubscription<T = unknown>(
           }
         },
         error() {
-          setConnected(false);
+          // WS lifecycle handler already calls _notifyConn(false); this is a
+          // subscription-level error (e.g. bad query) — keep WS state alone.
         },
-        complete() {
-          setConnected(false);
-        },
+        complete() {},
       },
     );
 

@@ -18,6 +18,32 @@ The Obidot dashboard is a **Next.js 15** web application that gives operators a 
 | Charts       | recharts (PnL candlestick chart)                                      |
 | Icons        | lucide-react                                                          |
 
+## Trade UI
+
+The `/swap` (and `/:trade/:chain/:router`) routes render a two-panel trading interface.
+
+### Swap Tab
+
+- **Left panel:** Token picker (inline dropdown for both sides), amount input, quote display, execute button. Uses `SwapForm`.
+- **Right panel:** `InfoBanners` (trending/farming pools ticker) + `RouteDiagram`. The route diagram shows on-chain routes (single/multi-hop, split), an adapter quotes comparison table, and cross-chain route stubs. Routes are sourced from `/api/routes` with a 600 ms debounce.
+
+### Limit Order Tab
+
+- **Left panel:** Token pair (via `TokenPicker`), sell amount, target price with ±% quick-set buttons and delta indicator, expiry selector. Submits a `PendingOrder` to `localStorage("obidot_limit_orders")` and dispatches a `CustomEvent("obidot:order-placed")`.
+- **Right panel:** `OrdersPanel` — live list of active and expired orders. Cancel removes the order from localStorage. Orders are monitored by the Obidot AI Agent and executed via `UniversalIntent` when the target price is reached.
+
+### Cross-Chain Tab
+
+- **Left panel:** Source and destination token (both via `TokenPicker`), amount input, destination chain selector (XCM or Bridge). For **RelayTeleport**, the output is estimated at 1:1 minus ~0.1% XCM fee with no exchange rate. For other chains, amounts are shown when routes are available.
+- **Right panel:** Idle (cross-chain positions panel is planned for a future iteration).
+
+### Supported Chains
+
+| Chain | ID | RPC |
+|---|---|---|
+| Polkadot Hub TestNet | 420420417 | `eth-rpc-testnet.polkadot.io` |
+| Polkadot Hub | 420420419 | `eth-rpc.polkadot.io` |
+
 ## Running Locally
 
 ```bash

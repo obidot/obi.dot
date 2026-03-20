@@ -9,8 +9,8 @@
   },
   "scripts": {
     "build": "tsc",
-    "dev": "tsx watch src/main.ts",
-    "start": "node dist/main.js",
+    "dev": "POLKADOTJS_DISABLE_ESM_CJS_WARNING=1 tsx watch src/bootstrap.ts",
+    "start": "POLKADOTJS_DISABLE_ESM_CJS_WARNING=1 node dist/bootstrap.js",
     "lint": "eslint src/",
     "typecheck": "tsc --noEmit"
   },

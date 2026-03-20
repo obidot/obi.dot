@@ -37,6 +37,45 @@ HydrationOmnipool   AssetHubPair    BifrostDEX
 | `MoonbeamAdapter`          | `0x4a6573c6EDc817bFd7eaFf23D892F429A87E1aB8` | Moonbeam EVM call via XCM Transact (parachain 2004, slot 7)                  |
 | `InterlayAdapter`          | `0x226337160C62EC00c2EEdB23BD5Ed54b576c32B1` | Interlay Loans.mint via XCM Transact (parachain 2032, slot 8)                |
 
+## Test Tokens (Polkadot Hub TestNet)
+
+| Symbol | Name | Address | Decimals |
+|--------|------|---------|----------|
+| `tDOT` | Test DOT | `0x2402C804aD8a6217BF73D8483dA7564065c56083` | 18 |
+| `tUSDC` | Test USDC | `0x5298FDe9E288371ECA21db04Ac5Ddba00C1ea626` | 18 |
+| `tETH` | Test ETH | `0xd92a5325fB3A56f5012F1EBD1bd37573d981144e` | 18 |
+| `TKA` | Test Token A | `0xD8913B1a14Db9CD4B29C05c5E7E105cDA34ebF9f` | 18 |
+| `TKB` | Test Token B | `0x3E8D34E94e22BdBaa9aD6D575a239D722973D2Bc` | 18 |
+
+## UniswapV2 Pairs (Testnet)
+
+Five pairs are live in the UV2 pair registry:
+
+| Pair | Type |
+|------|------|
+| tDOT / tUSDC | Local Hub |
+| tDOT / tETH | Local Hub |
+| tUSDC / tETH | Local Hub |
+| tDOT / TKB | Local Hub |
+| TKB / TKA | Local Hub |
+
+## Cross-Chain Route Stubs
+
+The route finder appends stubs for all registered adapters. On testnet, only `live` stubs are executable.
+
+| Route | Type | Status |
+|-------|------|--------|
+| RelayTeleport (XCM) | xcm | live |
+| Hydration Omnipool (XCM) | xcm | mainnet_only |
+| Bifrost DEX (XCM) | xcm | mainnet_only |
+| Uniswap V2 (Polkadot Hub) | local | live |
+| Karura DEX (XCM) | xcm | mainnet_only |
+| Interlay Loans (XCM) | xcm | mainnet_only |
+| Moonbeam DEX (XCM) | xcm | coming_soon |
+| Hyperbridge (ISMP) | bridge | mainnet_only |
+| Snowbridge (BridgeHub → Ethereum) | bridge | coming_soon |
+| ChainFlip (Polkadot → Ethereum) | bridge | coming_soon |
+
 ## Pool Types
 
 The router defines nine pool types via the `PoolType` enum:

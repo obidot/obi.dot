@@ -70,10 +70,10 @@ export function YieldComparison({
             <GitCompareArrows className="h-3.5 w-3.5 text-warning" />
           </div>
           <div>
-            <h3 className="text-sm font-semibold text-text-primary">
+            <h3 className="text-base font-semibold text-text-primary">
               Head-to-Head Comparison
             </h3>
-            <p className="font-mono text-[9px] text-text-muted">
+            <p className="font-mono text-xs text-text-muted">
               Side-by-side 5-dimension analysis
             </p>
           </div>
@@ -83,7 +83,7 @@ export function YieldComparison({
       {/* Selectors */}
       <div className="grid grid-cols-2 gap-4 border-b border-border p-4">
         <div>
-          <label className="mb-1 block text-[9px] uppercase tracking-wider text-primary font-bold">
+          <label className="mb-1 block text-xs uppercase tracking-wider text-primary font-bold">
             Protocol A
           </label>
           <select
@@ -99,7 +99,7 @@ export function YieldComparison({
           </select>
         </div>
         <div>
-          <label className="mb-1 block text-[9px] uppercase tracking-wider text-secondary font-bold">
+          <label className="mb-1 block text-xs uppercase tracking-wider text-secondary font-bold">
             Protocol B
           </label>
           <select
@@ -128,7 +128,7 @@ export function YieldComparison({
             return (
               <div key={dim.label}>
                 <div className="flex items-center justify-between mb-1">
-                  <span className="font-mono text-[10px] text-text-muted w-16">{dim.label}</span>
+                  <span className="font-mono text-xs text-text-muted w-16">{dim.label}</span>
                   <div className="flex-1 mx-2 flex gap-1">
                     {/* A bar (grows left-to-right from center) */}
                     <div className="flex-1 flex justify-end">
@@ -159,11 +159,11 @@ export function YieldComparison({
         <div className="mt-3 flex items-center justify-center gap-6">
           <div className="flex items-center gap-1.5">
             <div className="h-2 w-6 rounded-full bg-primary" />
-            <span className="truncate font-mono text-[9px] text-text-muted">{a.yield_.name}</span>
+            <span className="truncate font-mono text-xs text-text-muted">{a.yield_.name}</span>
           </div>
           <div className="flex items-center gap-1.5">
             <div className="h-2 w-6 rounded-full bg-secondary" />
-            <span className="truncate font-mono text-[9px] text-text-muted">{b.yield_.name}</span>
+            <span className="truncate font-mono text-xs text-text-muted">{b.yield_.name}</span>
           </div>
         </div>
       </div>
@@ -227,7 +227,7 @@ function CompRow({
 }) {
   return (
     <tr className="hover:bg-surface-hover">
-      <td className="px-4 py-1.5 text-left font-mono text-[10px] text-text-muted">
+      <td className="px-4 py-1.5 text-left font-mono text-xs text-text-muted">
         {label}
       </td>
       <td className={cn("px-4 py-1.5 text-right font-mono text-xs", aWins && !neutral ? "text-primary font-bold" : "text-text-secondary")}>
@@ -238,7 +238,7 @@ function CompRow({
       </td>
       <td className="px-4 py-1.5 text-center">
         {neutral ? (
-          <span className="text-[9px] text-text-muted">—</span>
+          <span className="text-xs text-text-muted">—</span>
         ) : aWins ? (
           <Check className="mx-auto h-3 w-3 text-primary" />
         ) : (

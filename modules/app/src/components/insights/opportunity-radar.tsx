@@ -90,16 +90,16 @@ export function OpportunityRadar({
             <Target className="h-3.5 w-3.5 text-primary" />
           </div>
           <div>
-            <h3 className="text-sm font-semibold text-text-primary">
+            <h3 className="text-base font-semibold text-text-primary">
               Opportunity Radar
             </h3>
-            <p className="font-mono text-[9px] text-text-muted">
+            <p className="font-mono text-xs text-text-muted">
               AI-scored yield opportunities ranked by risk-adjusted returns
             </p>
           </div>
         </div>
         <div className="text-right">
-          <p className="text-[9px] uppercase tracking-wider text-text-muted">
+          <p className="text-xs uppercase tracking-wider text-text-muted">
             Avg Score
           </p>
           <p className={cn("stat-number text-lg", avgScore >= 60 ? "text-primary" : avgScore >= 40 ? "text-warning" : "text-danger")}>
@@ -122,7 +122,7 @@ export function OpportunityRadar({
               className="flex w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-surface-hover"
             >
               {/* Rank */}
-              <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-surface-hover font-mono text-[10px] font-bold text-text-muted">
+              <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-surface-hover font-mono text-xs font-bold text-text-muted">
                 {idx + 1}
               </span>
 
@@ -136,7 +136,7 @@ export function OpportunityRadar({
                     />
                   </div>
                 </div>
-                <p className="mt-0.5 text-center font-mono text-[9px] font-bold text-text-secondary">
+                <p className="mt-0.5 text-center font-mono text-xs font-bold text-text-secondary">
                   {opp.score}
                 </p>
               </div>
@@ -149,7 +149,7 @@ export function OpportunityRadar({
                   </p>
                   <span
                     className={cn(
-                      "inline-flex shrink-0 items-center gap-1 rounded-full px-1.5 py-0.5 text-[9px] font-semibold",
+                      "inline-flex shrink-0 items-center gap-1 rounded-full px-1.5 py-0.5 text-[11px] font-semibold",
                       config.bg,
                       config.color,
                     )}
@@ -158,7 +158,7 @@ export function OpportunityRadar({
                     {config.label}
                   </span>
                 </div>
-                <p className="mt-0.5 truncate font-mono text-[9px] text-text-muted">
+                <p className="mt-0.5 truncate font-mono text-xs text-text-muted">
                   {opp.recommendation}
                 </p>
               </div>
@@ -168,7 +168,7 @@ export function OpportunityRadar({
                 <p className="font-mono text-xs font-bold text-primary">
                   {formatApy(opp.yield.apyPercent)}
                 </p>
-                <p className="font-mono text-[9px] text-text-muted">
+                <p className="font-mono text-xs text-text-muted">
                   {formatUsdNumber(opp.yield.tvlUsd, true)}
                 </p>
               </div>
@@ -181,7 +181,7 @@ export function OpportunityRadar({
 
       {/* Footer: Score breakdown legend */}
       <div className="flex items-center gap-4 border-t border-border px-4 py-2">
-        <span className="font-mono text-[9px] text-text-muted">Score = </span>
+        <span className="font-mono text-[11px] text-text-muted">Score = </span>
         {[
           { label: "APY", w: 30 },
           { label: "TVL", w: 25 },
@@ -191,7 +191,7 @@ export function OpportunityRadar({
         ].map((s) => (
           <span
             key={s.label}
-            className="font-mono text-[9px] text-text-muted"
+            className="font-mono text-[11px] text-text-muted"
           >
             {s.label}({s.w})
           </span>

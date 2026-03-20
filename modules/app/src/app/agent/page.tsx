@@ -8,7 +8,7 @@ import { PanelSkeleton } from "@/components/ui/skeleton";
 import { RefreshCw } from "lucide-react";
 
 export default function AgentPage() {
-  const { data: decisions, isLoading, error, refetch } = useAgentLog();
+  const { data: decisions, isLoading, error, refetch, isFetching } = useAgentLog();
 
   return (
     <div className="space-y-4">
@@ -30,7 +30,11 @@ export default function AgentPage() {
         </div>
       ) : (
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_320px]">
-          <DecisionFeed decisions={decisions ?? []} />
+          <DecisionFeed
+            decisions={decisions ?? []}
+            refetch={refetch}
+            isRefetching={isFetching}
+          />
           <LiveEvents />
         </div>
       )}

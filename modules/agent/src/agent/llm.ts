@@ -11,7 +11,7 @@ import { loopLog } from "../utils/logger.js";
 // ─────────────────────────────────────────────────────────────────────────────
 
 const DEFAULTS: Record<string, string> = {
-  openai: "gpt-4o",
+  openai: "gpt-5-mini",
   anthropic: "claude-sonnet-4-5",
   openrouter: "anthropic/claude-sonnet-4",
 };
@@ -29,7 +29,7 @@ const DEFAULTS: Record<string, string> = {
  */
 export async function createLlm(): Promise<BaseChatModel> {
   const provider = env.LLM_PROVIDER ?? "openai";
-  const model = env.LLM_MODEL ?? DEFAULTS[provider] ?? "gpt-4o";
+  const model = env.LLM_MODEL ?? DEFAULTS[provider] ?? "gpt-5-mini";
 
   loopLog.info({ provider, model }, "Initialising LLM");
 
@@ -39,7 +39,7 @@ export async function createLlm(): Promise<BaseChatModel> {
         throw new Error("LLM_PROVIDER=openai requires OPENAI_API_KEY");
       }
       const { ChatOpenAI } = await import("@langchain/openai");
-      return new ChatOpenAI({ model, temperature: 0, apiKey: env.OPENAI_API_KEY });
+      return new ChatOpenAI({ model, temperature: 1, apiKey: env.OPENAI_API_KEY });
     }
 
     case "anthropic": {
@@ -47,7 +47,7 @@ export async function createLlm(): Promise<BaseChatModel> {
         throw new Error("LLM_PROVIDER=anthropic requires ANTHROPIC_API_KEY");
       }
       const { ChatAnthropic } = await import("@langchain/anthropic");
-      return new ChatAnthropic({ model, temperature: 0, apiKey: env.ANTHROPIC_API_KEY });
+      return new ChatAnthropic({ model, temperature: 1, apiKey: env.ANTHROPIC_API_KEY });
     }
 
     case "openrouter": {
@@ -58,7 +58,7 @@ export async function createLlm(): Promise<BaseChatModel> {
       const { ChatOpenAI } = await import("@langchain/openai");
       return new ChatOpenAI({
         model,
-        temperature: 0,
+        temperature: 1,
         apiKey,
         configuration: {
           baseURL: "https://openrouter.ai/api/v1",

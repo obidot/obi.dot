@@ -12,8 +12,8 @@
   --color-surface: #ffffff;
   --color-surface-hover: #f1f5f9;
   --color-surface-alt: #f8fafc;
-  --color-border: #dbe3ee;
-  --color-border-subtle: #e7edf5;
+  --color-border: #cfd9e6;
+  --color-border-subtle: #dde6f0;
 
   /* Trading accents */
   --color-primary: #e6007a;
@@ -31,7 +31,7 @@
   /* Text hierarchy */
   --color-text-primary: #0f172a;
   --color-text-secondary: #334155;
-  --color-text-muted: #64748b;
+  --color-text-muted: #526175;
 
   --font-sans: var(--font-atlas), ui-sans-serif, system-ui, sans-serif;
   --font-mono: "JetBrains Mono", "SF Mono", ui-monospace, monospace;
@@ -50,7 +50,7 @@ body {
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  font-size: 13px;
+  font-size: 14px;
   line-height: 1.5;
 }
 
@@ -331,7 +331,7 @@ body {
   gap: 4px;
   padding: 2px 8px;
   border-radius: 0;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 500;
   font-family: var(--font-mono);
 }
@@ -398,9 +398,9 @@ body {
   background: var(--color-background);
   border: 1px solid var(--color-border);
   border-radius: 0;
-  padding: 8px 12px;
+  padding: 10px 12px;
   font-family: var(--font-mono);
-  font-size: 13px;
+  font-size: 14px;
   color: var(--color-text-primary);
   outline: none;
   transition: border-color 150ms ease;
@@ -426,13 +426,16 @@ body {
   padding: 10px 16px;
   border-radius: 0;
   font-family: var(--font-mono);
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 600;
   background: var(--color-primary);
   color: var(--color-background);
   border: none;
   cursor: pointer;
-  transition: all 150ms ease;
+  transition:
+    background-color 150ms ease,
+    box-shadow 150ms ease,
+    transform 150ms ease;
 }
 
 .btn-primary:hover:not(:disabled) {
@@ -456,13 +459,15 @@ body {
   padding: 10px 16px;
   border-radius: 0;
   font-family: var(--font-mono);
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 600;
   background: var(--color-secondary);
   color: white;
   border: none;
   cursor: pointer;
-  transition: all 150ms ease;
+  transition:
+    opacity 150ms ease,
+    box-shadow 150ms ease;
 }
 
 .btn-secondary:hover {
@@ -473,13 +478,16 @@ body {
 .btn-ghost {
   padding: 6px 12px;
   border-radius: 0;
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 500;
   color: var(--color-text-secondary);
   background: transparent;
   border: 1px solid var(--color-border);
   cursor: pointer;
-  transition: all 150ms ease;
+  transition:
+    background-color 150ms ease,
+    color 150ms ease,
+    border-color 150ms ease;
 }
 
 .btn-ghost:hover {
@@ -503,13 +511,15 @@ body {
   padding: 10px 16px;
   border-radius: 0;
   font-family: var(--font-mono);
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 600;
   background: var(--color-danger);
   color: white;
   border: none;
   cursor: pointer;
-  transition: all 150ms ease;
+  transition:
+    opacity 150ms ease,
+    box-shadow 150ms ease;
 }
 
 .btn-danger:hover {
@@ -535,9 +545,9 @@ body {
 }
 
 .tab-item {
-  padding: 6px 14px;
+  padding: 8px 14px;
   border-radius: 4px;
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 500;
   color: var(--color-text-muted);
   cursor: pointer;
@@ -625,7 +635,7 @@ body {
 /* ── Execution Metric (large key stats in quote display) ─────────────── */
 
 .execution-metric-label {
-  font-size: 12px;
+  font-size: 13px;
   color: var(--color-text-muted);
   text-transform: uppercase;
   letter-spacing: 0.06em;
@@ -634,7 +644,7 @@ body {
 
 .execution-metric-value {
   font-family: var(--font-mono);
-  font-size: 15px;
+  font-size: 16px;
   font-weight: 700;
   line-height: 1;
 }

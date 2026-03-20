@@ -82,10 +82,10 @@ export function PositionSimulatorPanel({
             <Calculator className="h-3.5 w-3.5 text-accent" />
           </div>
           <div>
-            <h3 className="text-sm font-semibold text-text-primary">
+            <h3 className="text-base font-semibold text-text-primary">
               Position Simulator
             </h3>
-            <p className="font-mono text-[9px] text-text-muted">
+            <p className="font-mono text-xs text-text-muted">
               What-if scenario engine with confidence intervals
             </p>
           </div>
@@ -96,7 +96,7 @@ export function PositionSimulatorPanel({
       <div className="grid grid-cols-1 gap-4 border-b border-border p-4 md:grid-cols-3">
         {/* Protocol selector */}
         <div>
-          <label className="mb-1.5 block text-[10px] uppercase tracking-wider text-text-muted">
+          <label className="mb-1.5 block text-xs uppercase tracking-wider text-text-muted">
             Protocol
           </label>
           <select
@@ -114,7 +114,7 @@ export function PositionSimulatorPanel({
 
         {/* Amount */}
         <div>
-          <label className="mb-1.5 block text-[10px] uppercase tracking-wider text-text-muted">
+          <label className="mb-1.5 block text-xs uppercase tracking-wider text-text-muted">
             Amount (USD)
           </label>
           <input
@@ -132,7 +132,7 @@ export function PositionSimulatorPanel({
                 type="button"
                 onClick={() => setAmount(a)}
                 className={cn(
-                  "rounded px-2 py-0.5 font-mono text-[9px] transition-colors",
+                  "rounded px-2 py-0.5 font-mono text-[11px] transition-colors",
                   amount === a
                     ? "bg-primary/10 text-primary"
                     : "text-text-muted hover:text-text-secondary",
@@ -146,7 +146,7 @@ export function PositionSimulatorPanel({
 
         {/* Duration */}
         <div>
-          <label className="mb-1.5 block text-[10px] uppercase tracking-wider text-text-muted">
+          <label className="mb-1.5 block text-xs uppercase tracking-wider text-text-muted">
             Duration
           </label>
           <div className="flex gap-1">
@@ -156,7 +156,7 @@ export function PositionSimulatorPanel({
                 type="button"
                 onClick={() => setDurationDays(preset.days)}
                 className={cn(
-                  "flex-1 rounded py-2 font-mono text-[10px] font-semibold transition-colors",
+                  "flex-1 rounded py-2 font-mono text-xs font-semibold transition-colors",
                   durationDays === preset.days
                     ? "bg-primary/10 text-primary"
                     : "bg-surface-hover text-text-muted hover:text-text-secondary",
@@ -202,7 +202,7 @@ export function PositionSimulatorPanel({
 
       {/* Confidence Intervals */}
       <div className="border-t border-border px-4 py-3">
-        <p className="mb-2 text-[10px] uppercase tracking-wider text-text-muted">
+        <p className="mb-2 text-xs uppercase tracking-wider text-text-muted">
           Confidence Intervals
         </p>
         <div className="grid grid-cols-3 gap-3">
@@ -222,7 +222,7 @@ export function PositionSimulatorPanel({
                 <div className="flex items-center justify-between">
                   <span
                     className={cn(
-                      "font-mono text-[10px] font-bold uppercase",
+                      "font-mono text-xs font-bold uppercase",
                       key === "low"
                         ? "text-danger"
                         : key === "mid"
@@ -232,7 +232,7 @@ export function PositionSimulatorPanel({
                   >
                     {proj.label}
                   </span>
-                  <span className="font-mono text-[9px] text-text-muted">
+                  <span className="font-mono text-xs text-text-muted">
                     {proj.apy.toFixed(1)}% APY
                   </span>
                 </div>
@@ -241,7 +241,7 @@ export function PositionSimulatorPanel({
                 </p>
                 <p
                   className={cn(
-                    "font-mono text-[10px]",
+                    "font-mono text-xs",
                     proj.totalReturn >= 0 ? "text-primary" : "text-danger",
                   )}
                 >
@@ -257,11 +257,11 @@ export function PositionSimulatorPanel({
       {/* Mini Timeline Chart (ASCII-style bar chart) */}
       <div className="border-t border-border px-4 py-3">
         <div className="flex items-center justify-between">
-          <p className="text-[10px] uppercase tracking-wider text-text-muted">
+          <p className="text-xs uppercase tracking-wider text-text-muted">
             <Calendar className="mr-1 inline h-3 w-3" />
             Growth Timeline
           </p>
-          <p className="font-mono text-[9px] text-text-muted">
+          <p className="font-mono text-xs text-text-muted">
             Daily: {formatSimUsd(sim.dailyYieldUsd)} | Monthly: {formatSimUsd(sim.monthlyYieldUsd)}
           </p>
         </div>
@@ -283,7 +283,7 @@ export function PositionSimulatorPanel({
                   style={{ height: `${Math.max(2, barH)}%` }}
                 />
                 {/* Hover tooltip */}
-                <div className="pointer-events-none absolute bottom-full left-1/2 z-10 mb-1 hidden -translate-x-1/2 whitespace-nowrap rounded border border-border bg-surface px-1.5 py-0.5 text-[8px] shadow group-hover:block">
+                <div className="pointer-events-none absolute bottom-full left-1/2 z-10 mb-1 hidden -translate-x-1/2 whitespace-nowrap rounded border border-border bg-surface px-1.5 py-0.5 text-[11px] shadow group-hover:block">
                   Day {point.day}: {formatSimUsd(point.balanceMid)}
                 </div>
               </div>
@@ -312,7 +312,7 @@ function ResultCard({
     <div className="bg-surface p-3">
       <div className="flex items-center gap-1.5">
         {icon}
-        <span className="text-[9px] uppercase tracking-wider text-text-muted">
+        <span className="text-xs uppercase tracking-wider text-text-muted">
           {label}
         </span>
       </div>
@@ -320,7 +320,7 @@ function ResultCard({
         {value}
       </p>
       {sub && (
-        <p className="font-mono text-[9px] text-text-muted">{sub}</p>
+        <p className="font-mono text-xs text-text-muted">{sub}</p>
       )}
     </div>
   );

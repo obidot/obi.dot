@@ -1,7 +1,15 @@
 "use client";
 
-import { Cpu, Zap, Radio } from "lucide-react";
+import { Cpu, Zap, Radio, Clock } from "lucide-react";
 import type { AgentDecision } from "@/types";
+
+function timeAgo(ms: number): string {
+  const s = Math.floor((Date.now() - ms) / 1000);
+  if (s < 60) return `${s}s ago`;
+  const m = Math.floor(s / 60);
+  if (m < 60) return `${m}m ago`;
+  return `${Math.floor(m / 60)}h ago`;
+}
 
 // Agent is considered "Running" if its last decision was within this window
 const ACTIVE_THRESHOLD_MS = 5 * 60 * 1_000; // 5 minutes
@@ -21,7 +29,7 @@ export function AgentStatus({ decisionCount, decisions = [] }: AgentStatusProps)
 
   return (
     <div className="panel overflow-hidden rounded-lg">
-      <div className="grid grid-cols-2 gap-px bg-border md:grid-cols-4">
+      <div className="grid grid-cols-2 gap-px bg-border md:grid-cols-5">
         {/* Status */}
         <div className="flex items-center gap-3 bg-surface px-4 py-3">
           <div className="relative">
@@ -74,7 +82,20 @@ export function AgentStatus({ decisionCount, decisions = [] }: AgentStatusProps)
               Model
             </p>
             <p className="font-mono text-sm font-semibold text-text-primary">
-              GPT-4o
+              GPT-5-mini
+            </p>
+          </div>
+        </div>
+
+        {/* Last Cycle */}
+        <div className="flex items-center gap-3 bg-surface px-4 py-3">
+          <Clock className="h-4 w-4 text-text-muted" />
+          <div>
+            <p className="text-[10px] uppercase tracking-wider text-text-muted">
+              Last Cycle
+            </p>
+            <p className="font-mono text-sm font-semibold text-text-primary">
+              {lastTimestamp > 0 ? timeAgo(lastTimestamp) : "—"}
             </p>
           </div>
         </div>

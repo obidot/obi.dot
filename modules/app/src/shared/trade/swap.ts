@@ -20,6 +20,18 @@ export const TOKENS: SwapToken[] = [
         name: "Test ETH",
         decimals: 18,
     },
+    {
+        address: CONTRACTS.TEST_TKA,
+        symbol: "TKA",
+        name: "Test Token A",
+        decimals: 18,
+    },
+    {
+        address: CONTRACTS.TEST_TKB,
+        symbol: "TKB",
+        name: "Test Token B",
+        decimals: 18,
+    },
 ];
 
 export const TOKEN_COLORS: Record<string, { circle: string; text: string }> = {

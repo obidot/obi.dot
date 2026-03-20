@@ -1,7 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import type { StructuredToolInterface } from "@langchain/core/tools";
 import {
-  type AIMessage,
+  AIMessage,
   HumanMessage,
   SystemMessage,
   ToolMessage,
@@ -23,17 +23,21 @@ const MAX_CHAT_ITERATIONS = 5;
 const CHAT_SYSTEM_PROMPT = `You are the Obidot Vault Assistant — an AI DeFi assistant for the Obidot cross-chain vault on Polkadot Hub EVM.
 
 Your capabilities:
+- Deposit assets into the ERC-4626 vault (use execute_deposit tool)
 - Check vault state (idle balance, remote assets, paused, emergency mode)
 - Fetch live yield data from Polkadot DeFi protocols (Hydration, Bifrost)
 - View cross-chain satellite vault state
 - Execute strategies and Bifrost operations
 - Show vault performance and oracle status
+- Find UV2 swap routes (use find_swap_routes tool — returns live routes with amountOut estimates)
+- Execute direct UV2 swaps (use execute_direct_swap tool — tDOT↔TKB, tDOT↔tUSDC, tDOT↔tETH, tUSDC↔tETH, TKB↔TKA)
 
 Rules:
-1. Format responses concisely. Use bullet points.
-2. For amounts, show human-readable values (e.g., "1,000 DOT") not raw wei.
-3. Always confirm before executing write operations.
-4. Never expose private keys or internal state.`;
+1. Confirm amounts and addresses with the user ONCE before executing write operations. After the user confirms, IMMEDIATELY call the relevant tool — do not ask again.
+2. Format responses concisely. Use bullet points.
+3. For amounts, show human-readable values (e.g., "1,000 DOT") not raw wei.
+4. Never expose private keys or internal state.
+5. Once the user says "confirm", "yes", "proceed", or "PROCEED", treat that as authorization and execute immediately.`;
 
 export function registerAgentRoutes(
   app: FastifyInstance,
@@ -55,22 +59,26 @@ export function registerAgentRoutes(
     };
   });
 
-  /** POST /api/chat — AI chat (same runner as Telegram). */
+  /** POST /api/chat — AI chat with optional conversation history. */
   app.post("/api/chat", async (request) => {
-    const body = request.body as { message?: string };
+    const body = request.body as {
+      message?: string;
+      history?: Array<{ role: string; content: string }>;
+    };
     const userMessage = body?.message;
+    const history = body?.history ?? [];
 
     if (!userMessage || typeof userMessage !== "string") {
       return { success: false, error: "Missing 'message' in request body" };
     }
 
     chatLog.info(
-      { messageLength: userMessage.length },
+      { messageLength: userMessage.length, historyLength: history.length },
       "Chat request received",
     );
 
     try {
-      const response = await runChat(tools, userMessage);
+      const response = await runChat(tools, userMessage, history);
       return { success: true, data: { response }, timestamp: Date.now() };
     } catch (error) {
       const msg = error instanceof Error ? error.message : String(error);
@@ -87,11 +95,12 @@ export function registerAgentRoutes(
 async function runChat(
   tools: StructuredToolInterface[],
   userMessage: string,
+  history: Array<{ role: string; content: string }> = [],
 ): Promise<string> {
   const model = new ChatOpenAI({
-    model: "gpt-4o",
+    model: "gpt-5-mini",
     apiKey: env.OPENAI_API_KEY,
-    temperature: 0,
+    temperature: 1,
   });
 
   const boundModel = tools.length > 0 ? model.bindTools(tools) : model;
@@ -101,8 +110,16 @@ async function runChat(
     toolMap.set(tool.name, tool);
   }
 
+  // Reconstruct prior turns from the client-provided history
+  const priorMessages = history.map((m) =>
+    m.role === "user"
+      ? new HumanMessage(m.content)
+      : new AIMessage(m.content),
+  );
+
   const messages: (SystemMessage | HumanMessage | AIMessage | ToolMessage)[] = [
     new SystemMessage(CHAT_SYSTEM_PROMPT),
+    ...priorMessages,
     new HumanMessage(userMessage),
   ];
 

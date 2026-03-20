@@ -33,6 +33,7 @@ export interface ProtocolYield {
   name: string;
   paraId: number;
   protocol: string;
+  protocolLabel: string;
   apyPercent: number;
   tvlUsd: number;
   fetchedAt: string;
@@ -42,10 +43,28 @@ export interface ProtocolYield {
 export interface BifrostYield {
   name: string;
   protocol: string;
+  protocolLabel: string;
   category: "SLP" | "DEX" | "Farming" | "SALP";
   apyPercent: number;
   tvlUsd: number;
   isActive: boolean;
+  fetchedAt: string;
+}
+
+/** UniswapV2 pair yield data from Polkadot Hub TestNet */
+export interface UniswapV2Yield {
+  name: string;
+  protocolLabel: string;
+  protocol: string;
+  address: string;
+  token0: string;
+  token1: string;
+  reserve0: string;
+  reserve1: string;
+  apyPercent: number;
+  tvlUsd: number;
+  category: "UniswapV2";
+  /** ISO string (agent serializes Date to string) */
   fetchedAt: string;
 }
 
@@ -106,6 +125,25 @@ export interface ChatMessage {
   timestamp: string;
 }
 
+/** Limit order stored in localStorage under key "obidot_limit_orders" */
+export interface PendingOrder {
+  id: string;
+  tokenInSymbol: string;
+  tokenOutSymbol: string;
+  /** ERC-20 address of tokenIn — used for fill detection */
+  tokenInAddress: string;
+  /** ERC-20 address of tokenOut — used for fill detection */
+  tokenOutAddress: string;
+  /** Human-readable amount (e.g. "10.5") */
+  amountIn: string;
+  targetPrice: string;
+  expiry: number;
+  marketPriceAtOrder: string;
+  createdAt: number;
+  /** Set to "filled" by fill-detection logic when a matching SwapExecuted event arrives */
+  status?: "pending" | "filled";
+}
+
 // ── DEX Aggregator Types ──────────────────────────────────────────────────
 
 /** Pool type enum (matches on-chain PoolType) */
@@ -133,6 +171,21 @@ export const POOL_TYPE_LABELS: Record<PoolType, string> = {
   [PoolType.Moonbeam]: "Moonbeam EVM",
   [PoolType.Interlay]: "Interlay Loans",
 };
+
+/**
+ * Resolve a pool type value to its numeric PoolType.
+ * Accepts either a numeric string ("3"), a number (3), or a label ("UniswapV2").
+ * Returns undefined if unrecognized.
+ */
+export function resolvePoolType(value: string | number): PoolType | undefined {
+  if (typeof value === "number") return value as PoolType;
+  const n = Number(value);
+  if (!isNaN(n)) return n as PoolType;
+  // Reverse label lookup
+  const entry = Object.entries(POOL_TYPE_LABELS).find(([, label]) => label === value);
+  if (entry) return Number(entry[0]) as PoolType;
+  return undefined;
+}
 
 /** Swap quote result from agent API */
 export interface SwapQuoteResult {
@@ -195,7 +248,8 @@ export interface SwapRouteResult {
   totalFeeBps: string;
   totalPriceImpactBps: string;
   routeType: "local" | "xcm" | "bridge";
-  status: "live" | "mainnet_only" | "coming_soon";
+  /** "no_liquidity" — path exists in UV2 but pool reserves are 0 (not yet seeded). */
+  status: "live" | "mainnet_only" | "coming_soon" | "no_liquidity";
 }
 
 // ── Split Route Types ─────────────────────────────────────────────────────
@@ -230,4 +284,14 @@ export interface NavItem {
   label: string;
   href: string;
   icon: string;
+}
+
+/** Metadata for a deployed LiquidityPair (LP-token-enabled UV2 pair). */
+export interface LiquidityPairMeta {
+  label: string;               // e.g. "tDOT/tUSDC"
+  address: `0x${string}`;      // deployed LiquidityPair contract
+  token0: `0x${string}`;       // lower-address token
+  token1: `0x${string}`;       // higher-address token
+  token0Symbol: string;
+  token1Symbol: string;
 }

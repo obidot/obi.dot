@@ -10,6 +10,7 @@ import {
   INTENT_DEADLINE_SECONDS,
   MAX_STRATEGY_AMOUNT,
   PLACEHOLDER_XCM_CALL,
+  TOKEN_ADDRESSES,
   VAULT_ADDRESS,
 } from "../config/constants.js";
 import {
@@ -1019,6 +1020,338 @@ export class ExecuteIntentTool extends Tool {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+//  DepositTool — ERC-4626 deposit into the vault
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * LangChain Tool that executes an ERC-4626 deposit into the ObidotVault.
+ *
+ * When the model is bound via bindTools(), LangChain serialises Tool args as
+ * { input: "<json string>" } (because Tool exposes a single-string schema).
+ * This _call implementation handles both the wrapped and unwrapped forms so
+ * the tool works correctly whether invoked from the autonomous loop or from
+ * the Telegram bot's bindTools() path.
+ */
+export class DepositTool extends Tool {
+  name = "execute_deposit";
+  description =
+    "Deposit ERC-20 assets into the Obidot ERC-4626 vault. " +
+    'Input MUST be a JSON object with fields: "token" (ERC-20 address), ' +
+    '"amount" (base units as string, e.g. "1000000000000000000" for 1 token with 18 decimals), ' +
+    '"receiver" (address to receive vault shares). ' +
+    "Automatically approves vault allowance if needed, then calls vault.deposit(). " +
+    "Returns txHash on success.";
+
+  private readonly signerService: SignerService;
+
+  constructor(signerService: SignerService) {
+    super();
+    this.signerService = signerService;
+  }
+
+  protected async _call(input: string): Promise<string> {
+    try {
+      // ── Parse input ────────────────────────────────────────────────────
+      // bindTools() wraps Tool args as { input: "<json>" }; handle both forms.
+      let raw: Record<string, unknown>;
+      try {
+        raw = JSON.parse(input) as Record<string, unknown>;
+      } catch {
+        return JSON.stringify({ success: false, error: "Invalid JSON input to execute_deposit." });
+      }
+
+      // Unwrap LangChain's { input: "..." } wrapper if present
+      const params = (typeof raw.input === "string"
+        ? JSON.parse(raw.input)
+        : raw) as Record<string, unknown>;
+
+      const token = params.token as string | undefined;
+      const amount = params.amount as string | undefined;
+      const receiver = params.receiver as string | undefined;
+
+      if (!token || !amount || !receiver) {
+        return JSON.stringify({
+          success: false,
+          error: `Missing fields. Received keys: ${Object.keys(params).join(", ")}. Expected: token, amount, receiver.`,
+        });
+      }
+
+      agentLog.info(
+        { token, amount, receiver },
+        "DepositTool: executing deposit",
+      );
+
+      const txHash = await this.signerService.executeDeposit(
+        token as `0x${string}`,
+        BigInt(amount),
+        receiver as `0x${string}`,
+      );
+
+      return JSON.stringify({
+        success: true,
+        data: { action: "DEPOSIT", txHash, token, amount, receiver },
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      agentLog.error({ err: error }, "DepositTool failed");
+      return JSON.stringify({ success: false, error: message });
+    }
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  FindRoutesTool — UV2 route discovery (read-only)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * LangChain tool that discovers all available swap routes between two tokens
+ * using the on-chain UV2 pair reserves. Does NOT execute any swap.
+ *
+ * Use this FIRST before swapping to see available routes and expected output.
+ */
+export class FindRoutesTool extends Tool {
+  name = "find_swap_routes";
+  description =
+    "Discover all available swap routes between two tokens on Polkadot Hub. " +
+    "Input MUST be a JSON object with: tokenIn (symbol or address), " +
+    "tokenOut (symbol or address), amountIn (wei string). " +
+    "Supported symbols: tDOT, tUSDC, tETH, TKA, TKB. " +
+    "Returns sorted routes (best amountOut first), each with pool addresses, " +
+    "hops, feeBps, and estimated amountOut. Use this before execute_direct_swap.";
+
+  private readonly swapRouterService: SwapRouterService;
+
+  constructor(swapRouterService: SwapRouterService) {
+    super();
+    this.swapRouterService = swapRouterService;
+  }
+
+  protected async _call(input: string): Promise<string> {
+    try {
+      let params: { tokenIn: string; tokenOut: string; amountIn: string };
+      try {
+        let raw = JSON.parse(input) as Record<string, unknown>;
+        // LangChain bindTools() wraps args as { input: "<json string>" }
+        if (typeof raw.input === "string") raw = JSON.parse(raw.input) as Record<string, unknown>;
+        params = raw as typeof params;
+      } catch {
+        return JSON.stringify({
+          success: false,
+          error: "Invalid JSON. Expected { tokenIn, tokenOut, amountIn }.",
+        });
+      }
+
+      const { tokenIn, tokenOut, amountIn } = params;
+      if (!tokenIn || !tokenOut || !amountIn) {
+        return JSON.stringify({
+          success: false,
+          error: "Missing fields: tokenIn, tokenOut, amountIn.",
+        });
+      }
+
+      // Resolve symbol → address
+      const inAddr =
+        (TOKEN_ADDRESSES as Record<string, string>)[tokenIn] ?? tokenIn;
+      const outAddr =
+        (TOKEN_ADDRESSES as Record<string, string>)[tokenOut] ?? tokenOut;
+
+      const routes = await this.swapRouterService.findRoutes(
+        inAddr,
+        outAddr,
+        BigInt(amountIn),
+      );
+
+      const liveRoutes = routes.filter((r) => r.status === "live" && r.amountOut !== "0");
+
+      swapLog.info(
+        { tokenIn, tokenOut, liveCount: liveRoutes.length },
+        "FindRoutesTool complete",
+      );
+
+      return JSON.stringify({
+        success: true,
+        data: {
+          tokenIn,
+          tokenOut,
+          amountIn,
+          liveRoutes: liveRoutes.map((r) => ({
+            id: r.id,
+            amountOut: r.amountOut,
+            minAmountOut: r.minAmountOut,
+            totalFeeBps: r.totalFeeBps,
+            totalPriceImpactBps: r.totalPriceImpactBps,
+            hops: r.hops.map((h) => ({
+              pool: h.pool,
+              poolLabel: h.poolLabel,
+              tokenIn: h.tokenIn,
+              tokenInSymbol: h.tokenInSymbol,
+              tokenOut: h.tokenOut,
+              tokenOutSymbol: h.tokenOutSymbol,
+              amountIn: h.amountIn,
+              amountOut: h.amountOut,
+              feeBps: h.feeBps,
+            })),
+          })),
+          totalRoutesFound: routes.length,
+        },
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      swapLog.error({ err: error }, "FindRoutesTool failed");
+      return JSON.stringify({ success: false, error: message });
+    }
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  DirectSwapTool — Execute a UV2 swap from the agent wallet
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * LangChain tool that executes a direct UniswapV2 swap from the agent's wallet.
+ *
+ * Flow:
+ *   1. Resolve token symbols to addresses
+ *   2. Call findRoutes() to get the best live UV2 path
+ *   3. Approve tokenIn → SwapRouter if needed
+ *   4. Execute swap (single-hop: swap(), multi-hop: swapMultiHop())
+ *
+ * This swaps from the AGENT'S wallet, not the vault.
+ * Use find_swap_routes first to confirm the route exists.
+ */
+export class DirectSwapTool extends Tool {
+  name = "execute_direct_swap";
+  description =
+    "Execute a direct UniswapV2 swap on Polkadot Hub from the agent wallet. " +
+    "Input MUST be a JSON object with: tokenIn (symbol or address), " +
+    "tokenOut (symbol or address), amountIn (wei string), " +
+    "maxSlippageBps (number, e.g. 50 for 0.5%), reasoning (string). " +
+    "Supported symbols: tDOT, tUSDC, tETH, TKA, TKB. " +
+    "Auto-selects the best live UV2 route. Approves and swaps in one call.";
+
+  private readonly swapRouterService: SwapRouterService;
+  private readonly signerService: SignerService;
+
+  constructor(signerService: SignerService, swapRouterService: SwapRouterService) {
+    super();
+    this.signerService = signerService;
+    this.swapRouterService = swapRouterService;
+  }
+
+  protected async _call(input: string): Promise<string> {
+    try {
+      let params: {
+        tokenIn: string;
+        tokenOut: string;
+        amountIn: string;
+        maxSlippageBps: number;
+        reasoning?: string;
+      };
+      try {
+        let raw = JSON.parse(input) as Record<string, unknown>;
+        // LangChain bindTools() wraps args as { input: "<json string>" }
+        if (typeof raw.input === "string") raw = JSON.parse(raw.input) as Record<string, unknown>;
+        params = raw as typeof params;
+      } catch {
+        return JSON.stringify({
+          success: false,
+          error: "Invalid JSON. Expected { tokenIn, tokenOut, amountIn, maxSlippageBps }.",
+        });
+      }
+
+      const { tokenIn, tokenOut, amountIn, maxSlippageBps, reasoning } = params;
+      if (!tokenIn || !tokenOut || !amountIn || maxSlippageBps === undefined) {
+        return JSON.stringify({
+          success: false,
+          error: "Missing fields: tokenIn, tokenOut, amountIn, maxSlippageBps.",
+        });
+      }
+
+      if (!this.swapRouterService.isRouterDeployed) {
+        return JSON.stringify({
+          success: false,
+          error: "SwapRouter not deployed — direct swaps unavailable.",
+        });
+      }
+
+      // Resolve symbol → address
+      const inAddr =
+        (TOKEN_ADDRESSES as Record<string, string>)[tokenIn] ?? tokenIn;
+      const outAddr =
+        (TOKEN_ADDRESSES as Record<string, string>)[tokenOut] ?? tokenOut;
+
+      const amountInBig = BigInt(amountIn);
+
+      // Find best live route
+      const routes = await this.swapRouterService.findRoutes(
+        inAddr,
+        outAddr,
+        amountInBig,
+      );
+      const best = routes.find((r) => r.status === "live" && r.amountOut !== "0");
+
+      if (!best) {
+        return JSON.stringify({
+          success: false,
+          error: `No live UV2 route found for ${tokenIn} → ${tokenOut}. Available pairs: tDOT/TKB, tDOT/tUSDC, tDOT/tETH, tUSDC/tETH, TKB/TKA (multi-hop supported).`,
+        });
+      }
+
+      const slippageBps = BigInt(maxSlippageBps);
+      const amountOut = BigInt(best.amountOut);
+      const minAmountOut = (amountOut * (10_000n - slippageBps)) / 10_000n;
+
+      swapLog.info(
+        {
+          tokenIn,
+          tokenOut,
+          amountIn: amountInBig.toString(),
+          amountOut: amountOut.toString(),
+          minAmountOut: minAmountOut.toString(),
+          hops: best.hops.length,
+          route: best.id,
+          reasoning,
+        },
+        "DirectSwapTool: executing swap",
+      );
+
+      const txHash = await this.signerService.executeDirectSwap(
+        best.hops.map((h) => ({
+          pool: h.pool,
+          tokenIn: h.tokenIn,
+          tokenOut: h.tokenOut,
+          feeBps: h.feeBps,
+        })),
+        amountInBig,
+        minAmountOut,
+      );
+
+      swapLog.info({ txHash }, "DirectSwapTool: swap executed");
+
+      return JSON.stringify({
+        success: true,
+        data: {
+          txHash,
+          route: best.id,
+          tokenIn,
+          tokenOut,
+          amountIn: amountInBig.toString(),
+          estimatedAmountOut: amountOut.toString(),
+          minAmountOut: minAmountOut.toString(),
+          hops: best.hops.length,
+          feeBps: best.totalFeeBps,
+          reasoning,
+        },
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      swapLog.error({ err: error }, "DirectSwapTool failed");
+      return JSON.stringify({ success: false, error: message });
+    }
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 //  Tool Factory
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -1045,6 +1378,8 @@ export function createObidotTools(
     new FetchBifrostYieldsTool(yieldService),
     new FetchVaultStateTool(signerService),
     new FetchCrossChainStateTool(signerService, crossChainService),
+    // ── ERC-4626 deposit ───────────────────────────────────────────────
+    new DepositTool(signerService),
     // ── Execution tools (legacy) ───────────────────────────────────────
     new ExecuteStrategyTool(signerService),
     new ExecuteBifrostStrategyTool(signerService),
@@ -1052,6 +1387,8 @@ export function createObidotTools(
 
   // ── DEX aggregator tools (conditional on service availability) ─────
   if (swapRouterService) {
+    tools.push(new FindRoutesTool(swapRouterService));
+    tools.push(new DirectSwapTool(signerService, swapRouterService));
     tools.push(new SwapQuoteTool(swapRouterService));
 
     if (intentService) {

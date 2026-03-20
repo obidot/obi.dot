@@ -61,12 +61,25 @@ export interface OraclePriceEvent {
   };
 }
 
+export interface LimitOrderTriggeredEvent {
+  type: "limit_order:triggered";
+  data: {
+    orderId: string;
+    tokenInSymbol: string;
+    tokenOutSymbol: string;
+    targetPrice: string;
+    currentPrice: string;
+    timestamp: number;
+  };
+}
+
 export type WsEvent =
   | VaultStateEvent
   | StrategyExecutedEvent
   | StrategyOutcomeEvent
   | AgentDecisionEvent
-  | OraclePriceEvent;
+  | OraclePriceEvent
+  | LimitOrderTriggeredEvent;
 
 /**
  * Singleton event bus for broadcasting real-time events to WebSocket clients.

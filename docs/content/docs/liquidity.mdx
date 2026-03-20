@@ -1,0 +1,159 @@
+---
+title: UniswapV2 Liquidity Provision
+description: Native LP token issuance on Polkadot Hub — LiquidityPair (ERC-20 LP tokens), LiquidityRouter (addLiquidity / removeLiquidity), five live pairs, and the LiquidityPanel frontend.
+---
+
+Obidot provides native UniswapV2-style liquidity provision directly on Polkadot Hub TestNet. Liquidity providers deposit two tokens into a `LiquidityPair` contract and receive ERC-20 LP tokens proportional to their share. Those LP tokens are redeemable at any time for the underlying reserves via `LiquidityRouter`.
+
+## Architecture
+
+```
+LiquidityPanel (frontend)
+        │
+        └── LiquidityRouter
+                  │
+        ┌─────────┴──────────┐
+        ▼                    ▼
+  addLiquidity()       removeLiquidity()
+        │                    │
+        └─────────┬──────────┘
+                  ▼
+          LiquidityPair
+          (ERC-20 LP token)
+          mint() / burn() / swap() / sync()
+```
+
+### LiquidityPair
+
+Each trading pair is its own `LiquidityPair` contract — there is **no factory**. Each pair:
+
+- Inherits OpenZeppelin v5 `ERC20` to issue LP tokens to liquidity providers.
+- Burns `MINIMUM_LIQUIDITY` (1 000 wei) to `0x000...dEaD` on the first mint to prevent share-price manipulation.
+- Exposes `mint(to)`, `burn(to)`, `swap(amount0Out, amount1Out, to)`, and `sync()` — the standard UniswapV2 interface.
+- Tracks reserves internally; no oracle price accumulator on testnet.
+
+### LiquidityRouter
+
+`LiquidityRouter` is the user-facing contract. It:
+
+- Accepts `addLiquidity(token0, token1, pair, amount0Desired, amount1Desired, amount0Min, amount1Min, to, deadline)`.
+- Computes an optimal split via `quote()` to match the current reserve ratio, then mints LP tokens.
+- Accepts `removeLiquidity(token0, token1, pair, liquidity, amount0Min, amount1Min, to, deadline)`.
+- Burns LP tokens and returns the underlying reserves to `to`.
+- Enforces slippage via `amount0Min` / `amount1Min` and reverts after `deadline`.
+
+No WETH wrapping and no protocol fee are active on testnet.
+
+## Deployed Contracts (Polkadot Hub TestNet)
+
+| Contract | Address | Blockscout |
+| -------- | ------- | ---------- |
+| `LiquidityRouter` | `0xe8A26F28207ba060c2fD98Ff5d7dF85347f0EB08` | [View](https://blockscout-testnet.polkadot.io/address/0xe8A26F28207ba060c2fD98Ff5d7dF85347f0EB08) |
+| `LiquidityPair` — tDOT / TKB | `0xDc1b4a27d44613aa5072Ca6edC20151D94e7f93A` | [View](https://blockscout-testnet.polkadot.io/address/0xDc1b4a27d44613aa5072Ca6edC20151D94e7f93A) |
+| `LiquidityPair` — tDOT / tUSDC | `0x9576F7b40bC3a8Bb5d236Cd4bEBC29dC40AF0fa4` | [View](https://blockscout-testnet.polkadot.io/address/0x9576F7b40bC3a8Bb5d236Cd4bEBC29dC40AF0fa4) |
+| `LiquidityPair` — tDOT / tETH | `0x4a0183BA79Ab7072240B5Fd8B6A1055E8e60aC83` | [View](https://blockscout-testnet.polkadot.io/address/0x4a0183BA79Ab7072240B5Fd8B6A1055E8e60aC83) |
+| `LiquidityPair` — tUSDC / tETH | `0x3FBa4A4db176201d3A3a5B25e7561274ceCb6ef5` | [View](https://blockscout-testnet.polkadot.io/address/0x3FBa4A4db176201d3A3a5B25e7561274ceCb6ef5) |
+| `LiquidityPair` — TKB / TKA | `0xd6F5C4b7b3911Db7D062D0457f8b3D4045C86d50` | [View](https://blockscout-testnet.polkadot.io/address/0xd6F5C4b7b3911Db7D062D0457f8b3D4045C86d50) |
+
+All contracts are verified on [Blockscout TestNet](https://blockscout-testnet.polkadot.io).
+
+## Available Pairs
+
+| Pair | LiquidityPair Address |
+| ---- | --------------------- |
+| tDOT / TKB | `0xDc1b4a27d44613aa5072Ca6edC20151D94e7f93A` |
+| tDOT / tUSDC | `0x9576F7b40bC3a8Bb5d236Cd4bEBC29dC40AF0fa4` |
+| tDOT / tETH | `0x4a0183BA79Ab7072240B5Fd8B6A1055E8e60aC83` |
+| tUSDC / tETH | `0x3FBa4A4db176201d3A3a5B25e7561274ceCb6ef5` |
+| TKB / TKA | `0xd6F5C4b7b3911Db7D062D0457f8b3D4045C86d50` |
+
+## How to Add Liquidity
+
+Adding liquidity requires three on-chain steps: approve each token for the router, then call `addLiquidity`.
+
+**Step 1 — Approve token0**
+
+```solidity
+IERC20(token0).approve(liquidityRouter, amount0Desired);
+```
+
+**Step 2 — Approve token1**
+
+```solidity
+IERC20(token1).approve(liquidityRouter, amount1Desired);
+```
+
+**Step 3 — Call addLiquidity**
+
+```solidity
+LiquidityRouter(liquidityRouter).addLiquidity(
+    token0,          // address of the first token
+    token1,          // address of the second token
+    pair,            // LiquidityPair contract address
+    amount0Desired,  // maximum token0 to deposit
+    amount1Desired,  // maximum token1 to deposit
+    amount0Min,      // minimum token0 (slippage guard)
+    amount1Min,      // minimum token1 (slippage guard)
+    to,              // recipient of LP tokens
+    deadline         // Unix timestamp — reverts if exceeded
+);
+```
+
+The router uses `quote()` to compute the optimal deposit amounts against the current reserves. Any excess beyond the reserve ratio is not transferred. The caller receives LP tokens proportional to the deposited share.
+
+## How to Remove Liquidity
+
+Removing liquidity burns LP tokens and returns the proportional share of each reserve.
+
+**Step 1 — Approve LP tokens**
+
+```solidity
+IERC20(pair).approve(liquidityRouter, liquidity);
+```
+
+**Step 2 — Call removeLiquidity**
+
+```solidity
+LiquidityRouter(liquidityRouter).removeLiquidity(
+    token0,     // address of the first token
+    token1,     // address of the second token
+    pair,       // LiquidityPair contract address
+    liquidity,  // LP token amount to burn
+    amount0Min, // minimum token0 to receive (slippage guard)
+    amount1Min, // minimum token1 to receive (slippage guard)
+    to,         // recipient of withdrawn tokens
+    deadline    // Unix timestamp — reverts if exceeded
+);
+```
+
+The pair burns the LP tokens and transfers `token0` and `token1` to `to`. The amounts received reflect the current reserve ratio at the time of the transaction.
+
+## Frontend: LiquidityPanel
+
+The `LiquidityPanel` component is a fixed right-side overlay panel accessible from the `/yields` page.
+
+**How to open it:**
+
+1. Navigate to `/yields`.
+2. Locate a UniswapV2 row in the yields table.
+3. Click the **+ Earn** button on that row.
+
+The panel opens on the right side of the screen with two tabs:
+
+| Tab | Action |
+| --- | ------ |
+| **Add** | Enter amounts for token0 and token1, set slippage tolerance, view the estimated LP tokens you will receive, then step through the approval flow (Approve token0 → Approve token1 → Add Liquidity). |
+| **Remove** | Enter the LP token amount to burn, view the estimated token0 and token1 you will receive back, then step through Approve LP → Remove Liquidity. |
+
+The panel displays a live LP token estimate before any transaction is submitted, computed from the current on-chain reserves via `quote()`.
+
+## Key Design Notes
+
+| Property | Detail |
+| -------- | ------ |
+| **No factory** | Each `LiquidityPair` is deployed directly with a constructor — there is no factory contract. Pair addresses are static. |
+| **No WETH** | Native token wrapping is not supported. Only ERC-20 pairs. |
+| **No protocol fee** | The fee switch is off on testnet; all swap fees accrue to liquidity providers. |
+| **MINIMUM_LIQUIDITY** | 1 000 wei of LP tokens are permanently locked in `0x000...dEaD` on the first `mint()` to prevent share-price inflation attacks. |
+| **OZ v5 ERC20** | LP tokens use OpenZeppelin v5 `ERC20` — standard `transfer`, `approve`, `transferFrom` interfaces. |
+| **Slippage + deadline** | Both `addLiquidity` and `removeLiquidity` enforce caller-specified minimum amounts and a deadline timestamp. |

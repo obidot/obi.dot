@@ -1,7 +1,7 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { getYields, getBifrostYields } from "@/lib/api";
+import { getYields, getBifrostYields, getUniswapV2Yields } from "@/lib/api";
 
 export function useYields() {
   return useQuery({
@@ -14,5 +14,14 @@ export function useBifrostYields() {
   return useQuery({
     queryKey: ["yields", "bifrost"],
     queryFn: getBifrostYields,
+  });
+}
+
+export function useUniswapV2Yields() {
+  return useQuery({
+    queryKey: ["yields", "uniswap"],
+    queryFn: getUniswapV2Yields,
+    retry: 1,
+    staleTime: 60_000,
   });
 }

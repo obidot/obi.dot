@@ -497,8 +497,15 @@ export class SwapRouterService {
         ),
       );
 
-      reservesData = results.map((r) => {
-        if (r.status === "rejected" || !r.value) return null;
+      reservesData = results.map((r, i) => {
+        if (r.status === "rejected") {
+          swapLog.warn(
+            { pair: UV2_PAIRS[i].label, reason: String(r.reason) },
+            "getReserves rejected — treating as no liquidity",
+          );
+          return null;
+        }
+        if (!r.value) return null;
         const [r0, r1, ts] = r.value as [bigint, bigint, number];
         return [r0, r1, ts];
       });
@@ -507,24 +514,33 @@ export class SwapRouterService {
       return [];
     }
 
-    // ── 2. Build adjacency map: token → [{pairIdx, neighbour, reserveIn, reserveOut}] ──
+    // ── 2. Build adjacency maps ──────────────────────────────────────────────
+    //   liveGraph: only pairs with non-zero reserves (executable routes)
+    //   fullGraph: all pairs regardless of reserves (for dry-path discovery)
     interface PairEdge {
       pairIdx: number;
       neighbour: string;
       reserveIn: bigint;
       reserveOut: bigint;
     }
-    const graph = new Map<string, PairEdge[]>();
+    const graph = new Map<string, PairEdge[]>();     // live only
+    const fullGraph = new Map<string, PairEdge[]>(); // includes zero-reserve
 
     for (let i = 0; i < UV2_PAIRS.length; i++) {
       const pair = UV2_PAIRS[i];
       const reserves = reservesData[i];
-      if (!reserves) continue;
-      const [r0, r1] = reserves;
-      if (r0 === 0n || r1 === 0n) continue; // skip empty pools
-
       const t0 = pair.token0.toLowerCase();
       const t1 = pair.token1.toLowerCase();
+      const r0 = reserves?.[0] ?? 0n;
+      const r1 = reserves?.[1] ?? 0n;
+
+      // always add to fullGraph (even with zero reserves — shows path exists)
+      if (!fullGraph.has(t0)) fullGraph.set(t0, []);
+      fullGraph.get(t0)!.push({ pairIdx: i, neighbour: t1, reserveIn: r0, reserveOut: r1 });
+      if (!fullGraph.has(t1)) fullGraph.set(t1, []);
+      fullGraph.get(t1)!.push({ pairIdx: i, neighbour: t0, reserveIn: r1, reserveOut: r0 });
+
+      if (!reserves || r0 === 0n || r1 === 0n) continue; // skip empty pools for live graph
 
       // t0 → t1
       if (!graph.has(t0)) graph.set(t0, []);
@@ -659,89 +675,124 @@ export class SwapRouterService {
     const visited = new Set<string>([tokenInLc]);
     dfs(tokenInLc, amountIn, [], visited);
 
-    // ── 5. Append cross-chain stub routes ────────────────────────────────────
+    // ── 5. Second DFS pass: discover "dry" paths (pools exist but no reserves) ─
+    // Use fullGraph so we can find paths even through zero-reserve pairs.
+    const liveRouteIds = new Set(routes.map((r) => r.id));
+
+    function dryDfs(
+      currentToken: string,
+      path: Array<{ pairIdx: number; tokenIn: string; tokenOut: string }>,
+      visited2: Set<string>,
+    ): void {
+      if (currentToken === tokenOutLc && path.length > 0) {
+        const hopSymbols = [
+          TOKEN_SYMBOLS[tokenInLc] ?? tokenInLc.slice(0, 8),
+          ...path.map((s) => TOKEN_SYMBOLS[s.tokenOut] ?? s.tokenOut.slice(0, 8)),
+        ];
+        const id = hopSymbols.join("→");
+        if (!liveRouteIds.has(id)) {
+          const hops: RouteHop[] = path.map((step) => {
+            const pair = UV2_PAIRS[step.pairIdx];
+            const tokenInSymbol = TOKEN_SYMBOLS[step.tokenIn] ?? step.tokenIn.slice(0, 8);
+            const tokenOutSymbol = TOKEN_SYMBOLS[step.tokenOut] ?? step.tokenOut.slice(0, 8);
+            return {
+              pool: pair.address,
+              poolLabel: pair.label,
+              poolType: POOL_TYPE_LABELS[PoolType.Custom],
+              tokenIn: step.tokenIn,
+              tokenInSymbol,
+              tokenOut: step.tokenOut,
+              tokenOutSymbol,
+              amountIn: "0",
+              amountOut: "0",
+              feeBps: "30",
+              priceImpactBps: "0",
+            } satisfies RouteHop;
+          });
+          routes.push({
+            id,
+            tokenIn,
+            tokenOut,
+            amountIn: amountIn.toString(),
+            amountOut: "0",
+            minAmountOut: "0",
+            hops,
+            totalFeeBps: (30n * BigInt(path.length)).toString(),
+            totalPriceImpactBps: "0",
+            routeType: "local",
+            status: "no_liquidity",
+          });
+        }
+        return;
+      }
+      if (path.length >= 3) return;
+      const edges = fullGraph.get(currentToken) ?? [];
+      for (const edge of edges) {
+        if (visited2.has(edge.neighbour)) continue;
+        visited2.add(edge.neighbour);
+        path.push({ pairIdx: edge.pairIdx, tokenIn: currentToken, tokenOut: edge.neighbour });
+        dryDfs(edge.neighbour, path, visited2);
+        path.pop();
+        visited2.delete(edge.neighbour);
+      }
+    }
+
+    const visited2 = new Set<string>([tokenInLc]);
+    dryDfs(tokenInLc, [], visited2);
+
+    // ── 6. Append cross-chain stub routes ────────────────────────────────────
+    const stub = (
+      id: string,
+      routeType: SwapRouteResult["routeType"],
+      status: SwapRouteResult["status"],
+      totalFeeBps = "0",
+    ): SwapRouteResult => ({
+      id,
+      tokenIn,
+      tokenOut,
+      amountIn: amountIn.toString(),
+      amountOut: "0",
+      minAmountOut: "0",
+      hops: [],
+      totalFeeBps,
+      totalPriceImpactBps: "0",
+      routeType,
+      status,
+    });
+
     const crossChainStubs: SwapRouteResult[] = [
-      {
-        id: "RelayTeleport (XCM)",
-        tokenIn,
-        tokenOut,
-        amountIn: amountIn.toString(),
-        amountOut: "0",
-        minAmountOut: "0",
-        hops: [],
-        totalFeeBps: "0",
-        totalPriceImpactBps: "0",
-        routeType: "xcm",
-        status: "live",
-      },
-      {
-        id: "Hydration Omnipool (XCM)",
-        tokenIn,
-        tokenOut,
-        amountIn: amountIn.toString(),
-        amountOut: "0",
-        minAmountOut: "0",
-        hops: [],
-        totalFeeBps: "30",
-        totalPriceImpactBps: "0",
-        routeType: "xcm",
-        status: "mainnet_only",
-      },
-      {
-        id: "Bifrost DEX (XCM)",
-        tokenIn,
-        tokenOut,
-        amountIn: amountIn.toString(),
-        amountOut: "0",
-        minAmountOut: "0",
-        hops: [],
-        totalFeeBps: "30",
-        totalPriceImpactBps: "0",
-        routeType: "xcm",
-        status: "mainnet_only",
-      },
-      {
-        id: "Snowbridge (BridgeHub → Ethereum)",
-        tokenIn,
-        tokenOut,
-        amountIn: amountIn.toString(),
-        amountOut: "0",
-        minAmountOut: "0",
-        hops: [],
-        totalFeeBps: "0",
-        totalPriceImpactBps: "0",
-        routeType: "bridge",
-        status: "coming_soon",
-      },
-      {
-        id: "ChainFlip (Polkadot → Ethereum)",
-        tokenIn,
-        tokenOut,
-        amountIn: amountIn.toString(),
-        amountOut: "0",
-        minAmountOut: "0",
-        hops: [],
-        totalFeeBps: "0",
-        totalPriceImpactBps: "0",
-        routeType: "bridge",
-        status: "coming_soon",
-      },
+      // XCM parachains
+      stub("RelayTeleport (XCM)", "xcm", "live"),
+      stub("Hydration Omnipool (XCM)", "xcm", "mainnet_only", "30"),
+      stub("Bifrost DEX (XCM)", "xcm", "mainnet_only", "30"),
+      // Local Polkadot Hub DEX — also appears in On-chain Routes when pair exists
+      stub("Uniswap V2 (Polkadot Hub)", "local", "live", "30"),
+      stub("Karura DEX (XCM)", "xcm", "mainnet_only", "30"),
+      stub("Interlay Loans (XCM)", "xcm", "mainnet_only"),
+      // The Moonbeam adapter (slot 7) routes via XCM to Moonbeam para 2004.
+      stub("Moonbeam DEX (XCM)", "xcm", "coming_soon", "30"),
+      // EVM bridges
+      stub("Hyperbridge (ISMP)", "bridge", "mainnet_only"),
+      stub("Snowbridge (BridgeHub → Ethereum)", "bridge", "coming_soon"),
+      stub("ChainFlip (Polkadot → Ethereum)", "bridge", "coming_soon"),
     ];
 
-    // ── 6. Sort live routes by amountOut desc, then append stubs ─────────────
-    const liveRoutes = routes.sort((a, b) =>
-      Number(BigInt(b.amountOut) - BigInt(a.amountOut)),
-    );
+    // ── 7. Sort: live routes first (best amountOut), dry paths next, then stubs ─
+    const liveRoutes = routes
+      .filter((r) => r.status === "live")
+      .sort((a, b) => Number(BigInt(b.amountOut) - BigInt(a.amountOut)));
+    const dryRoutes = routes.filter((r) => r.status === "no_liquidity");
 
     swapLog.debug(
       {
         tokenIn: TOKEN_SYMBOLS[tokenInLc] ?? tokenInLc,
         tokenOut: TOKEN_SYMBOLS[tokenOutLc] ?? tokenOutLc,
         liveCount: liveRoutes.length,
+        dryCount: dryRoutes.length,
       },
       "findRoutes complete",
     );
 
-    return [...liveRoutes, ...crossChainStubs];
+    return [...liveRoutes, ...dryRoutes, ...crossChainStubs];
   }
 }

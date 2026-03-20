@@ -1,0 +1,4 @@
+{"type":"server-started","port":65403,"host":"127.0.0.1","url_host":"localhost","url":"http://localhost:65403","screen_dir":"/home/harry-riddle/dev/github.com/obidot/obidot/.superpowers/brainstorm/3587785-1773777823"}
+{"type":"screen-added","file":"/home/harry-riddle/dev/github.com/obidot/obidot/.superpowers/brainstorm/3587785-1773777823/trade-layout.html"}
+{"type":"screen-added","file":"/home/harry-riddle/dev/github.com/obidot/obidot/.superpowers/brainstorm/3587785-1773777823/trade-layout-v2.html"}
+{"type":"server-stopped","reason":"idle timeout"}
