@@ -33,6 +33,7 @@ export interface ProtocolYield {
   name: string;
   paraId: number;
   protocol: string;
+  protocolLabel: string;
   apyPercent: number;
   tvlUsd: number;
   fetchedAt: string;
@@ -42,6 +43,7 @@ export interface ProtocolYield {
 export interface BifrostYield {
   name: string;
   protocol: string;
+  protocolLabel: string;
   category: "SLP" | "DEX" | "Farming" | "SALP";
   apyPercent: number;
   tvlUsd: number;

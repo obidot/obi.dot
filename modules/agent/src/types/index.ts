@@ -515,6 +515,8 @@ export interface ProtocolYield {
   paraId: number;
   /** Protocol contract/address for exposure tracking. */
   protocol: Address;
+  /** Human-readable display name for the protocol. */
+  protocolLabel: string;
   /** Current annual percentage yield (e.g. 8.5 = 8.5%). */
   apyPercent: number;
   /** Total value locked in USD (informational). */

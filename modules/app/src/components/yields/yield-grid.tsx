@@ -245,8 +245,9 @@ export function YieldGrid({ yields, bifrostYields }: YieldGridProps) {
           <tbody>
             {combined.map((item) => {
               const y = item.yield_;
-              const initials = y.protocol.slice(0, 2).toUpperCase();
-              const colors = protocolColor(y.protocol);
+              const displayLabel = y.protocolLabel ?? y.protocol;
+              const initials = displayLabel.slice(0, 2).toUpperCase();
+              const colors = protocolColor(displayLabel);
               const isHighApr = y.apyPercent >= 10;
 
               return (
@@ -263,7 +264,7 @@ export function YieldGrid({ yields, bifrostYields }: YieldGridProps) {
                         {initials}
                       </span>
                       <span className="text-text-secondary font-sans text-[12px] truncate max-w-[120px]">
-                        {y.protocol}
+                        {displayLabel}
                       </span>
                     </div>
                   </td>

@@ -18,6 +18,7 @@ export function registerYieldRoutes(
         data: yields.map((y) => ({
           name: y.name,
           protocol: y.protocol,
+          protocolLabel: y.protocolLabel,
           paraId: y.paraId,
           apyPercent: y.apyPercent,
           tvlUsd: y.tvlUsd,
@@ -40,6 +41,7 @@ export function registerYieldRoutes(
         data: bifrostYields.map((y) => ({
           name: y.name,
           protocol: y.protocol,
+          protocolLabel: y.protocolLabel,
           category: y.category,
           apyPercent: y.apyPercent,
           tvlUsd: y.tvlUsd,
