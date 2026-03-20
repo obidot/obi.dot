@@ -4,6 +4,7 @@ import type { AgentDecision } from "@/types";
 import { formatRelativeTime, formatTokenAmount, cn } from "@/lib/format";
 import {
   ArrowUpRight,
+  ArrowLeftRight,
   PauseCircle,
   RefreshCcw,
   Droplets,
@@ -32,6 +33,12 @@ const ACTION_CONFIG: Record<
     color: "text-accent",
     pillClass: "bg-accent/10 text-accent",
     label: "Rebalance",
+  },
+  LOCAL_SWAP: {
+    icon: ArrowLeftRight,
+    color: "text-accent",
+    pillClass: "bg-accent/10 text-accent",
+    label: "Local Swap",
   },
   NO_ACTION: {
     icon: PauseCircle,

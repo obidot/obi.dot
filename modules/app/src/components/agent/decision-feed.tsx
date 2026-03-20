@@ -2,12 +2,25 @@
 
 import type { AgentDecision } from "@/types";
 import { DecisionCard } from "@/components/agent/decision-card";
-import { Terminal } from "lucide-react";
+import { Terminal, RefreshCw } from "lucide-react";
+import { cn } from "@/lib/format";
+
+function timeAgo(ms: number): string {
+  const s = Math.floor((Date.now() - ms) / 1000);
+  if (s < 60) return `${s}s ago`;
+  const m = Math.floor(s / 60);
+  if (m < 60) return `${m}m ago`;
+  return `${Math.floor(m / 60)}h ago`;
+}
 
 export function DecisionFeed({
   decisions,
+  refetch = () => {},
+  isRefetching = false,
 }: {
   decisions: AgentDecision[];
+  refetch?: () => void;
+  isRefetching?: boolean;
 }) {
   if (decisions.length === 0) {
     return (
@@ -35,9 +48,25 @@ export function DecisionFeed({
             Decision Log
           </h3>
         </div>
-        <span className="pill bg-surface-hover text-text-secondary text-[10px]">
-          {decisions.length} entries
-        </span>
+        <div className="flex items-center gap-2">
+          <span className="font-mono text-[10px] text-text-muted">
+            {decisions.length > 0
+              ? `Updated ${timeAgo(decisions[decisions.length - 1].timestamp)}`
+              : "No data yet"}
+          </span>
+          <span className="pill bg-surface-hover text-text-secondary text-[10px]">
+            {decisions.length} entries
+          </span>
+          <button
+            type="button"
+            onClick={refetch}
+            disabled={isRefetching}
+            className="btn-ghost p-1"
+            aria-label="Refresh decisions"
+          >
+            <RefreshCw className={cn("h-3 w-3", isRefetching && "animate-spin")} />
+          </button>
+        </div>
       </div>
 
       {/* Decision list — terminal style */}
