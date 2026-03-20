@@ -16,6 +16,7 @@ import { SYSTEM_PROMPT } from "./systemPrompt.js";
 import { aiDecisionSchema } from "../types/index.js";
 import type { MarketSnapshot } from "../types/index.js";
 import { loopLog, agentLog } from "../utils/logger.js";
+import { strategyStore } from "../services/strategy-store.service.js";
 
 // ─────────────────────────────────────────────────────────────────────────────
 //  Autonomous Loop — The "Brain"
@@ -26,7 +27,7 @@ import { loopLog, agentLog } from "../utils/logger.js";
  *
  * Architecture:
  *   1. Initialize ObiKit SDK + inject custom tools via `addTool()`
- *   2. Initialize LLM (GPT-4o) with tool bindings
+ *   2. Initialize LLM (GPT-5-mini) with tool bindings
  *   3. Run polling loop:  Perception → Reasoning → Execution → Sleep
  *
  * The loop is fault-tolerant: any error in a cycle is caught, logged,
@@ -307,6 +308,30 @@ export class AutonomousLoop {
     const userMessage = this.buildUserMessage(snapshot);
     const decision = await this.invokeLlm(userMessage);
 
+    // ── Record decision (always, even NO_DECISION) ──────────────────────
+    const allYields = [...yields, ...(bifrostYields ?? [])];
+    const topYield = allYields.reduce(
+      (best, y) => (y.apyPercent > (best?.apyPercent ?? -1) ? y : best),
+      allYields[0] as (typeof allYields)[0] | undefined,
+    );
+
+    try {
+      strategyStore.addDecision({
+        cycle: this.cycleCount,
+        action: decision?.action ?? "NO_DECISION",
+        reasoning: decision?.reasoning ?? "LLM returned no actionable decision",
+        timestamp: Date.now(),
+        snapshot: {
+          totalAssets: vaultState.totalAssets.toString(),
+          idleBalance: vaultState.idleBalance.toString(),
+          topYieldApy: topYield?.apyPercent.toFixed(2) ?? "0.00",
+          topYieldProtocol: topYield?.name ?? "unknown",
+        },
+      });
+    } catch (err) {
+      loopLog.warn({ err }, "Failed to record agent decision — continuing cycle");
+    }
+
     if (!decision) {
       loopLog.warn("LLM returned no actionable decision");
       return;
@@ -326,36 +351,36 @@ export class AutonomousLoop {
         action: decision.action,
         ...(decision.action === "REALLOCATE"
           ? {
-              targetParachain: decision.targetParachain,
-              amount: decision.amount,
-              maxSlippageBps: decision.maxSlippageBps,
-            }
+            targetParachain: decision.targetParachain,
+            amount: decision.amount,
+            maxSlippageBps: decision.maxSlippageBps,
+          }
           : decision.action === "BIFROST_STRATEGY"
             ? {
-                strategyType: decision.strategyType,
-                amount: decision.amount,
-                currencyIn: decision.currencyIn,
-              }
+              strategyType: decision.strategyType,
+              amount: decision.amount,
+              currencyIn: decision.currencyIn,
+            }
             : decision.action === "CROSS_CHAIN_REBALANCE"
               ? {
-                  targetChain: decision.targetChain,
-                  direction: decision.direction,
-                  amount: decision.amount,
-                }
+                targetChain: decision.targetChain,
+                direction: decision.direction,
+                amount: decision.amount,
+              }
               : decision.action === "LOCAL_SWAP"
                 ? {
-                    poolType: decision.poolType,
-                    tokenIn: decision.tokenIn,
-                    tokenOut: decision.tokenOut,
-                    amount: decision.amount,
-                  }
+                  poolType: decision.poolType,
+                  tokenIn: decision.tokenIn,
+                  tokenOut: decision.tokenOut,
+                  amount: decision.amount,
+                }
                 : decision.action === "UNIVERSAL_INTENT"
                   ? {
-                      tokenIn: decision.tokenIn,
-                      tokenOut: decision.tokenOut,
-                      destType: decision.destType,
-                      amount: decision.amount,
-                    }
+                    tokenIn: decision.tokenIn,
+                    tokenOut: decision.tokenOut,
+                    destType: decision.destType,
+                    amount: decision.amount,
+                  }
                   : {}),
         reasoning: decision.reasoning,
       },
@@ -517,13 +542,13 @@ export class AutonomousLoop {
       "",
       ...(CHAIN_ID === 420_420_417
         ? [
-            "⚠️ TESTNET ENVIRONMENT (Polkadot Hub TestNet, chain 420420417):",
-            "  - XCM channels to Bifrost, Hydration, and other parachains are NOT active.",
-            "  - BIFROST_STRATEGY, REALLOCATE, CROSS_CHAIN_REBALANCE, and UNIVERSAL_INTENT will revert.",
-            "  - Only NO_ACTION and LOCAL_SWAP are executable on this network.",
-            "  - Choose NO_ACTION unless a LOCAL_SWAP opportunity is clearly profitable.",
-            "",
-          ]
+          "⚠️ TESTNET ENVIRONMENT (Polkadot Hub TestNet, chain 420420417):",
+          "  - XCM channels to Bifrost, Hydration, and other parachains are NOT active.",
+          "  - BIFROST_STRATEGY, REALLOCATE, CROSS_CHAIN_REBALANCE, and UNIVERSAL_INTENT will revert.",
+          "  - Only NO_ACTION and LOCAL_SWAP are executable on this network.",
+          "  - Choose NO_ACTION unless a LOCAL_SWAP opportunity is clearly profitable.",
+          "",
+        ]
         : []),
       "Based on this data, produce your decision as a JSON object.",
     ].join("\n");
