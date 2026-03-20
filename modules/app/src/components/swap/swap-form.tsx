@@ -4,6 +4,8 @@ import { useState, useMemo, useCallback, useEffect } from "react";
 import {
   useAccount,
   useBalance,
+  useChainId,
+  useReadContract,
   useWriteContract,
   useWaitForTransactionReceipt,
 } from "wagmi";
@@ -15,6 +17,7 @@ import {
   ZERO_ADDRESS,
   ZERO_BYTES32,
   CHAIN,
+  GAS_LIMITS,
 } from "@/lib/constants";
 import { SWAP_ROUTER_ABI, ERC20_APPROVE_ABI } from "@/lib/abi";
 import { useSwapQuote, useSwapRoutes } from "@/hooks/use-swap";
@@ -28,8 +31,9 @@ import {
   TriangleAlert,
 } from "lucide-react";
 import type { SwapToken, SwapRouteResult, SwapStep, SplitRouteSelection } from "@/types";
-import { PoolType, POOL_TYPE_LABELS } from "@/types";
+import { PoolType, POOL_TYPE_LABELS, resolvePoolType } from "@/types";
 import { TOKENS } from "@/shared/trade/swap";
+import { polkadotHubTestnet } from "@/lib/chains";
 import TokenPicker from "./token-picker";
 
 interface SwapFormProps {
@@ -65,6 +69,8 @@ export default function SwapForm({
 
   // ── Wallet ─────────────────────────────────────────────────────────────
   const { address, isConnected } = useAccount();
+  const chainId = useChainId();
+  const isTestnet = chainId === polkadotHubTestnet.id;
   const { data: balanceInData } = useBalance({
     address,
     token: tokenIn.address as Address,
@@ -88,6 +94,24 @@ export default function SwapForm({
 
   // ── Split mode detection ────────────────────────────────────────────────
   const isSplitMode = !!selectedSplitRoutes && selectedSplitRoutes.length === 2;
+  const selectedRouteIsLocal = selectedRoute?.routeType === "local";
+  const selectedRouteHasHops = (selectedRoute?.hops.length ?? 0) > 0;
+  const selectedRouteIsLive = selectedRoute?.status === "live";
+  const selectedRouteExecutable =
+    !!selectedRoute &&
+    selectedRouteIsLocal &&
+    selectedRouteHasHops &&
+    selectedRouteIsLive;
+  const splitRoutesExecutable =
+    !!isSplitMode &&
+    !!selectedSplitRoutes &&
+    selectedSplitRoutes.length === 2 &&
+    selectedSplitRoutes.every(
+      (s) =>
+        s.route.routeType === "local" &&
+        s.route.status === "live" &&
+        s.route.hops.length > 0,
+    );
 
   // ── Quote ──────────────────────────────────────────────────────────────
   const parsedAmountIn = useMemo(() => {
@@ -134,12 +158,27 @@ export default function SwapForm({
     setImpactConfirmed(false);
   }, [selectedRoute?.id, selectedSplitRoutes?.length]);
 
+  // ── Effective output amount — prefer route finder (accurate) over on-chain quote ──
+  // The on-chain quoter can return placeholder values on testnet.
+  const effectiveAmountOut = useMemo(() => {
+    if (selectedRoute) return selectedRoute.amountOut;
+    return quote?.amountOut ?? null;
+  }, [selectedRoute, quote]);
+
+  // Merged quote for display and slippage math — same source/fee as on-chain,
+  // but amountOut replaced by the accurate route-finder value.
+  const displayQuote = useMemo(() => {
+    if (!quote) return undefined;
+    if (!effectiveAmountOut) return quote;
+    return { ...quote, amountOut: effectiveAmountOut };
+  }, [quote, effectiveAmountOut]);
+
   // ── Min output (with slippage) ──────────────────────────────────────────
   const minAmountOut = useMemo(() => {
-    if (!quote) return BigInt(0);
-    const out = BigInt(quote.amountOut);
+    if (!effectiveAmountOut) return BigInt(0);
+    const out = BigInt(effectiveAmountOut);
     return out - (out * BigInt(slippageBps)) / BigInt(10_000);
-  }, [quote, slippageBps]);
+  }, [effectiveAmountOut, slippageBps]);
 
   // ── Split min output ────────────────────────────────────────────────────
   const splitMinAmountOut = useMemo(() => {
@@ -151,6 +190,24 @@ export default function SwapForm({
     }, BigInt(0));
     return totalOut - (totalOut * BigInt(slippageBps)) / BigInt(10_000);
   }, [isSplitMode, selectedSplitRoutes, slippageBps]);
+
+  // ── Allowance check ─────────────────────────────────────────────────────
+  const { data: currentAllowance, refetch: refetchAllowance } = useReadContract({
+    address: tokenIn.address as Address,
+    abi: ERC20_APPROVE_ABI,
+    functionName: "allowance",
+    args: [address as Address, routerAddress as Address],
+    query: {
+      enabled: isConnected && !!address && !!parsedAmountIn,
+      staleTime: 5_000,
+    },
+  });
+
+  const needsApproval = useMemo(() => {
+    if (!parsedAmountIn) return false;
+    if (currentAllowance === undefined) return true;
+    return (currentAllowance as bigint) < BigInt(parsedAmountIn);
+  }, [parsedAmountIn, currentAllowance]);
 
   // ── Token approval ──────────────────────────────────────────────────────
   const {
@@ -174,90 +231,100 @@ export default function SwapForm({
   const { isLoading: swapConfirming, isSuccess: swapConfirmed } =
     useWaitForTransactionReceipt({ hash: swapTxHash });
 
-  // Step progression: approval confirmed → fire swap
-  useEffect(() => {
-    if (
-      swapStep === "approve-confirming" &&
-      approveConfirmed &&
-      quote &&
-      parsedAmountIn &&
-      address
-    ) {
-      setSwapStep("swapping");
-      const deadline = BigInt(Math.floor(Date.now() / 1000) + 300);
+  // Extracted swap writer — called directly (sufficient allowance) or after approval
+  const executeSwap = useCallback(() => {
+    if (!quote || !parsedAmountIn || !address) return;
+    if (isSplitMode && !splitRoutesExecutable) return;
+    if (!isSplitMode && !selectedRouteExecutable) return;
+    const deadline = BigInt(Math.floor(Date.now() / 1000) + 300);
 
-      if (isSplitMode && selectedSplitRoutes && selectedSplitRoutes.length === 2) {
-        // Build SplitLeg[] from selected routes
-        const legs = selectedSplitRoutes.map((s) => ({
-          route: {
-            poolType: s.route.hops[0] ? 3 : 0, // Custom (V2) as default
-            pool: (s.route.hops[0]?.pool ?? ZERO_ADDRESS) as Address,
-            tokenIn: tokenIn.address as Address,
-            tokenOut: tokenOut.address as Address,
-            feeBps: BigInt(s.route.hops[0]?.feeBps ?? 30),
-            data: ZERO_BYTES32,
-          },
-          weight: BigInt(s.weight),
+    if (isSplitMode && selectedSplitRoutes && selectedSplitRoutes.length === 2) {
+      const legs = selectedSplitRoutes.map((s) => ({
+        route: {
+          poolType: s.route.hops[0] ? 3 : 0,
+          pool: (s.route.hops[0]?.pool ?? ZERO_ADDRESS) as Address,
+          tokenIn: tokenIn.address as Address,
+          tokenOut: tokenOut.address as Address,
+          feeBps: BigInt(s.route.hops[0]?.feeBps ?? 30),
+          data: ZERO_BYTES32,
+        },
+        weight: BigInt(s.weight),
+      }));
+      writeSwap({
+        address: routerAddress as Address,
+        abi: SWAP_ROUTER_ABI,
+        functionName: "swapSplit",
+        gas: GAS_LIMITS.SWAP,
+        args: [
+          legs,
+          tokenIn.address as Address,
+          tokenOut.address as Address,
+          BigInt(parsedAmountIn),
+          splitMinAmountOut,
+          address,
+          deadline,
+        ],
+      });
+    } else {
+      if (!selectedRoute) return;
+
+      const isMultiHop = selectedRoute.hops.length > 1;
+      const isSingleHopSelected = selectedRoute.hops.length === 1;
+
+      if (isMultiHop && selectedRoute) {
+        const routeHops = selectedRoute.hops.map((hop) => ({
+          poolType: (resolvePoolType(hop.poolType) ?? PoolType.Custom) as unknown as number,
+          pool: hop.pool as Address,
+          tokenIn: hop.tokenIn as Address,
+          tokenOut: hop.tokenOut as Address,
+          feeBps: BigInt(hop.feeBps),
+          data: ZERO_BYTES32,
         }));
-
         writeSwap({
           address: routerAddress as Address,
           abi: SWAP_ROUTER_ABI,
-          functionName: "swapSplit",
+          functionName: "swapMultiHop",
+          gas: GAS_LIMITS.SWAP,
+          args: [routeHops, BigInt(parsedAmountIn), minAmountOut, address, deadline],
+        });
+      } else if (isSingleHopSelected && selectedRoute) {
+        // Single-hop selected route — use the route's pool/poolType (not the on-chain quoter)
+        const hop = selectedRoute.hops[0];
+        const poolTypeNum = resolvePoolType(hop.poolType) ?? PoolType.Custom;
+        writeSwap({
+          address: routerAddress as Address,
+          abi: SWAP_ROUTER_ABI,
+          functionName: "swapFlat",
+          gas: GAS_LIMITS.SWAP,
           args: [
-            legs,
-            tokenIn.address as Address,
-            tokenOut.address as Address,
+            poolTypeNum,
+            hop.pool as Address,
+            hop.tokenIn as Address,
+            hop.tokenOut as Address,
+            BigInt(hop.feeBps),
+            ZERO_BYTES32,
             BigInt(parsedAmountIn),
-            splitMinAmountOut,
+            minAmountOut,
             address,
             deadline,
           ],
         });
-      } else {
-        const isMultiHop = selectedRoute && selectedRoute.hops.length > 1;
-
-        if (isMultiHop && selectedRoute) {
-          const routeHops = selectedRoute.hops.map((hop) => ({
-            poolType: Number(hop.poolType) as unknown as number,
-            pool: hop.pool as Address,
-            tokenIn: hop.tokenIn as Address,
-            tokenOut: hop.tokenOut as Address,
-            feeBps: BigInt(hop.feeBps),
-            data: ZERO_BYTES32,
-          }));
-          writeSwap({
-            address: routerAddress as Address,
-            abi: SWAP_ROUTER_ABI,
-            functionName: "swapMultiHop",
-            args: [routeHops, BigInt(parsedAmountIn), minAmountOut, address, deadline],
-          });
-        } else {
-          writeSwap({
-            address: routerAddress as Address,
-            abi: SWAP_ROUTER_ABI,
-            functionName: "swapFlat",
-            args: [
-              quote.source,
-              quote.pool as Address,
-              tokenIn.address as Address,
-              tokenOut.address as Address,
-              BigInt(quote.feeBps),
-              ZERO_BYTES32,
-              BigInt(parsedAmountIn),
-              minAmountOut,
-              address,
-              deadline,
-            ],
-          });
-        }
       }
     }
   }, [
-    swapStep, approveConfirmed, quote, parsedAmountIn, address,
-    routerAddress, tokenIn, tokenOut, minAmountOut, splitMinAmountOut,
-    selectedRoute, isSplitMode, selectedSplitRoutes, writeSwap,
+    quote, parsedAmountIn, address, routerAddress, tokenIn, tokenOut,
+    minAmountOut, splitMinAmountOut, selectedRoute, isSplitMode,
+    selectedSplitRoutes, writeSwap, selectedRouteExecutable, splitRoutesExecutable,
   ]);
+
+  // Step progression: approval confirmed → fire swap
+  useEffect(() => {
+    if (swapStep === "approve-confirming" && approveConfirmed && quote && parsedAmountIn && address) {
+      void refetchAllowance();
+      setSwapStep("swapping");
+      executeSwap();
+    }
+  }, [swapStep, approveConfirmed, quote, parsedAmountIn, address, executeSwap, refetchAllowance]);
 
   useEffect(() => {
     if (swapStep === "swapping" && swapWalletPending) setSwapStep("swap-confirming");
@@ -295,14 +362,26 @@ export default function SwapForm({
   const handleSwap = useCallback(() => {
     if (!routerReady || !quote || !parsedAmountIn || !address) return;
     if (swapStep !== "idle" && swapStep !== "done") return;
-    setSwapStep("approving");
-    writeApprove({
-      address: tokenIn.address as Address,
-      abi: ERC20_APPROVE_ABI,
-      functionName: "approve",
-      args: [routerAddress as Address, BigInt(parsedAmountIn)],
-    });
-  }, [routerReady, quote, parsedAmountIn, address, swapStep, writeApprove, tokenIn, routerAddress]);
+    if (isSplitMode && !splitRoutesExecutable) return;
+    if (!isSplitMode && !selectedRouteExecutable) return;
+    if (highImpact && !impactConfirmed) return; // safety: must confirm via button click first
+
+    if (!needsApproval) {
+      // Allowance already covers the amount — skip to swap
+      setSwapStep("swapping");
+      executeSwap();
+    } else {
+      // Need to approve first
+      setSwapStep("approving");
+      writeApprove({
+        address: tokenIn.address as Address,
+        abi: ERC20_APPROVE_ABI,
+        functionName: "approve",
+        gas: GAS_LIMITS.APPROVE,
+        args: [routerAddress as Address, BigInt(parsedAmountIn)],
+      });
+    }
+  }, [routerReady, quote, parsedAmountIn, address, swapStep, highImpact, impactConfirmed, needsApproval, executeSwap, writeApprove, tokenIn, routerAddress, isSplitMode, splitRoutesExecutable, selectedRouteExecutable]);
 
   useEffect(() => {
     if (swapStep === "approving" && approveWalletPending) setSwapStep("approve-confirming");
@@ -323,14 +402,20 @@ export default function SwapForm({
       ? `${formatTokenAmount(balanceOutData.value.toString(), balanceOutData.decimals, 4)} ${tokenOut.symbol}`
       : null;
 
-  const amountOutDisplay = quote
-    ? formatUnits(BigInt(quote.amountOut), tokenOut.decimals)
+  const amountOutDisplay = effectiveAmountOut
+    ? formatUnits(BigInt(effectiveAmountOut), tokenOut.decimals)
     : "";
 
   const minOutDisplay =
     minAmountOut > BigInt(0) ? formatUnits(minAmountOut, tokenOut.decimals) : "";
 
-  const sourceLabel = quote ? POOL_TYPE_LABELS[quote.source as PoolType] : "";
+  // On testnet the on-chain quoter returns Hydration as best, which is misleading.
+  // Prefer the selected route's pool label; fall back to quote source only on mainnet.
+  const sourceLabel = selectedRoute
+    ? (selectedRoute.hops[0]?.poolLabel ?? "")
+    : !isTestnet && quote
+      ? POOL_TYPE_LABELS[quote.source as PoolType]
+      : "";
   const showNotDeployed = (routerAddress as string) === ZERO_ADDRESS;
 
   const explorerBase = CHAIN.blockExplorer;
@@ -340,21 +425,30 @@ export default function SwapForm({
     if (!isConnected) return "CONNECT WALLET";
     if (!routerReady) return "ROUTER UNAVAILABLE";
     if (!parsedAmountIn) return "ENTER AMOUNT";
-    if (!quote) return "FETCHING QUOTE...";
+    if (!quote) return "FETCHING QUOTE…";
+    if (!selectedRoute && !isSplitMode) return "SELECT A ROUTE";
+    if (selectedRoute && !selectedRouteIsLocal) return "USE CROSS-CHAIN TAB";
+    if (selectedRoute && !selectedRouteHasHops) return "ROUTE NOT EXECUTABLE";
+    if (selectedRoute?.status === "mainnet_only") return "MAINNET ONLY";
+    if (selectedRoute?.status === "coming_soon") return "COMING SOON";
     if (highImpact && !impactConfirmed) return "CONFIRM HIGH IMPACT";
     switch (swapStep) {
-      case "approving": return "APPROVING...";
-      case "approve-confirming": return "CONFIRMING APPROVAL...";
-      case "swapping": return "SWAPPING...";
-      case "swap-confirming": return "CONFIRMING SWAP...";
+      case "approving": return "APPROVING…";
+      case "approve-confirming": return "CONFIRMING APPROVAL…";
+      case "swapping": return "SWAPPING…";
+      case "swap-confirming": return "CONFIRMING SWAP…";
       case "done": return "SWAP AGAIN";
       default: {
+        if (needsApproval) return `APPROVE ${tokenIn.symbol}`;
         if (isSplitMode) {
+          if (!selectedSplitRoutes || selectedSplitRoutes.length !== 2) {
+            return "SELECT 2 SPLIT ROUTES";
+          }
           const w0 = selectedSplitRoutes![0].weight / 100;
           const w1 = selectedSplitRoutes![1].weight / 100;
           return `SPLIT SWAP ${w0}% / ${w1}%`;
         }
-        const isMultiHop = selectedRoute && selectedRoute.hops.length > 1;
+        const isMultiHop = selectedRouteExecutable && selectedRoute.hops.length > 1;
         const suffix = isMultiHop ? ` (${selectedRoute.hops.length}-HOP)` : "";
         return `SWAP ${tokenIn.symbol} \u2192 ${tokenOut.symbol}${suffix}`;
       }
@@ -365,15 +459,15 @@ export default function SwapForm({
     isConnected &&
     !!parsedAmountIn &&
     !!quote &&
+    (selectedRouteExecutable || splitRoutesExecutable) &&
     !isExecuting &&
-    routerReady &&
-    (!highImpact || impactConfirmed);
+    routerReady;
 
   return (
     <div className="p-5 space-y-4">
       {/* ── Slippage selector ───────────────────────────────────────────── */}
       <div className="flex items-center justify-between">
-        <span className="text-[13px] text-text-muted">Max Slippage</span>
+        <span className="text-[14px] text-text-muted">Max Slippage</span>
         <div className="flex gap-1">
           {SLIPPAGE_OPTIONS.map(({ label, bps }) => (
             <button
@@ -381,7 +475,7 @@ export default function SwapForm({
               type="button"
               onClick={() => setSlippageBps(bps)}
               className={cn(
-                "px-2.5 py-1 rounded-none text-[13px] font-mono transition-colors border",
+                "px-2.5 py-1 rounded-none text-[14px] font-mono transition-colors border",
                 slippageBps === bps
                   ? "bg-primary/15 text-primary border-primary/30"
                   : "btn-ghost border-transparent",
@@ -397,7 +491,7 @@ export default function SwapForm({
       {showNotDeployed && (
         <div className="flex items-start gap-2 rounded-none border border-warning/30 bg-warning/5 px-3 py-2.5">
           <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-warning mt-0.5" />
-          <p className="text-[13px] text-text-secondary">
+          <p className="text-[14px] text-text-secondary">
             SwapRouter is not yet deployed. Quotes are unavailable until deployment.
           </p>
         </div>
@@ -426,7 +520,7 @@ export default function SwapForm({
               aria-label="Amount to swap"
               className="input-trading text-left text-[28px] font-bold tracking-tight w-full bg-transparent border-0 focus:ring-0 p-0"
             />
-            <p className="text-left text-[13px] text-text-muted mt-1 font-mono">
+            <p className="text-left text-[14px] text-text-muted mt-1 font-mono">
               {amountIn && Number(amountIn) > 0 ? "≈ market value" : ""}
             </p>
           </div>
@@ -436,7 +530,7 @@ export default function SwapForm({
         <div className="flex gap-1.5 mt-4">
           {[{ label: "25%", frac: 0.25 }, { label: "50%", frac: 0.5 }, { label: "75%", frac: 0.75 }, { label: "MAX", frac: 1.0 }].map(
             ({ label, frac }) => (
-              <button key={label} type="button" onClick={() => handlePct(frac)} className="btn-ghost flex-1 py-1 text-[13px] font-mono">
+              <button key={label} type="button" onClick={() => handlePct(frac)} className="btn-ghost flex-1 py-1 text-[14px] font-mono">
                 {label}
               </button>
             ),
@@ -452,7 +546,7 @@ export default function SwapForm({
           className={cn(
             "rounded-none border border-border bg-surface p-2",
             "hover:border-primary hover:bg-primary/10 hover:text-primary",
-            "transition-all duration-150",
+            "transition-colors duration-150",
           )}
           aria-label="Flip tokens"
         >
@@ -472,7 +566,7 @@ export default function SwapForm({
               </div>
             )}
             {sourceLabel && !displayBalanceOut && (
-              <span className="font-mono text-[13px] text-accent">via {sourceLabel}</span>
+              <span className="font-mono text-[14px] text-accent">via {sourceLabel}</span>
             )}
           </div>
         </div>
@@ -482,26 +576,26 @@ export default function SwapForm({
             <input
               type="text"
               readOnly
-              value={quoteLoading ? "..." : amountOutDisplay}
+              value={quoteLoading ? "…" : amountOutDisplay}
               placeholder="0.00"
               aria-label="Amount to receive"
               className="input-trading text-left text-[28px] font-bold tracking-tight w-full bg-transparent border-0 focus:ring-0 p-0 text-text-secondary"
             />
-            <p className="text-left text-[13px] text-text-muted mt-1 font-mono">
+            <p className="text-left text-[14px] text-text-muted mt-1 font-mono">
               {amountOutDisplay && Number(amountOutDisplay) > 0 ? "≈ market value" : ""}
             </p>
           </div>
           <TokenPicker selectedIdx={tokenOutIdx} onSelect={setTokenOutIdx} disabledIdx={tokenInIdx} />
         </div>
         {sourceLabel && displayBalanceOut && (
-          <p className="text-[13px] text-text-muted mt-3 font-mono">via {sourceLabel}</p>
+          <p className="text-[14px] text-text-muted mt-3 font-mono">via {sourceLabel}</p>
         )}
       </div>
 
       {/* Quote details */}
-      {quote && parsedAmountIn && !isSplitMode && (
+      {displayQuote && parsedAmountIn && !isSplitMode && (
         <QuoteDisplay
-          quote={quote}
+          quote={displayQuote}
           tokenIn={tokenIn}
           tokenOut={tokenOut}
           slippageBps={slippageBps}
@@ -513,11 +607,11 @@ export default function SwapForm({
       {/* Split mode summary */}
       {isSplitMode && selectedSplitRoutes && (
         <div className="rounded-none border border-primary/20 bg-primary/5 px-3 py-2.5 space-y-1.5">
-          <p className="text-[13px] text-primary font-semibold">Split Route</p>
+          <p className="text-[14px] text-primary font-semibold">Split Route</p>
           {selectedSplitRoutes.map((s) => (
             <div key={s.route.id} className="flex items-center justify-between">
-              <span className="text-[12px] text-text-secondary font-mono">{s.route.id}</span>
-              <span className="text-[12px] text-primary font-mono font-semibold">{(s.weight / 100).toFixed(0)}%</span>
+              <span className="text-[13px] text-text-secondary font-mono">{s.route.id}</span>
+              <span className="text-[13px] text-primary font-mono font-semibold">{(s.weight / 100).toFixed(0)}%</span>
             </div>
           ))}
         </div>
@@ -529,8 +623,8 @@ export default function SwapForm({
           <div className="flex items-start gap-2 mb-2">
             <TriangleAlert className="h-4 w-4 text-danger mt-0.5 shrink-0" />
             <div>
-              <p className="text-[13px] text-danger font-semibold">High Price Impact</p>
-              <p className="text-[12px] text-text-secondary mt-0.5">
+              <p className="text-[14px] text-danger font-semibold">High Price Impact</p>
+              <p className="text-[13px] text-text-secondary mt-0.5">
                 This swap has {(activeImpactBps / 100).toFixed(2)}% price impact. You may receive significantly less than expected.
               </p>
             </div>
@@ -539,7 +633,7 @@ export default function SwapForm({
             type="button"
             onClick={() => setImpactConfirmed((v) => !v)}
             className={cn(
-              "flex items-center gap-2 text-[12px] font-mono border px-2 py-1 transition-colors",
+              "flex items-center gap-2 text-[13px] font-mono border px-2 py-1 transition-colors",
               impactConfirmed
                 ? "border-danger bg-danger/20 text-danger"
                 : "border-danger/40 text-text-muted hover:border-danger hover:text-danger",
@@ -556,19 +650,34 @@ export default function SwapForm({
       {/* Quote error */}
       {quoteError && parsedAmountIn && (
         <div className="text-center">
-          <p className="text-[13px] text-danger">Quote unavailable — {quoteError.message.slice(0, 80)}</p>
+          <p className="text-[14px] text-danger">Quote unavailable — {quoteError.message.slice(0, 80)}</p>
+        </div>
+      )}
+
+      {/* Non-executable selected route hint */}
+      {selectedRoute && !selectedRouteExecutable && !isSplitMode && (
+        <div className="rounded-none border border-warning/30 bg-warning/5 px-3 py-2.5">
+          <p className="text-[13px] leading-relaxed text-text-secondary">
+            {selectedRoute.routeType !== "local"
+              ? "Selected route is cross-chain. Use the Cross-chain tab to execute XCM/bridge routes."
+              : selectedRoute.hops.length === 0
+                ? "Selected route is informational only and cannot be executed on this tab."
+                : selectedRoute.status === "mainnet_only"
+                  ? "Selected route is available on mainnet only."
+                  : "Selected route is not executable right now."}
+          </p>
         </div>
       )}
 
       {/* Swap confirmed with block explorer link */}
       {swapStep === "done" && swapTxHash && (
         <div className="rounded-none border border-primary/30 bg-primary/5 px-3 py-2.5">
-          <p className="text-[13px] text-primary font-semibold">Swap confirmed!</p>
+          <p className="text-[14px] text-primary font-semibold">Swap confirmed!</p>
           <a
             href={`${explorerBase}/tx/${swapTxHash}`}
             target="_blank"
             rel="noopener noreferrer"
-            className="flex items-center gap-1 text-[12px] text-text-muted hover:text-primary font-mono mt-0.5 break-all transition-colors"
+            className="flex items-center gap-1 text-[13px] text-text-muted hover:text-primary font-mono mt-0.5 break-all transition-colors"
           >
             <span className="truncate">{swapTxHash}</span>
             <ExternalLink className="h-3 w-3 shrink-0" />
@@ -579,12 +688,12 @@ export default function SwapForm({
       {/* Approval tx link */}
       {(swapStep === "approve-confirming" || swapStep === "swapping") && approveTxHash && (
         <div className="rounded-none border border-border px-3 py-2">
-          <p className="text-[12px] text-text-muted">Approval tx:</p>
+          <p className="text-[13px] text-text-muted">Approval tx:</p>
           <a
             href={`${explorerBase}/tx/${approveTxHash}`}
             target="_blank"
             rel="noopener noreferrer"
-            className="flex items-center gap-1 text-[12px] text-text-muted hover:text-primary font-mono break-all transition-colors"
+            className="flex items-center gap-1 text-[13px] text-text-muted hover:text-primary font-mono break-all transition-colors"
           >
             <span className="truncate">{approveTxHash}</span>
             <ExternalLink className="h-3 w-3 shrink-0" />
@@ -595,7 +704,7 @@ export default function SwapForm({
       {/* Approval / swap errors */}
       {(approveError || swapError) && (
         <div className="rounded-none border border-danger/30 bg-danger/5 px-3 py-2.5">
-          <p className="text-[13px] text-danger">
+          <p className="text-[14px] text-danger">
             {approveError
               ? `Approval failed — ${approveError.message.slice(0, 100)}`
               : `Swap failed — ${swapError?.message.slice(0, 100)}`}
@@ -606,7 +715,7 @@ export default function SwapForm({
       {/* Multi-hop route hint */}
       {selectedRoute && selectedRoute.hops.length > 1 && !isSplitMode && (
         <div className="rounded-none border border-primary/20 bg-primary/5 px-3 py-2">
-          <p className="text-[13px] text-primary">
+          <p className="text-[14px] text-primary">
             {selectedRoute.hops.length}-hop route via{" "}
             {selectedRoute.hops.map((h) => h.poolLabel).join(" → ")}
           </p>
@@ -628,7 +737,7 @@ export default function SwapForm({
       </button>
 
       {!isConnected && (
-        <p className="text-center text-[12px] text-text-muted">Connect wallet to enable swaps</p>
+        <p className="text-center text-[13px] text-text-muted">Connect wallet to enable swaps</p>
       )}
     </div>
   );

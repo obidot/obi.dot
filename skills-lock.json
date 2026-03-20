@@ -6,6 +6,46 @@
       "sourceType": "github",
       "computedHash": "6160beec9198509690137bf8928414ef851fd230f0a66bc6c85668b746f6f821"
     },
+    "git-atomic-commit": {
+      "source": "chasebuild/agent-skills",
+      "sourceType": "github",
+      "computedHash": "b80a83513dea5148ad8b0c87f245f35c0288ecb3e267bab1640f6ada0c3a36fe"
+    },
+    "git-conventional-commit": {
+      "source": "chasebuild/agent-skills",
+      "sourceType": "github",
+      "computedHash": "ad77aef1f1921230520900f97d6a3dfd91f79abf8bc8fe03feb72a766e279549"
+    },
+    "git-pr-workflow": {
+      "source": "chasebuild/agent-skills",
+      "sourceType": "github",
+      "computedHash": "889dee805c2062b411d3892d5220737620de3ba4ed11a5c61342dbda8cff3e20"
+    },
+    "git-run-checks": {
+      "source": "chasebuild/agent-skills",
+      "sourceType": "github",
+      "computedHash": "0090d8de12c8dbc9522c21b7913cba638019e8cd9346800e717cce63880b7eb9"
+    },
+    "git-workflow-orchestrator": {
+      "source": "chasebuild/agent-skills",
+      "sourceType": "github",
+      "computedHash": "b076e3c3d1bf52f295b90de001471ed04040ca241f4fb7935055ed68e2cb60db"
+    },
+    "vercel-composition-patterns": {
+      "source": "chasebuild/agent-skills",
+      "sourceType": "github",
+      "computedHash": "f98931159fa9c7fed043bcd18a891a46dcf89ababa38df13a4c5b7b30dc0ce07"
+    },
+    "vercel-react-best-practices": {
+      "source": "chasebuild/agent-skills",
+      "sourceType": "github",
+      "computedHash": "afeca00ac2f492d88fdd010e73d91719a5b57c564bb4a73325b0bd77e11323ab"
+    },
+    "web-design-guidelines": {
+      "source": "chasebuild/agent-skills",
+      "sourceType": "github",
+      "computedHash": "a6a44d5498f7e8f68289902f3dedfc6f38ae0cee1e96527c80724cf27f727c2a"
+    },
     "workflow-orchestration-patterns": {
       "source": "wshobson/agents",
       "sourceType": "github",

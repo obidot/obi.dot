@@ -14,12 +14,28 @@ import { registerStrategyRoutes } from "./routes/strategies.js";
 import { registerCrossChainRoutes } from "./routes/crosschain.js";
 import { registerAgentRoutes } from "./routes/agent.js";
 import { registerSwapRoutes } from "./routes/swap.js";
+import { env } from "../config/env.js";
 import { logger } from "../utils/logger.js";
 
 const apiLog = logger.child({ module: "api" });
 
-const API_PORT = Number(process.env["API_PORT"] ?? "3001");
-const API_HOST = process.env["API_HOST"] ?? "0.0.0.0";
+const API_PORT = env.API_PORT;
+const API_HOST = env.API_HOST;
+const API_PORT_MAX_TRIES = env.API_PORT_MAX_TRIES;
+
+interface ListenError extends Error {
+  code?: string;
+}
+
+function isAddressInUseError(error: unknown): error is ListenError {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "code" in error &&
+    typeof (error as { code?: unknown }).code === "string" &&
+    (error as { code: string }).code === "EADDRINUSE"
+  );
+}
 
 export interface ApiDependencies {
   signerService: SignerService;
@@ -87,8 +103,32 @@ export async function startApiServer(deps: ApiDependencies): Promise<void> {
 
   // ── Start ──────────────────────────────────────────────────────────
   try {
-    await app.listen({ port: API_PORT, host: API_HOST });
-    apiLog.info({ port: API_PORT, host: API_HOST }, "API server listening");
+    let listenPort = API_PORT;
+    let attempt = 1;
+
+    while (attempt <= API_PORT_MAX_TRIES) {
+      try {
+        await app.listen({ port: listenPort, host: API_HOST });
+        apiLog.info(
+          { port: listenPort, host: API_HOST, attempts: attempt },
+          "API server listening",
+        );
+        return;
+      } catch (error) {
+        if (!isAddressInUseError(error) || attempt >= API_PORT_MAX_TRIES) {
+          throw error;
+        }
+
+        const nextPort = listenPort + 1;
+        apiLog.warn(
+          { port: listenPort, nextPort, attempt, maxTries: API_PORT_MAX_TRIES },
+          "API port in use — retrying with next port",
+        );
+
+        listenPort = nextPort;
+        attempt += 1;
+      }
+    }
   } catch (error) {
     apiLog.error({ err: error }, "Failed to start API server");
     throw error;

@@ -21,6 +21,9 @@ const teleLog = logger.child({ module: "telegram" });
 /** Maximum LangChain tool-calling iterations per user message. */
 const MAX_ITERATIONS = 5;
 
+/** Maximum conversation turns (human + AI pairs) to retain per user. */
+const MAX_HISTORY_TURNS = 20;
+
 /** Telegram message character limit. */
 const TELEGRAM_CHAR_LIMIT = 4096;
 
@@ -28,43 +31,50 @@ const TELEGRAM_CHAR_LIMIT = 4096;
 const TELEGRAM_SYSTEM_PROMPT = `You are the **Obidot Vault Assistant** — an AI-powered DeFi assistant on Telegram for the Obidot cross-chain vault on Polkadot Hub EVM.
 
 ## Capabilities
-- Deposit / withdraw assets into/from the ERC-4626 vault
+- Deposit assets into the ERC-4626 vault (use execute_deposit tool)
 - Check vault state (idle balance, remote assets, paused, emergency mode)
 - Fetch live yield data from Polkadot DeFi protocols (Hydration, Bifrost)
 - Fetch Bifrost-specific yields (SLP, DEX, Farming, SALP)
 - View cross-chain satellite vault state
-- Execute strategies and Bifrost operations (when authorized)
+- Execute cross-chain strategies and Bifrost operations (when authorized)
 - Show vault performance and oracle status
+- Find best swap routes across UV2 pools (use find_swap_routes tool)
+- Execute direct UV2 swaps from agent wallet (use execute_direct_swap tool)
+- Supported swap pairs: tDOT↔TKB, tDOT↔tUSDC, tDOT↔tETH, tUSDC↔tETH, TKB↔TKA (multi-hop supported)
 
 ## Rules
-1. Always confirm amounts and addresses before executing write operations.
+1. Confirm amounts and addresses with the user ONCE before executing write operations. After the user confirms, IMMEDIATELY call the relevant tool — do not ask again.
 2. Format responses concisely for mobile chat — use bullet points, avoid walls of text.
 3. Use tool results to provide accurate, up-to-date on-chain information.
 4. If a tool returns an error, explain it clearly to the user.
 5. For amounts, show human-readable values (e.g., "1,000 DOT") not raw wei strings.
 6. Never expose private keys or sensitive internal state.
-7. When the vault has no idle balance, clearly inform the user.`;
+7. When the vault has no idle balance, clearly inform the user.
+8. Once the user says "confirm", "yes", "proceed", or "PROCEED", treat that as authorization and execute immediately without asking for further confirmation.
+9. For swap requests: ALWAYS call find_swap_routes first to see available routes and expected output, then confirm with user before calling execute_direct_swap.`;
 
 // ─────────────────────────────────────────────────────────────────────────────
 //  Agent Runner
 // ─────────────────────────────────────────────────────────────────────────────
 
+type ConversationMessage = SystemMessage | HumanMessage | AIMessage | ToolMessage;
+
 interface AgentRunner {
-  run: (userMessage: string) => Promise<string>;
+  run: (userMessage: string, userId: number) => Promise<string>;
 }
 
 /**
- * Creates a LangChain tool-calling agent runner.
+ * Creates a LangChain tool-calling agent runner with per-user conversation history.
  *
- * The runner sends the user message through GPT-4o with bound tools,
- * iterating up to MAX_ITERATIONS until the model produces a final
- * text response (no more tool calls).
+ * History is retained across messages so the model remembers prior context
+ * (e.g. a deposit amount/address the user confirmed earlier in the session).
+ * Each user gets an independent history capped at MAX_HISTORY_TURNS pairs.
  */
 function createAgentRunner(tools: StructuredToolInterface[]): AgentRunner {
   const model = new ChatOpenAI({
-    model: "gpt-4o",
+    model: "gpt-5-mini",
     apiKey: env.OPENAI_API_KEY,
-    temperature: 0,
+    temperature: 1,
   });
 
   const boundModel =
@@ -75,30 +85,41 @@ function createAgentRunner(tools: StructuredToolInterface[]): AgentRunner {
     toolMap.set(tool.name, tool);
   }
 
+  /** Per-user message history (excluding system prompt, which is prepended each time). */
+  const userHistories = new Map<number, ConversationMessage[]>();
+
   return {
-    async run(userMessage: string): Promise<string> {
-      const messages: (
-        | SystemMessage
-        | HumanMessage
-        | AIMessage
-        | ToolMessage
-      )[] = [
+    async run(userMessage: string, userId: number): Promise<string> {
+      // Retrieve or initialise this user's history
+      if (!userHistories.has(userId)) {
+        userHistories.set(userId, []);
+      }
+      const history = userHistories.get(userId)!;
+
+      // Append the new human message
+      history.push(new HumanMessage(userMessage));
+
+      // Build full message list: system prompt + rolling history
+      const messages: ConversationMessage[] = [
         new SystemMessage(TELEGRAM_SYSTEM_PROMPT),
-        new HumanMessage(userMessage),
+        ...history,
       ];
+
+      let finalContent = "I was unable to complete your request within the allowed steps. Please try a simpler query.";
 
       for (let i = 0; i < MAX_ITERATIONS; i++) {
         const response = await boundModel.invoke(messages);
-        messages.push(response as AIMessage);
-
         const aiMessage = response as AIMessage;
+        messages.push(aiMessage);
+
         const toolCalls = aiMessage.tool_calls;
 
         if (!toolCalls || toolCalls.length === 0) {
           const content = aiMessage.content;
-          if (typeof content === "string") return content;
-          if (Array.isArray(content)) {
-            return content
+          if (typeof content === "string") {
+            finalContent = content;
+          } else if (Array.isArray(content)) {
+            finalContent = content
               .map((part) => {
                 if (typeof part === "string") return part;
                 if (typeof part === "object" && "text" in part)
@@ -106,47 +127,44 @@ function createAgentRunner(tools: StructuredToolInterface[]): AgentRunner {
                 return "";
               })
               .join("");
+          } else {
+            finalContent = String(content);
           }
-          return String(content);
+
+          // Persist AI response to history
+          history.push(aiMessage);
+          break;
         }
 
+        // Execute tool calls
         for (const toolCall of toolCalls) {
           const tool = toolMap.get(toolCall.name);
           if (!tool) {
-            messages.push(
-              new ToolMessage({
-                content: JSON.stringify({
-                  success: false,
-                  error: `Unknown tool: ${toolCall.name}`,
-                }),
-                tool_call_id: toolCall.id ?? "",
+            const errMsg = new ToolMessage({
+              content: JSON.stringify({
+                success: false,
+                error: `Unknown tool: ${toolCall.name}`,
               }),
-            );
+              tool_call_id: toolCall.id ?? "",
+            });
+            messages.push(errMsg);
             continue;
           }
 
           try {
-            const result = await tool.invoke(
-              JSON.stringify(toolCall.args),
-            );
-            messages.push(
-              new ToolMessage({
-                content:
-                  typeof result === "string"
-                    ? result
-                    : JSON.stringify(result),
-                tool_call_id: toolCall.id ?? "",
-              }),
-            );
+            const result = await tool.invoke(JSON.stringify(toolCall.args));
+            const toolMsg = new ToolMessage({
+              content:
+                typeof result === "string" ? result : JSON.stringify(result),
+              tool_call_id: toolCall.id ?? "",
+            });
+            messages.push(toolMsg);
           } catch (error) {
             const errorMessage =
               error instanceof Error ? error.message : String(error);
             messages.push(
               new ToolMessage({
-                content: JSON.stringify({
-                  success: false,
-                  error: errorMessage,
-                }),
+                content: JSON.stringify({ success: false, error: errorMessage }),
                 tool_call_id: toolCall.id ?? "",
               }),
             );
@@ -154,7 +172,12 @@ function createAgentRunner(tools: StructuredToolInterface[]): AgentRunner {
         }
       }
 
-      return "I was unable to complete your request within the allowed steps. Please try a simpler query.";
+      // Trim history to last MAX_HISTORY_TURNS human+AI pairs to bound context size
+      if (history.length > MAX_HISTORY_TURNS * 2) {
+        history.splice(0, history.length - MAX_HISTORY_TURNS * 2);
+      }
+
+      return finalContent;
     },
   };
 }
@@ -222,14 +245,14 @@ export function createTelegramBot(
   bot.command("start", async (ctx) => {
     await ctx.reply(
       `Welcome to Obidot — Autonomous Cross-Chain Finance on Polkadot\n\n` +
-        `Vault: ${VAULT_ADDRESS}\n` +
-        `Chain: Polkadot Hub Testnet (Paseo)\n\n` +
-        `Send me a message to interact with the vault. Examples:\n` +
-        `• "What is the current vault state?"\n` +
-        `• "Show me the best yield opportunities"\n` +
-        `• "What are the Bifrost yields?"\n` +
-        `• "Deposit 100 DOT into the vault"\n\n` +
-        `Type /help for all commands.`,
+      `Vault: ${VAULT_ADDRESS}\n` +
+      `Chain: Polkadot Hub Testnet (Paseo)\n\n` +
+      `Send me a message to interact with the vault. Examples:\n` +
+      `• "What is the current vault state?"\n` +
+      `• "Show me the best yield opportunities"\n` +
+      `• "What are the Bifrost yields?"\n` +
+      `• "Deposit 100 DOT into the vault"\n\n` +
+      `Type /help for all commands.`,
     );
   });
 
@@ -239,16 +262,16 @@ export function createTelegramBot(
     const toolNames = tools.map((t) => `• ${t.name}`).join("\n");
     await ctx.reply(
       `Obidot Vault Bot — Help\n\n` +
-        `Available tools:\n${toolNames}\n\n` +
-        `Example prompts:\n` +
-        `• "Show vault state"\n` +
-        `• "Fetch all yield opportunities"\n` +
-        `• "What are the Bifrost liquid staking yields?"\n` +
-        `• "Check cross-chain satellite status"\n` +
-        `• "Deposit 50 DOT"\n` +
-        `• "Withdraw 25 DOT"\n\n` +
-        `The bot uses an AI agent to interpret your messages ` +
-        `and call the appropriate on-chain tools.`,
+      `Available tools:\n${toolNames}\n\n` +
+      `Example prompts:\n` +
+      `• "Show vault state"\n` +
+      `• "Fetch all yield opportunities"\n` +
+      `• "What are the Bifrost liquid staking yields?"\n` +
+      `• "Check cross-chain satellite status"\n` +
+      `• "Deposit 50 DOT"\n` +
+      `• "Withdraw 25 DOT"\n\n` +
+      `The bot uses an AI agent to interpret your messages ` +
+      `and call the appropriate on-chain tools.`,
     );
   });
 
@@ -257,11 +280,11 @@ export function createTelegramBot(
   bot.command("info", async (ctx) => {
     await ctx.reply(
       `Obidot Agent Info\n\n` +
-        `• Vault: ${VAULT_ADDRESS}\n` +
-        `• Chain: Polkadot Hub Testnet (420420417)\n` +
-        `• Tools: ${String(tools.length)}\n` +
-        `• Model: GPT-4o\n` +
-        `• Mode: EVM (live transactions)`,
+      `• Vault: ${VAULT_ADDRESS}\n` +
+      `• Chain: Polkadot Hub Testnet (420420417)\n` +
+      `• Tools: ${String(tools.length)}\n` +
+      `• Model: GPT-5-mini\n` +
+      `• Mode: EVM (live transactions)`,
     );
   });
 
@@ -281,7 +304,7 @@ export function createTelegramBot(
     await ctx.replyWithChatAction("typing");
 
     try {
-      const response = await agent.run(userMessage);
+      const response = await agent.run(userMessage, userId ?? chatId);
 
       const chunks = splitMessage(response);
       for (const chunk of chunks) {
@@ -298,7 +321,7 @@ export function createTelegramBot(
       teleLog.error({ chatId, error: errorMessage }, "Agent error");
       await ctx.reply(
         "Sorry, something went wrong while processing your request. " +
-          "Please try again.",
+        "Please try again.",
       );
     }
   });

@@ -660,72 +660,40 @@ export class SwapRouterService {
     dfs(tokenInLc, amountIn, [], visited);
 
     // ── 5. Append cross-chain stub routes ────────────────────────────────────
+    const stub = (
+      id: string,
+      routeType: SwapRouteResult["routeType"],
+      status: SwapRouteResult["status"],
+      totalFeeBps = "0",
+    ): SwapRouteResult => ({
+      id,
+      tokenIn,
+      tokenOut,
+      amountIn: amountIn.toString(),
+      amountOut: "0",
+      minAmountOut: "0",
+      hops: [],
+      totalFeeBps,
+      totalPriceImpactBps: "0",
+      routeType,
+      status,
+    });
+
     const crossChainStubs: SwapRouteResult[] = [
-      {
-        id: "RelayTeleport (XCM)",
-        tokenIn,
-        tokenOut,
-        amountIn: amountIn.toString(),
-        amountOut: "0",
-        minAmountOut: "0",
-        hops: [],
-        totalFeeBps: "0",
-        totalPriceImpactBps: "0",
-        routeType: "xcm",
-        status: "live",
-      },
-      {
-        id: "Hydration Omnipool (XCM)",
-        tokenIn,
-        tokenOut,
-        amountIn: amountIn.toString(),
-        amountOut: "0",
-        minAmountOut: "0",
-        hops: [],
-        totalFeeBps: "30",
-        totalPriceImpactBps: "0",
-        routeType: "xcm",
-        status: "mainnet_only",
-      },
-      {
-        id: "Bifrost DEX (XCM)",
-        tokenIn,
-        tokenOut,
-        amountIn: amountIn.toString(),
-        amountOut: "0",
-        minAmountOut: "0",
-        hops: [],
-        totalFeeBps: "30",
-        totalPriceImpactBps: "0",
-        routeType: "xcm",
-        status: "mainnet_only",
-      },
-      {
-        id: "Snowbridge (BridgeHub → Ethereum)",
-        tokenIn,
-        tokenOut,
-        amountIn: amountIn.toString(),
-        amountOut: "0",
-        minAmountOut: "0",
-        hops: [],
-        totalFeeBps: "0",
-        totalPriceImpactBps: "0",
-        routeType: "bridge",
-        status: "coming_soon",
-      },
-      {
-        id: "ChainFlip (Polkadot → Ethereum)",
-        tokenIn,
-        tokenOut,
-        amountIn: amountIn.toString(),
-        amountOut: "0",
-        minAmountOut: "0",
-        hops: [],
-        totalFeeBps: "0",
-        totalPriceImpactBps: "0",
-        routeType: "bridge",
-        status: "coming_soon",
-      },
+      // XCM parachains
+      stub("RelayTeleport (XCM)", "xcm", "live"),
+      stub("Hydration Omnipool (XCM)", "xcm", "mainnet_only", "30"),
+      stub("Bifrost DEX (XCM)", "xcm", "mainnet_only", "30"),
+      // Local Polkadot Hub DEX — also appears in On-chain Routes when pair exists
+      stub("Uniswap V2 (Polkadot Hub)", "local", "live", "30"),
+      stub("Karura DEX (XCM)", "xcm", "mainnet_only", "30"),
+      stub("Interlay Loans (XCM)", "xcm", "mainnet_only"),
+      // The Moonbeam adapter (slot 7) routes via XCM to Moonbeam para 2004.
+      stub("Moonbeam DEX (XCM)", "xcm", "coming_soon", "30"),
+      // EVM bridges
+      stub("Hyperbridge (ISMP)", "bridge", "mainnet_only"),
+      stub("Snowbridge (BridgeHub → Ethereum)", "bridge", "coming_soon"),
+      stub("ChainFlip (Polkadot → Ethereum)", "bridge", "coming_soon"),
     ];
 
     // ── 6. Sort live routes by amountOut desc, then append stubs ─────────────

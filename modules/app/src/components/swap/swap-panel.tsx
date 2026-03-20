@@ -1,5 +1,6 @@
 "use client";
 
+import { useCallback, useRef } from "react";
 import { cn } from "@/lib/format";
 import { TRADE_ACTIONS } from "@/shared/trade";
 import { Info, Settings2, ArrowLeftRight, Clock3, Link2 } from "lucide-react";
@@ -41,16 +42,27 @@ export default function SwapPanel({
   onRouteSelect,
   onSplitRoutesSelect,
 }: SwapPanelProps) {
-  const handleInputChange = (p: {
-    tokenIn: string;
-    tokenOut: string;
-    amountIn: string;
-    tokenOutSymbol: string;
-    tokenOutDecimals: number;
-  }) => {
-    onSwapInputChange(p);
-    onRouteSelect(null);
-  };
+  // Track the previous token pair so we only clear the selected route when
+  // tokens actually change — not on every amount keystroke.
+  const prevTokenPairRef = useRef<{ tokenIn: string; tokenOut: string } | null>(null);
+
+  const handleInputChange = useCallback(
+    (p: {
+      tokenIn: string;
+      tokenOut: string;
+      amountIn: string;
+      tokenOutSymbol: string;
+      tokenOutDecimals: number;
+    }) => {
+      const prev = prevTokenPairRef.current;
+      const tokenPairChanged =
+        !prev || prev.tokenIn !== p.tokenIn || prev.tokenOut !== p.tokenOut;
+      prevTokenPairRef.current = { tokenIn: p.tokenIn, tokenOut: p.tokenOut };
+      onSwapInputChange(p);
+      if (tokenPairChanged) onRouteSelect(null);
+    },
+    [onSwapInputChange, onRouteSelect],
+  );
 
   return (
     <div className="border-r border-border bg-surface overflow-hidden flex flex-col">

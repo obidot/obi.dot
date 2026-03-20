@@ -20,6 +20,9 @@ import {
   STRATEGY_INTENT_TYPES,
   BIFROST_ADAPTER_ADDRESS,
   BIFROST_ADAPTER_ABI,
+  ERC20_ABI,
+  SWAP_ROUTER_ADDRESS,
+  SWAP_ROUTER_ABI,
 } from "../config/constants.js";
 import type { StrategyIntent } from "../types/index.js";
 import { BifrostStrategyType, BifrostCurrencyId } from "../types/index.js";
@@ -503,6 +506,189 @@ export class SignerService {
       "Strategy outcome reported on-chain",
     );
 
+    return txHash;
+  }
+
+  // ─────────────────────────────────────────────────────────────────────
+  //  ERC-4626 Deposit
+  // ─────────────────────────────────────────────────────────────────────
+
+  /**
+   * Approve the vault to spend `amount` of `token` from the agent's wallet,
+   * then call vault.deposit(amount, receiver).
+   *
+   * @param token    - ERC-20 token address
+   * @param amount   - Amount in base units (wei)
+   * @param receiver - Address to receive vault shares
+   * @returns Transaction hash of the deposit
+   */
+  async executeDeposit(
+    token: `0x${string}`,
+    amount: bigint,
+    receiver: `0x${string}`,
+  ): Promise<Hex> {
+    // ── Check & set allowance ──────────────────────────────────────────
+    const allowance = await this.publicClient.readContract({
+      address: token,
+      abi: ERC20_ABI,
+      functionName: "allowance",
+      args: [this.account.address, VAULT_ADDRESS],
+    });
+
+    if (allowance < amount) {
+      signerLog.info(
+        { allowance: allowance.toString(), needed: amount.toString() },
+        "Approving vault to spend token",
+      );
+      const approveTx = await this.walletClient.writeContract({
+        account: this.account,
+        chain: polkadotHubTestnet,
+        address: token,
+        abi: ERC20_ABI,
+        functionName: "approve",
+        args: [VAULT_ADDRESS, amount],
+      });
+      await this.publicClient.waitForTransactionReceipt({ hash: approveTx });
+      signerLog.info({ approveTx }, "Approval confirmed");
+    }
+
+    // ── Execute deposit ────────────────────────────────────────────────
+    signerLog.info(
+      { token, amount: amount.toString(), receiver },
+      "Submitting vault deposit",
+    );
+    const txHash = await this.walletClient.writeContract({
+      account: this.account,
+      chain: polkadotHubTestnet,
+      address: VAULT_ADDRESS,
+      abi: VAULT_ABI,
+      functionName: "deposit",
+      args: [amount, receiver],
+    });
+
+    const receipt = await this.publicClient.waitForTransactionReceipt({
+      hash: txHash,
+    });
+
+    signerLog.info(
+      { txHash, blockNumber: receipt.blockNumber.toString(), status: receipt.status },
+      "Deposit confirmed",
+    );
+
+    return txHash;
+  }
+
+  // ─────────────────────────────────────────────────────────────────────
+  //  Direct UV2 Swap
+  // ─────────────────────────────────────────────────────────────────────
+
+  /**
+   * Execute a direct UniswapV2 swap through the SwapRouter.
+   *
+   * For single-hop routes, calls SwapRouter.swap().
+   * For multi-hop routes, calls SwapRouter.swapMultiHop().
+   *
+   * @param hops       Route hops from findRoutes() — each hop has pool, tokenIn, tokenOut, feeBps
+   * @param amountIn   Amount of tokenIn in wei
+   * @param minAmountOut  Minimum output after slippage
+   * @param to         Recipient address (defaults to agent wallet)
+   * @returns Transaction hash
+   */
+  async executeDirectSwap(
+    hops: Array<{ pool: string; tokenIn: string; tokenOut: string; feeBps: string }>,
+    amountIn: bigint,
+    minAmountOut: bigint,
+    to?: `0x${string}`,
+  ): Promise<`0x${string}`> {
+    if (hops.length === 0) throw new Error("executeDirectSwap: empty hops");
+
+    const recipient = to ?? this.account.address;
+    const deadline = BigInt(Math.floor(Date.now() / 1000) + 600); // 10 min
+    const ZERO_BYTES32 = "0x0000000000000000000000000000000000000000000000000000000000000000" as `0x${string}`;
+    const POOL_TYPE_CUSTOM = 3; // PoolType.Custom = UV2
+
+    // ── Check & set tokenIn allowance for SwapRouter ───────────────────────
+    const tokenIn = hops[0].tokenIn as `0x${string}`;
+    const allowance = await this.publicClient.readContract({
+      address: tokenIn,
+      abi: ERC20_ABI,
+      functionName: "allowance",
+      args: [this.account.address, SWAP_ROUTER_ADDRESS],
+    });
+
+    if ((allowance as bigint) < amountIn) {
+      signerLog.info(
+        { tokenIn, amountIn: amountIn.toString() },
+        "Approving SwapRouter to spend token",
+      );
+      const approveTx = await this.walletClient.writeContract({
+        account: this.account,
+        chain: polkadotHubTestnet,
+        address: tokenIn,
+        abi: ERC20_ABI,
+        functionName: "approve",
+        args: [SWAP_ROUTER_ADDRESS, amountIn],
+        gas: BigInt(50_000),
+      });
+      await this.publicClient.waitForTransactionReceipt({ hash: approveTx });
+      signerLog.info({ approveTx }, "SwapRouter approval confirmed");
+    }
+
+    // ── Execute swap ─────────────────────────────────────────────────────
+    let txHash: `0x${string}`;
+
+    if (hops.length === 1) {
+      const hop = hops[0];
+      txHash = await this.walletClient.writeContract({
+        account: this.account,
+        chain: polkadotHubTestnet,
+        address: SWAP_ROUTER_ADDRESS,
+        abi: SWAP_ROUTER_ABI,
+        functionName: "swap",
+        args: [
+          {
+            route: {
+              poolType: POOL_TYPE_CUSTOM,
+              pool: hop.pool as `0x${string}`,
+              tokenIn: hop.tokenIn as `0x${string}`,
+              tokenOut: hop.tokenOut as `0x${string}`,
+              feeBps: BigInt(hop.feeBps),
+              data: ZERO_BYTES32,
+            },
+            amountIn,
+            minAmountOut,
+            to: recipient,
+            deadline,
+          },
+        ],
+        gas: BigInt(300_000),
+      });
+    } else {
+      const routes = hops.map((hop) => ({
+        poolType: POOL_TYPE_CUSTOM,
+        pool: hop.pool as `0x${string}`,
+        tokenIn: hop.tokenIn as `0x${string}`,
+        tokenOut: hop.tokenOut as `0x${string}`,
+        feeBps: BigInt(hop.feeBps),
+        data: ZERO_BYTES32,
+      }));
+
+      txHash = await this.walletClient.writeContract({
+        account: this.account,
+        chain: polkadotHubTestnet,
+        address: SWAP_ROUTER_ADDRESS,
+        abi: SWAP_ROUTER_ABI,
+        functionName: "swapMultiHop",
+        args: [routes, amountIn, minAmountOut, recipient, deadline],
+        gas: BigInt(500_000),
+      });
+    }
+
+    const receipt = await this.publicClient.waitForTransactionReceipt({ hash: txHash });
+    signerLog.info(
+      { txHash, hops: hops.length, blockNumber: receipt.blockNumber.toString(), status: receipt.status },
+      "Direct swap executed",
+    );
     return txHash;
   }
 

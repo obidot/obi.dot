@@ -78,7 +78,7 @@ function StatusPill({ status }: { status: SwapRouteResult["status"] }) {
     coming_soon: "COMING SOON",
   };
   return (
-    <span className={cn("font-mono text-[11px] border px-1.5 py-0.5 tracking-wide", s[status])}>
+    <span className={cn("font-mono text-[12px] border px-1.5 py-0.5 tracking-wide", s[status])}>
       {l[status]}
     </span>
   );
@@ -101,12 +101,12 @@ function ChainSelector({ selected, options, onSelect }: ChainSelectorProps) {
         onClick={() => setOpen((v) => !v)}
         className="flex items-center gap-2 border border-border bg-surface-hover px-3 py-2 hover:border-primary/50 transition-colors w-full"
       >
-        <span className={cn("flex h-6 w-6 items-center justify-center text-[11px] font-bold rounded-full bg-primary/20 text-primary shrink-0")}>
+        <span className={cn("flex h-6 w-6 items-center justify-center text-[12px] font-bold rounded-full bg-primary/20 text-primary shrink-0")}>
           {selected.icon}
         </span>
-        <span className="text-[14px] text-text-primary font-medium flex-1 text-left">{selected.name}</span>
+        <span className="text-[15px] text-text-primary font-medium flex-1 text-left">{selected.name}</span>
         {selected.paraId && (
-          <span className="font-mono text-[11px] text-text-muted">para {selected.paraId}</span>
+          <span className="font-mono text-[12px] text-text-muted">para {selected.paraId}</span>
         )}
         <ChevronDown className="h-4 w-4 text-text-muted shrink-0" />
       </button>
@@ -123,12 +123,12 @@ function ChainSelector({ selected, options, onSelect }: ChainSelectorProps) {
                 c.id === selected.id && "bg-primary/5",
               )}
             >
-              <span className="flex h-5 w-5 items-center justify-center text-[10px] font-bold rounded-full bg-primary/20 text-primary shrink-0">
+              <span className="flex h-5 w-5 items-center justify-center text-[11px] font-bold rounded-full bg-primary/20 text-primary shrink-0">
                 {c.icon}
               </span>
-              <span className="text-[13px] text-text-primary flex-1">{c.name}</span>
-              {c.paraId && <span className="font-mono text-[11px] text-text-muted">para {c.paraId}</span>}
-              <span className={cn("font-mono text-[10px] border px-1 py-0.5", c.type === "xcm" ? "text-primary border-primary/20" : "text-warning border-warning/20")}>
+              <span className="text-[14px] text-text-primary flex-1">{c.name}</span>
+              {c.paraId && <span className="font-mono text-[12px] text-text-muted">para {c.paraId}</span>}
+              <span className={cn("font-mono text-[11px] border px-1 py-0.5", c.type === "xcm" ? "text-primary border-primary/20" : "text-warning border-warning/20")}>
                 {c.type.toUpperCase()}
               </span>
             </button>
@@ -162,6 +162,8 @@ export default function CrossChainSwapPanel() {
   const tokenOut = TOKENS[tokenOutIdx];
 
   const isRelayTeleport = selectedChain.id === "relay";
+  const isRelayTokenSupported =
+    tokenIn.address.toLowerCase() === CONTRACTS.TEST_DOT.toLowerCase();
 
   const { data: allowance } = useReadContract({
     address: tokenIn.address as Address,
@@ -224,7 +226,7 @@ export default function CrossChainSwapPanel() {
         PoolType.RelayTeleport,
         CONTRACTS.XCM_EXECUTOR as Address,
         tokenIn.address as Address,
-        CONTRACTS.NATIVE_DOT as Address,
+        "0x0000000000000000000000000000000000000000" as Address, // relay-chain native — no Hub ERC-20
         0n,
         ZERO_BYTES32,
         BigInt(parsedAmountIn),
@@ -258,6 +260,8 @@ export default function CrossChainSwapPanel() {
     if (xcmStep !== "idle" && xcmStep !== "done") return;
 
     if (isRelayTeleport) {
+      if (!isRelayTokenSupported) return;
+
       if (needsApproval) {
         setXcmStep("approving");
         writeApprove({
@@ -272,34 +276,34 @@ export default function CrossChainSwapPanel() {
       }
     }
     // Other chains are mainnet_only or coming_soon — button is disabled for those
-  }, [isConnected, openConnectModal, parsedAmountIn, address, xcmStep, isRelayTeleport, needsApproval, writeApprove, executeXcmSwap, tokenIn]);
+  }, [isConnected, openConnectModal, parsedAmountIn, address, xcmStep, isRelayTeleport, isRelayTokenSupported, needsApproval, writeApprove, executeXcmSwap, tokenIn]);
 
   return (
     <div className="p-5 space-y-5">
       {/* Header */}
       <div className="flex items-center gap-2">
         <Link2 className="h-4 w-4 text-primary" />
-        <span className="text-[13px] text-text-secondary font-medium">Route via Polkadot XCM / Bridge</span>
+        <span className="text-[14px] text-text-secondary font-medium">Route via Polkadot XCM / Bridge</span>
       </div>
 
       {/* Destination chain */}
       <div className="space-y-1.5">
-        <p className="text-[12px] text-text-muted uppercase tracking-wider">Destination Chain</p>
+        <p className="text-[13px] text-text-muted uppercase tracking-wider">Destination Chain</p>
         <ChainSelector
           selected={selectedChain}
           options={XCM_CHAINS}
           onSelect={setSelectedChain}
         />
         <div className="flex items-center gap-3 mt-1">
-          <div className="flex items-center gap-1 text-[12px] text-text-muted">
+          <div className="flex items-center gap-1 text-[13px] text-text-muted">
             <Clock className="h-3 w-3" />
             <span>Est. {selectedChain.estTime}</span>
           </div>
           {selectedChain.type === "bridge" && (
-            <span className="text-[11px] text-warning font-mono border border-warning/20 px-1.5 py-0.5">BRIDGE</span>
+            <span className="text-[12px] text-warning font-mono border border-warning/20 px-1.5 py-0.5">BRIDGE</span>
           )}
           {selectedChain.type === "xcm" && (
-            <span className="text-[11px] text-primary font-mono border border-primary/20 px-1.5 py-0.5">XCM</span>
+            <span className="text-[12px] text-primary font-mono border border-primary/20 px-1.5 py-0.5">XCM</span>
           )}
         </div>
       </div>
@@ -307,7 +311,7 @@ export default function CrossChainSwapPanel() {
       {/* Token inputs */}
       <div className="space-y-2">
         <div className="border border-border bg-background/60 p-4">
-          <p className="text-[13px] text-text-muted mb-3">You Pay</p>
+          <p className="text-[14px] text-text-muted mb-3">You Pay</p>
           <div className="flex items-center gap-3">
             <input
               type="text"
@@ -325,28 +329,39 @@ export default function CrossChainSwapPanel() {
           <button
             type="button"
             onClick={handleFlip}
-            className="rounded-none border border-border bg-surface p-1.5 hover:border-primary hover:bg-primary/10 hover:text-primary transition-all"
+            className="rounded-none border border-border bg-surface p-1.5 hover:border-primary hover:bg-primary/10 hover:text-primary transition-colors"
           >
             <ArrowRight className="h-3.5 w-3.5" />
           </button>
         </div>
 
         <div className="border border-border bg-background/60 p-4">
-          <p className="text-[13px] text-text-muted mb-3">
+          <p className="text-[14px] text-text-muted mb-3">
             You Receive on {isRelayTeleport ? "Relay Chain" : selectedChain.name}
           </p>
           <div className="flex items-center gap-3">
             <span className="text-xl font-semibold text-text-secondary flex-1">
-              {isLoading ? "..." : isRelayTeleport
+              {isLoading ? "…" : isRelayTeleport
                 ? (relayReceiveAmount ? formatTokenAmount(relayReceiveAmount, tokenIn.decimals, 6) : "—")
                 : (activeRoute?.amountOut && activeRoute.amountOut !== "0"
                     ? formatTokenAmount(activeRoute.amountOut, tokenOut.decimals, 6)
                     : "—")}
             </span>
-            <TokenPicker selectedIdx={tokenOutIdx} onSelect={setTokenOutIdx} disabledIdx={tokenInIdx} />
+            {isRelayTeleport ? (
+              <span className="inline-flex items-center border border-border bg-surface px-3 py-2 text-[14px] font-medium text-text-primary">
+                {tokenIn.symbol} (Relay)
+              </span>
+            ) : (
+              <TokenPicker selectedIdx={tokenOutIdx} onSelect={setTokenOutIdx} disabledIdx={tokenInIdx} />
+            )}
           </div>
-          {isRelayTeleport && parsedAmountIn && (
-            <p className="text-[11px] text-text-muted mt-1.5">
+          {isRelayTeleport && !isRelayTokenSupported && (
+            <p className="text-[12px] text-warning mt-1.5">
+              Relay teleport currently supports tDOT input only.
+            </p>
+          )}
+          {isRelayTeleport && parsedAmountIn && isRelayTokenSupported && (
+            <p className="text-[12px] text-text-muted mt-1.5">
               ~0.1% XCM fee deducted · 1:1 teleport, no exchange rate
             </p>
           )}
@@ -357,19 +372,19 @@ export default function CrossChainSwapPanel() {
       {activeRoute && (
         <div className="border border-border divide-y divide-border">
           <div className="flex items-center justify-between px-3 py-2">
-            <span className="text-[12px] text-text-muted">Route</span>
+            <span className="text-[13px] text-text-muted">Route</span>
             <div className="flex items-center gap-2">
-              <span className="text-[13px] text-text-secondary font-medium">{activeRoute.id}</span>
+              <span className="text-[14px] text-text-secondary font-medium">{activeRoute.id}</span>
               <StatusPill status={activeRoute.status} />
             </div>
           </div>
           <div className="flex items-center justify-between px-3 py-2">
-            <span className="text-[12px] text-text-muted">Est. Time</span>
-            <span className="font-mono text-[13px] text-text-secondary">{selectedChain.estTime}</span>
+            <span className="text-[13px] text-text-muted">Est. Time</span>
+            <span className="font-mono text-[14px] text-text-secondary">{selectedChain.estTime}</span>
           </div>
           <div className="flex items-center justify-between px-3 py-2">
-            <span className="text-[12px] text-text-muted">Protocol Fee</span>
-            <span className="font-mono text-[13px] text-text-secondary">
+            <span className="text-[13px] text-text-muted">Protocol Fee</span>
+            <span className="font-mono text-[14px] text-text-secondary">
               {activeRoute.totalFeeBps !== "0"
                 ? `${(Number(activeRoute.totalFeeBps) / 100).toFixed(2)}%`
                 : "—"}
@@ -377,14 +392,14 @@ export default function CrossChainSwapPanel() {
           </div>
           {isRelayTeleport && (
             <div className="flex items-center justify-between px-3 py-2">
-              <span className="text-[12px] text-text-muted">Exchange Rate</span>
-              <span className="font-mono text-[13px] text-primary font-semibold">1:1 (teleport)</span>
+              <span className="text-[13px] text-text-muted">Exchange Rate</span>
+              <span className="font-mono text-[14px] text-primary font-semibold">1:1 (teleport)</span>
             </div>
           )}
           {selectedChain.paraId && (
             <div className="flex items-center justify-between px-3 py-2">
-              <span className="text-[12px] text-text-muted">Parachain</span>
-              <span className="font-mono text-[13px] text-text-secondary">#{selectedChain.paraId}</span>
+              <span className="text-[13px] text-text-muted">Parachain</span>
+              <span className="font-mono text-[14px] text-text-secondary">#{selectedChain.paraId}</span>
             </div>
           )}
         </div>
@@ -392,7 +407,7 @@ export default function CrossChainSwapPanel() {
 
       {/* Status-based action */}
       {!activeRoute && !isLoading && !isRelayTeleport && (
-        <p className="text-[13px] text-text-muted text-center py-2">
+        <p className="text-[14px] text-text-muted text-center py-2">
           {parsedAmountIn ? "No route found for this chain" : "Enter an amount to see routes"}
         </p>
       )}
@@ -400,7 +415,7 @@ export default function CrossChainSwapPanel() {
       {activeRoute?.status === "mainnet_only" && (
         <div className="flex items-start gap-2 border border-warning/30 bg-warning/5 px-3 py-2.5">
           <AlertTriangle className="h-3.5 w-3.5 text-warning mt-0.5 shrink-0" />
-          <p className="text-[12px] text-text-secondary">
+          <p className="text-[13px] leading-relaxed text-text-secondary">
             {selectedChain.name} is available on Polkadot mainnet only. Connect to mainnet to execute this route.
           </p>
         </div>
@@ -409,7 +424,7 @@ export default function CrossChainSwapPanel() {
       {activeRoute?.status === "coming_soon" && (
         <div className="flex items-start gap-2 border border-border px-3 py-2.5">
           <Clock className="h-3.5 w-3.5 text-text-muted mt-0.5 shrink-0" />
-          <p className="text-[12px] text-text-muted">
+          <p className="text-[13px] text-text-muted">
             {selectedChain.name} integration is coming soon.
           </p>
         </div>
@@ -421,7 +436,7 @@ export default function CrossChainSwapPanel() {
         disabled={
           isConnected && (
             isRelayTeleport
-              ? !parsedAmountIn || (xcmStep !== "idle" && xcmStep !== "done")
+              ? !parsedAmountIn || !isRelayTokenSupported || (xcmStep !== "idle" && xcmStep !== "done")
               : (!activeRoute || activeRoute.status !== "live" || !parsedAmountIn)
           )
         }
@@ -432,15 +447,17 @@ export default function CrossChainSwapPanel() {
           : !parsedAmountIn
             ? "ENTER AMOUNT"
             : isRelayTeleport
-              ? xcmStep === "approving" || approveWalletPending
-                ? `APPROVING ${tokenIn.symbol}...`
-                : xcmStep === "swapping" || swapWalletPending
-                  ? "TELEPORTING..."
-                  : xcmStep === "done"
-                    ? "TELEPORT AGAIN"
-                    : needsApproval
-                      ? `APPROVE ${tokenIn.symbol}`
-                      : "TELEPORT DOT TO RELAY CHAIN"
+              ? !isRelayTokenSupported
+                ? "DOT ONLY (RELAY TELEPORT)"
+                : xcmStep === "approving" || approveWalletPending
+                  ? `APPROVING ${tokenIn.symbol}…`
+                  : xcmStep === "swapping" || swapWalletPending
+                    ? "TELEPORTING…"
+                    : xcmStep === "done"
+                      ? "TELEPORT AGAIN"
+                      : needsApproval
+                        ? `APPROVE ${tokenIn.symbol}`
+                        : "TELEPORT DOT TO RELAY CHAIN"
               : !activeRoute
                 ? "NO ROUTE AVAILABLE"
                 : activeRoute.status === "live"
@@ -450,7 +467,7 @@ export default function CrossChainSwapPanel() {
                     : "COMING SOON"}
       </button>
 
-      <p className="text-center text-[11px] text-text-muted">
+      <p className="text-center text-[12px] text-text-muted leading-relaxed">
         Cross-chain execution powered by XCM precompile on Polkadot Hub
         <a
           href="https://blockscout-testnet.polkadot.io"

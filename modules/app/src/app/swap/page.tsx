@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useCallback, useRef } from "react";
 import SwapForm from "@/components/swap/swap-form";
 import { RouteDiagram } from "@/components/swap/route-diagram";
 import { cn } from "@/lib/format";
@@ -18,6 +18,8 @@ export default function SwapPage() {
     tokenIn: "",
     tokenOut: "",
     amountIn: "",
+    tokenOutSymbol: "",
+    tokenOutDecimals: 18,
   });
   const [selectedRoute, setSelectedRoute] = useState<SwapRouteResult | null>(
     null,
@@ -25,17 +27,27 @@ export default function SwapPage() {
 
   const { data: routes } = useSwapRoutes();
 
-  // Clear selected route when inputs change
-  const handleInputChange = (params: {
-    tokenIn: string;
-    tokenOut: string;
-    amountIn: string;
-    tokenOutSymbol: string;
-    tokenOutDecimals: number;
-  }) => {
-    setSwapInput(params);
-    setSelectedRoute(null);
-  };
+  // Stable ref tracks the token pair so we only clear the selected route when
+  // tokens change — not on every amount keystroke.
+  const prevTokenPairRef = useRef<{ tokenIn: string; tokenOut: string } | null>(null);
+
+  const handleInputChange = useCallback(
+    (params: {
+      tokenIn: string;
+      tokenOut: string;
+      amountIn: string;
+      tokenOutSymbol: string;
+      tokenOutDecimals: number;
+    }) => {
+      const prev = prevTokenPairRef.current;
+      const tokenPairChanged =
+        !prev || prev.tokenIn !== params.tokenIn || prev.tokenOut !== params.tokenOut;
+      prevTokenPairRef.current = { tokenIn: params.tokenIn, tokenOut: params.tokenOut };
+      setSwapInput(params);
+      if (tokenPairChanged) setSelectedRoute(null);
+    },
+    [], // setSwapInput and setSelectedRoute are stable React setState dispatchers
+  );
 
   const showDiagram =
     activeTab === "swap" &&
@@ -75,7 +87,7 @@ export default function SwapPage() {
           </div>
 
           {/* Description */}
-          <p className="px-4 pt-2 pb-0 text-[11px] text-text-muted">
+          <p className="px-4 pt-2 pb-0 text-[13px] leading-relaxed text-text-muted">
             {activeDescription}
           </p>
 
@@ -104,6 +116,8 @@ export default function SwapPage() {
               tokenIn={swapInput.tokenIn}
               tokenOut={swapInput.tokenOut}
               amountIn={swapInput.amountIn}
+              tokenOutSymbol={swapInput.tokenOutSymbol}
+              tokenOutDecimals={swapInput.tokenOutDecimals}
               selectedRouteId={selectedRoute?.id}
               onSelectRoute={setSelectedRoute}
             />
@@ -112,16 +126,16 @@ export default function SwapPage() {
               {/* KyberSwap-style empty state */}
               <div className="relative">
                 <div className="h-10 w-10 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center">
-                  <span className="font-mono text-[13px] font-bold text-primary">
+                  <span className="font-mono text-[14px] font-bold text-primary">
                     →
                   </span>
                 </div>
               </div>
               <div>
-                <p className="text-[13px] font-semibold text-text-secondary">
+                <p className="text-[15px] font-semibold text-text-primary">
                   Your trade route
                 </p>
-                <p className="mt-1 text-[11px] text-text-muted max-w-[200px]">
+                <p className="mt-1 max-w-[240px] text-[13px] leading-relaxed text-text-muted text-pretty">
                   Enter an amount to see the best routing path across Polkadot
                   adapters
                 </p>
@@ -133,7 +147,7 @@ export default function SwapPage() {
                     .map((a) => (
                       <span
                         key={a.label}
-                        className="pill bg-surface-hover text-text-muted border border-border text-[10px]"
+                        className="pill border border-border bg-surface-hover text-[11px] text-text-muted"
                       >
                         {a.label}
                       </span>
@@ -152,6 +166,8 @@ export default function SwapPage() {
             tokenIn={swapInput.tokenIn}
             tokenOut={swapInput.tokenOut}
             amountIn={swapInput.amountIn}
+            tokenOutSymbol={swapInput.tokenOutSymbol}
+            tokenOutDecimals={swapInput.tokenOutDecimals}
             selectedRouteId={selectedRoute?.id}
             onSelectRoute={setSelectedRoute}
           />

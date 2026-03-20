@@ -198,6 +198,41 @@ export const VAULT_ABI = [
     stateMutability: "view",
   },
 
+  // ── ERC-4626 Read Functions ────────────────────────────────────────────
+  {
+    type: "function",
+    name: "previewDeposit",
+    inputs: [{ name: "assets", type: "uint256" }],
+    outputs: [{ name: "shares", type: "uint256" }],
+    stateMutability: "view",
+  },
+  {
+    type: "function",
+    name: "convertToShares",
+    inputs: [{ name: "assets", type: "uint256" }],
+    outputs: [{ name: "shares", type: "uint256" }],
+    stateMutability: "view",
+  },
+  {
+    type: "function",
+    name: "totalSupply",
+    inputs: [],
+    outputs: [{ name: "", type: "uint256" }],
+    stateMutability: "view",
+  },
+
+  // ── ERC-4626 Write Functions ───────────────────────────────────────────
+  {
+    type: "function",
+    name: "deposit",
+    inputs: [
+      { name: "assets", type: "uint256" },
+      { name: "receiver", type: "address" },
+    ],
+    outputs: [{ name: "shares", type: "uint256" }],
+    stateMutability: "nonpayable",
+  },
+
   // ── Write Functions ────────────────────────────────────────────────────
   {
     type: "function",
@@ -278,6 +313,40 @@ export const VAULT_ABI = [
       { name: "available", type: "uint256" },
       { name: "requested", type: "uint256" },
     ],
+  },
+] as const;
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  Minimal ERC-20 ABI (approve + allowance — used by DepositTool)
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const ERC20_ABI = [
+  {
+    type: "function",
+    name: "allowance",
+    inputs: [
+      { name: "owner", type: "address" },
+      { name: "spender", type: "address" },
+    ],
+    outputs: [{ name: "", type: "uint256" }],
+    stateMutability: "view",
+  },
+  {
+    type: "function",
+    name: "approve",
+    inputs: [
+      { name: "spender", type: "address" },
+      { name: "amount", type: "uint256" },
+    ],
+    outputs: [{ name: "", type: "bool" }],
+    stateMutability: "nonpayable",
+  },
+  {
+    type: "function",
+    name: "decimals",
+    inputs: [],
+    outputs: [{ name: "", type: "uint8" }],
+    stateMutability: "view",
   },
 ] as const;
 
@@ -1055,34 +1124,34 @@ export const UV2_PAIRS: Array<{
   label: string;
 }> = [
   {
-    address: "0xdd59E6121315237ACc953cd6aF1924F4320778dF" as Address,
-    token0: "0x3E8D34E94e22BdBaa9aD6D575a239D722973D2Bc" as Address,
-    token1: "0xD8913B1a14Db9CD4B29C05c5E7E105cDA34ebF9f" as Address,
-    label: "TKB/TKA",
-  },
-  {
-    address: "0x9E628e8F4f26771F3208E2B9071d843cFeF45b1a" as Address,
-    token0: "0x5298FDe9E288371ECA21db04Ac5Ddba00C1ea626" as Address,
-    token1: "0xd92a5325fB3A56f5012F1EBD1bd37573d981144e" as Address,
-    label: "tUSDC/tETH",
-  },
-  {
-    address: "0xe01503Aeac95Ca39E8001aDa83121f1F8743e491" as Address,
-    token0: "0x2402C804aD8a6217BF73D8483dA7564065c56083" as Address,
-    token1: "0x3E8D34E94e22BdBaa9aD6D575a239D722973D2Bc" as Address,
+    address: "0xDc1b4a27d44613aa5072Ca6edC20151D94e7f93A" as Address,
+    token0: "0x2402C804aD8a6217BF73D8483dA7564065c56083" as Address, // tDOT
+    token1: "0x3E8D34E94e22BdBaa9aD6D575a239D722973D2Bc" as Address, // TKB
     label: "tDOT/TKB",
   },
   {
-    address: "0x84864aff1aac120809f3a2ebf0be0f2cc3a51528" as Address,
-    token0: "0x2402C804aD8a6217BF73D8483dA7564065c56083" as Address,
-    token1: "0x5298FDe9E288371ECA21db04Ac5Ddba00C1ea626" as Address,
+    address: "0x9576F7b40bC3a8Bb5d236Cd4bEBC29dC40AF0fa4" as Address,
+    token0: "0x2402C804aD8a6217BF73D8483dA7564065c56083" as Address, // tDOT
+    token1: "0x5298FDe9E288371ECA21db04Ac5Ddba00C1ea626" as Address, // tUSDC
     label: "tDOT/tUSDC",
   },
   {
-    address: "0x412cfeb621f5a43a08adda9c8d09f29651570a01" as Address,
-    token0: "0x2402C804aD8a6217BF73D8483dA7564065c56083" as Address,
-    token1: "0xd92a5325fB3A56f5012F1EBD1bd37573d981144e" as Address,
+    address: "0x4a0183BA79Ab7072240B5Fd8B6A1055E8e60aC83" as Address,
+    token0: "0x2402C804aD8a6217BF73D8483dA7564065c56083" as Address, // tDOT
+    token1: "0xd92a5325fB3A56f5012F1EBD1bd37573d981144e" as Address, // tETH
     label: "tDOT/tETH",
+  },
+  {
+    address: "0x3FBa4A4db176201d3A3a5B25e7561274ceCb6ef5" as Address,
+    token0: "0x5298FDe9E288371ECA21db04Ac5Ddba00C1ea626" as Address, // tUSDC
+    token1: "0xd92a5325fB3A56f5012F1EBD1bd37573d981144e" as Address, // tETH
+    label: "tUSDC/tETH",
+  },
+  {
+    address: "0xd6F5C4b7b3911Db7D062D0457f8b3D4045C86d50" as Address,
+    token0: "0x3E8D34E94e22BdBaa9aD6D575a239D722973D2Bc" as Address, // TKB
+    token1: "0xD8913B1a14Db9CD4B29C05c5E7E105cDA34ebF9f" as Address, // TKA
+    label: "TKB/TKA",
   },
 ];
 
