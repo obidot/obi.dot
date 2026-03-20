@@ -3,6 +3,8 @@
 import { useState, useMemo } from "react";
 import type { ProtocolYield, BifrostYield, UniswapV2Yield } from "@/types";
 import { cn, formatApy, formatUsdNumber } from "@/lib/format";
+import type { LiquidityPairMeta } from "@/types";
+import { LP_PAIRS } from "@/lib/constants";
 import { Search, ChevronUp, ChevronDown } from "lucide-react";
 
 type SourceFilter = "all" | "bifrost" | "defi" | "uniswap";
@@ -87,7 +89,7 @@ interface YieldGridProps {
   yields: ProtocolYield[];
   bifrostYields: BifrostYield[];
   uniswapV2Yields: UniswapV2Yield[];
-  onEarn?: (name: string, apy: number) => void;
+  onEarn?: (name: string, apy: number, pairMeta?: LiquidityPairMeta) => void;
 }
 
 export function YieldGrid({ yields, bifrostYields, uniswapV2Yields, onEarn }: YieldGridProps) {
@@ -321,7 +323,15 @@ export function YieldGrid({ yields, bifrostYields, uniswapV2Yields, onEarn }: Yi
                   <td>
                     <button
                       type="button"
-                      onClick={() => onEarn?.(y.name, y.apyPercent)}
+                      onClick={() => {
+                        const pairMeta = item.isUniswap
+                          ? LP_PAIRS.find((p) => p.label === y.name)
+                          : undefined;
+                        if (item.isUniswap && !pairMeta) {
+                          console.warn(`[YieldGrid] No LP_PAIRS entry for UV2 row "${y.name}"`);
+                        }
+                        onEarn?.(y.name, y.apyPercent, pairMeta);
+                      }}
                       className={cn(
                         "rounded border px-2.5 py-1 font-mono text-[10px] font-semibold transition-colors",
                         onEarn

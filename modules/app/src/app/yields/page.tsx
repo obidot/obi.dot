@@ -2,6 +2,8 @@
 
 import { useRef, useState } from "react";
 import { useYields, useBifrostYields, useUniswapV2Yields } from "@/hooks/use-yields";
+import type { LiquidityPairMeta } from "@/types";
+import { LiquidityPanel } from "@/components/liquidity/liquidity-panel";
 import { YieldGrid } from "@/components/yields/yield-grid";
 import { VaultOverview } from "@/components/dashboard/vault-overview";
 import { QuickStats } from "@/components/dashboard/quick-stats";
@@ -156,10 +158,16 @@ export default function YieldsPage() {
 
   const sidebarRef = useRef<HTMLDivElement>(null);
   const [earnHint, setEarnHint] = useState<{ name: string; apy: number } | null>(null);
+  const [selectedLpPair, setSelectedLpPair] = useState<LiquidityPairMeta | null>(null);
 
-  function handleEarn(name: string, apy: number) {
-    setEarnHint({ name, apy });
-    sidebarRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  function handleEarn(name: string, apy: number, pairMeta?: LiquidityPairMeta) {
+    if (pairMeta) {
+      setSelectedLpPair(pairMeta);
+    } else {
+      setSelectedLpPair(null);
+      setEarnHint({ name, apy });
+      sidebarRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
   }
 
   return (
@@ -246,6 +254,12 @@ export default function YieldsPage() {
 
       {/* Recent on-chain activity */}
       <RecentActivity />
+
+      <LiquidityPanel
+        pair={selectedLpPair}
+        open={!!selectedLpPair}
+        onClose={() => setSelectedLpPair(null)}
+      />
     </div>
   );
 }
