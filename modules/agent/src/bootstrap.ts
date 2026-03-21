@@ -11,8 +11,7 @@ const POLKADOT_WARNING_MARKERS = [
   "Either remove and explicitly install matching versions or dedupe using your package manager.",
 ];
 
-const showRawPolkadotWarnings =
-  process.env["OBI_SHOW_POLKADOT_WARNINGS"] === "1";
+const showRawPolkadotWarnings = process.env.OBI_SHOW_POLKADOT_WARNINGS === "1";
 
 if (!showRawPolkadotWarnings) {
   const originalWarn = console.warn.bind(console);

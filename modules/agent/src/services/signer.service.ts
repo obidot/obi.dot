@@ -1,31 +1,30 @@
 import {
+  type Address,
+  type Chain,
   createPublicClient,
   createWalletClient,
-  http,
-  type Address,
   type Hex,
+  http,
   type PublicClient,
   type WalletClient,
-  type Chain,
 } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
-
-import { env } from "../config/env.js";
 import {
-  CHAIN_ID,
-  RPC_URL,
-  VAULT_ADDRESS,
-  VAULT_ABI,
-  EIP712_DOMAIN,
-  STRATEGY_INTENT_TYPES,
-  BIFROST_ADAPTER_ADDRESS,
   BIFROST_ADAPTER_ABI,
+  BIFROST_ADAPTER_ADDRESS,
+  CHAIN_ID,
+  EIP712_DOMAIN,
   ERC20_ABI,
-  SWAP_ROUTER_ADDRESS,
+  RPC_URL,
+  STRATEGY_INTENT_TYPES,
   SWAP_ROUTER_ABI,
+  SWAP_ROUTER_ADDRESS,
+  VAULT_ABI,
+  VAULT_ADDRESS,
 } from "../config/constants.js";
+import { env } from "../config/env.js";
 import type { StrategyIntent } from "../types/index.js";
-import { BifrostStrategyType, BifrostCurrencyId } from "../types/index.js";
+import { BifrostCurrencyId, type BifrostStrategyType } from "../types/index.js";
 import { signerLog } from "../utils/logger.js";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -571,7 +570,11 @@ export class SignerService {
     });
 
     signerLog.info(
-      { txHash, blockNumber: receipt.blockNumber.toString(), status: receipt.status },
+      {
+        txHash,
+        blockNumber: receipt.blockNumber.toString(),
+        status: receipt.status,
+      },
       "Deposit confirmed",
     );
 
@@ -595,7 +598,12 @@ export class SignerService {
    * @returns Transaction hash
    */
   async executeDirectSwap(
-    hops: Array<{ pool: string; tokenIn: string; tokenOut: string; feeBps: string }>,
+    hops: Array<{
+      pool: string;
+      tokenIn: string;
+      tokenOut: string;
+      feeBps: string;
+    }>,
     amountIn: bigint,
     minAmountOut: bigint,
     to?: `0x${string}`,
@@ -604,7 +612,8 @@ export class SignerService {
 
     const recipient = to ?? this.account.address;
     const deadline = BigInt(Math.floor(Date.now() / 1000) + 600); // 10 min
-    const ZERO_BYTES32 = "0x0000000000000000000000000000000000000000000000000000000000000000" as `0x${string}`;
+    const ZERO_BYTES32 =
+      "0x0000000000000000000000000000000000000000000000000000000000000000" as `0x${string}`;
     const POOL_TYPE_CUSTOM = 3; // PoolType.Custom = UV2
 
     // ── Check & set tokenIn allowance for SwapRouter ───────────────────────
@@ -684,9 +693,16 @@ export class SignerService {
       });
     }
 
-    const receipt = await this.publicClient.waitForTransactionReceipt({ hash: txHash });
+    const receipt = await this.publicClient.waitForTransactionReceipt({
+      hash: txHash,
+    });
     signerLog.info(
-      { txHash, hops: hops.length, blockNumber: receipt.blockNumber.toString(), status: receipt.status },
+      {
+        txHash,
+        hops: hops.length,
+        blockNumber: receipt.blockNumber.toString(),
+        status: receipt.status,
+      },
       "Direct swap executed",
     );
     return txHash;

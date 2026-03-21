@@ -39,7 +39,11 @@ export async function createLlm(): Promise<BaseChatModel> {
         throw new Error("LLM_PROVIDER=openai requires OPENAI_API_KEY");
       }
       const { ChatOpenAI } = await import("@langchain/openai");
-      return new ChatOpenAI({ model, temperature: 1, apiKey: env.OPENAI_API_KEY });
+      return new ChatOpenAI({
+        model,
+        temperature: 1,
+        apiKey: env.OPENAI_API_KEY,
+      });
     }
 
     case "anthropic": {
@@ -47,13 +51,19 @@ export async function createLlm(): Promise<BaseChatModel> {
         throw new Error("LLM_PROVIDER=anthropic requires ANTHROPIC_API_KEY");
       }
       const { ChatAnthropic } = await import("@langchain/anthropic");
-      return new ChatAnthropic({ model, temperature: 1, apiKey: env.ANTHROPIC_API_KEY });
+      return new ChatAnthropic({
+        model,
+        temperature: 1,
+        apiKey: env.ANTHROPIC_API_KEY,
+      });
     }
 
     case "openrouter": {
       const apiKey = env.OPENAI_API_KEY;
       if (!apiKey) {
-        throw new Error("LLM_PROVIDER=openrouter requires OPENAI_API_KEY (used as OpenRouter key)");
+        throw new Error(
+          "LLM_PROVIDER=openrouter requires OPENAI_API_KEY (used as OpenRouter key)",
+        );
       }
       const { ChatOpenAI } = await import("@langchain/openai");
       return new ChatOpenAI({

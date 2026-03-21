@@ -1,5 +1,5 @@
-import { z } from "zod";
 import dotenv from "dotenv";
+import { z } from "zod";
 
 dotenv.config();
 
@@ -19,9 +19,7 @@ const envSchema = z.object({
    * "anthropic"        — ChatAnthropic (claude-sonnet-4 or configured model).
    * "openrouter"       — OpenRouter proxy (requires OPENAI_API_KEY as the API key).
    */
-  LLM_PROVIDER: z
-    .enum(["openai", "anthropic", "openrouter"])
-    .default("openai"),
+  LLM_PROVIDER: z.enum(["openai", "anthropic", "openrouter"]).default("openai"),
 
   /**
    * LLM model string.
@@ -97,9 +95,7 @@ const envSchema = z.object({
    * Suppress noisy @polkadot/util duplicate ESM/CJS warnings when they are same-version duplicates.
    * NOTE: This does not suppress real version mismatches.
    */
-  POLKADOTJS_DISABLE_ESM_CJS_WARNING: z
-    .enum(["0", "1"])
-    .default("1"),
+  POLKADOTJS_DISABLE_ESM_CJS_WARNING: z.enum(["0", "1"]).default("1"),
 
   /** Maximum single strategy deployment in asset units (18-decimal string). */
   MAX_STRATEGY_AMOUNT: z.string().default("100000000000000000000000"), // 100k tokens

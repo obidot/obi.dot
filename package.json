@@ -22,12 +22,14 @@
     "agent:start": "pnpm --filter @obidot/agent run start",
     "agent:typecheck": "pnpm --filter @obidot/agent run typecheck",
     "agent:lint": "pnpm --filter @obidot/agent run lint",
+    "agent:format": "pnpm --filter @obidot/agent run format",
 
     "app:dev": "pnpm --filter @obidot/app run dev",
     "app:build": "pnpm --filter @obidot/app run build",
     "app:start": "pnpm --filter @obidot/app run start",
     "app:typecheck": "pnpm --filter @obidot/app run typecheck",
-    "app:lint": "pnpm --filter @obidot/app run lint"
+    "app:lint": "pnpm --filter @obidot/app run lint",
+    "app:format": "pnpm --filter @obidot/app run format"
   },
   "devDependencies": {
     "turbo": "^2.5.0"

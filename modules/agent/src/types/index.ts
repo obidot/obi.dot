@@ -1,5 +1,5 @@
-import { z } from "zod";
 import type { Address, Hex } from "viem";
+import { z } from "zod";
 
 // ─────────────────────────────────────────────────────────────────────────────
 //  StrategyIntent — TypeScript mirror of the Solidity struct

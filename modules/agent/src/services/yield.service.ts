@@ -1,6 +1,17 @@
-import { createPublicClient, http, type Chain } from "viem";
-import { KNOWN_PARACHAINS, BIFROST_PROTOCOLS, CHAIN_ID, RPC_URL, UV2_PAIRS, UV2_PAIR_ABI } from "../config/constants.js";
-import type { ProtocolYield, BifrostYield, UniswapV2Yield } from "../types/index.js";
+import { type Chain, createPublicClient, http } from "viem";
+import {
+  BIFROST_PROTOCOLS,
+  CHAIN_ID,
+  KNOWN_PARACHAINS,
+  RPC_URL,
+  UV2_PAIR_ABI,
+  UV2_PAIRS,
+} from "../config/constants.js";
+import type {
+  BifrostYield,
+  ProtocolYield,
+  UniswapV2Yield,
+} from "../types/index.js";
 import { BifrostCurrencyId } from "../types/index.js";
 import { yieldLog } from "../utils/logger.js";
 
@@ -108,7 +119,10 @@ export class YieldService {
           paraId: y.paraId,
           apyPercent: y.apyPercent.toFixed(2),
           tvlUsd: y.tvlUsd.toLocaleString(),
-          tvlSource: tvl.hydration !== null || tvl.bifrost !== null ? "defillama-tvl" : "simulation",
+          tvlSource:
+            tvl.hydration !== null || tvl.bifrost !== null
+              ? "defillama-tvl"
+              : "simulation",
           apySource: "simulation",
         },
         "Yield data fetched",
@@ -295,7 +309,8 @@ export class YieldService {
           });
           const totalReserveWei = reserve0 + reserve1;
           // Divide in BigInt first to preserve precision, then convert
-          const tvlUsd = (Number(totalReserveWei / BigInt(1e15)) / 1e3) * DOT_PRICE_USD;
+          const tvlUsd =
+            (Number(totalReserveWei / BigInt(1e15)) / 1e3) * DOT_PRICE_USD;
           return {
             name: pair.label,
             protocolLabel: "UniswapV2",
@@ -311,7 +326,10 @@ export class YieldService {
             fetchedAt: now,
           };
         } catch {
-          yieldLog.warn({ pair: pair.label }, "Failed to fetch UV2 reserves — using fallback");
+          yieldLog.warn(
+            { pair: pair.label },
+            "Failed to fetch UV2 reserves — using fallback",
+          );
           return {
             name: pair.label,
             protocolLabel: "UniswapV2",
@@ -331,7 +349,10 @@ export class YieldService {
     );
 
     return results
-      .filter((r): r is PromiseFulfilledResult<UniswapV2Yield> => r.status === "fulfilled")
+      .filter(
+        (r): r is PromiseFulfilledResult<UniswapV2Yield> =>
+          r.status === "fulfilled",
+      )
       .map((r) => r.value);
   }
 
@@ -373,13 +394,18 @@ export class YieldService {
         }
         const text = await response.text();
         const value = parseFloat(text);
-        if (isNaN(value)) {
-          throw new Error(`DeFiLlama TVL non-numeric response for ${slug}: ${text}`);
+        if (Number.isNaN(value)) {
+          throw new Error(
+            `DeFiLlama TVL non-numeric response for ${slug}: ${text}`,
+          );
         }
         yieldLog.info({ slug, tvlUsd: value }, "DeFiLlama TVL fetched");
         return value;
       } catch (err) {
-        yieldLog.warn({ err, slug }, "Failed to fetch DeFiLlama TVL — using fallback");
+        yieldLog.warn(
+          { err, slug },
+          "Failed to fetch DeFiLlama TVL — using fallback",
+        );
         return null;
       }
     };

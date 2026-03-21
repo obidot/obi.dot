@@ -4,12 +4,11 @@ import {
   SystemMessage,
   ToolMessage,
 } from "@langchain/core/messages";
-import { ChatOpenAI } from "@langchain/openai";
 import type { StructuredToolInterface } from "@langchain/core/tools";
+import { ChatOpenAI } from "@langchain/openai";
 import { Bot } from "grammy";
-
-import { env } from "../config/env.js";
 import { VAULT_ADDRESS } from "../config/constants.js";
+import { env } from "../config/env.js";
 import { logger } from "../utils/logger.js";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -57,7 +56,11 @@ const TELEGRAM_SYSTEM_PROMPT = `You are the **Obidot Vault Assistant** — an AI
 //  Agent Runner
 // ─────────────────────────────────────────────────────────────────────────────
 
-type ConversationMessage = SystemMessage | HumanMessage | AIMessage | ToolMessage;
+type ConversationMessage =
+  | SystemMessage
+  | HumanMessage
+  | AIMessage
+  | ToolMessage;
 
 interface AgentRunner {
   run: (userMessage: string, userId: number) => Promise<string>;
@@ -77,8 +80,7 @@ function createAgentRunner(tools: StructuredToolInterface[]): AgentRunner {
     temperature: 1,
   });
 
-  const boundModel =
-    tools.length > 0 ? model.bindTools(tools) : model;
+  const boundModel = tools.length > 0 ? model.bindTools(tools) : model;
 
   const toolMap = new Map<string, StructuredToolInterface>();
   for (const tool of tools) {
@@ -94,7 +96,10 @@ function createAgentRunner(tools: StructuredToolInterface[]): AgentRunner {
       if (!userHistories.has(userId)) {
         userHistories.set(userId, []);
       }
-      const history = userHistories.get(userId)!;
+      const history = userHistories.get(userId);
+      if (!history) {
+        throw new Error(`Failed to initialize history for user ${userId}`);
+      }
 
       // Append the new human message
       history.push(new HumanMessage(userMessage));
@@ -105,7 +110,8 @@ function createAgentRunner(tools: StructuredToolInterface[]): AgentRunner {
         ...history,
       ];
 
-      let finalContent = "I was unable to complete your request within the allowed steps. Please try a simpler query.";
+      let finalContent =
+        "I was unable to complete your request within the allowed steps. Please try a simpler query.";
 
       for (let i = 0; i < MAX_ITERATIONS; i++) {
         const response = await boundModel.invoke(messages);
@@ -164,7 +170,10 @@ function createAgentRunner(tools: StructuredToolInterface[]): AgentRunner {
               error instanceof Error ? error.message : String(error);
             messages.push(
               new ToolMessage({
-                content: JSON.stringify({ success: false, error: errorMessage }),
+                content: JSON.stringify({
+                  success: false,
+                  error: errorMessage,
+                }),
                 tool_call_id: toolCall.id ?? "",
               }),
             );
@@ -227,14 +236,10 @@ function splitMessage(text: string): string[] {
  *   autonomous agent so users can invoke the same capabilities via chat).
  * @returns The Grammy Bot instance (for lifecycle management).
  */
-export function createTelegramBot(
-  tools: StructuredToolInterface[],
-): Bot {
+export function createTelegramBot(tools: StructuredToolInterface[]): Bot {
   const token = env.TELEGRAM_BOT_TOKEN;
   if (!token) {
-    throw new Error(
-      "TELEGRAM_BOT_TOKEN is required to start the Telegram bot",
-    );
+    throw new Error("TELEGRAM_BOT_TOKEN is required to start the Telegram bot");
   }
 
   const bot = new Bot(token);
@@ -248,14 +253,14 @@ export function createTelegramBot(
   bot.command("start", async (ctx) => {
     await ctx.reply(
       `Welcome to Obidot — Autonomous Cross-Chain Finance on Polkadot\n\n` +
-      `Vault: ${VAULT_ADDRESS}\n` +
-      `Chain: Polkadot Hub Testnet (Paseo)\n\n` +
-      `Send me a message to interact with the vault. Examples:\n` +
-      `• "What is the current vault state?"\n` +
-      `• "Show me the best yield opportunities"\n` +
-      `• "What are the Bifrost yields?"\n` +
-      `• "Deposit 100 DOT into the vault"\n\n` +
-      `Type /help for all commands.`,
+        `Vault: ${VAULT_ADDRESS}\n` +
+        `Chain: Polkadot Hub Testnet (Paseo)\n\n` +
+        `Send me a message to interact with the vault. Examples:\n` +
+        `• "What is the current vault state?"\n` +
+        `• "Show me the best yield opportunities"\n` +
+        `• "What are the Bifrost yields?"\n` +
+        `• "Deposit 100 DOT into the vault"\n\n` +
+        `Type /help for all commands.`,
     );
   });
 
@@ -265,16 +270,16 @@ export function createTelegramBot(
     const toolNames = tools.map((t) => `• ${t.name}`).join("\n");
     await ctx.reply(
       `Obidot Vault Bot — Help\n\n` +
-      `Available tools:\n${toolNames}\n\n` +
-      `Example prompts:\n` +
-      `• "Show vault state"\n` +
-      `• "Fetch all yield opportunities"\n` +
-      `• "What are the Bifrost liquid staking yields?"\n` +
-      `• "Check cross-chain satellite status"\n` +
-      `• "Deposit 50 DOT"\n` +
-      `• "Withdraw 25 DOT"\n\n` +
-      `The bot uses an AI agent to interpret your messages ` +
-      `and call the appropriate on-chain tools.`,
+        `Available tools:\n${toolNames}\n\n` +
+        `Example prompts:\n` +
+        `• "Show vault state"\n` +
+        `• "Fetch all yield opportunities"\n` +
+        `• "What are the Bifrost liquid staking yields?"\n` +
+        `• "Check cross-chain satellite status"\n` +
+        `• "Deposit 50 DOT"\n` +
+        `• "Withdraw 25 DOT"\n\n` +
+        `The bot uses an AI agent to interpret your messages ` +
+        `and call the appropriate on-chain tools.`,
     );
   });
 
@@ -283,11 +288,11 @@ export function createTelegramBot(
   bot.command("info", async (ctx) => {
     await ctx.reply(
       `Obidot Agent Info\n\n` +
-      `• Vault: ${VAULT_ADDRESS}\n` +
-      `• Chain: Polkadot Hub Testnet (420420417)\n` +
-      `• Tools: ${String(tools.length)}\n` +
-      `• Model: GPT-5-mini\n` +
-      `• Mode: EVM (live transactions)`,
+        `• Vault: ${VAULT_ADDRESS}\n` +
+        `• Chain: Polkadot Hub Testnet (420420417)\n` +
+        `• Tools: ${String(tools.length)}\n` +
+        `• Model: GPT-5-mini\n` +
+        `• Mode: EVM (live transactions)`,
     );
   });
 
@@ -324,7 +329,7 @@ export function createTelegramBot(
       teleLog.error({ chatId, error: errorMessage }, "Agent error");
       await ctx.reply(
         "Sorry, something went wrong while processing your request. " +
-        "Please try again.",
+          "Please try again.",
       );
     }
   });

@@ -436,7 +436,7 @@ export const EVM_CHAINS: Record<string, EVMChainConfig> = {};
 
 // Populate from env at import time (optional env vars)
 if (env.ETH_RPC_URL) {
-  EVM_CHAINS["ethereum"] = {
+  EVM_CHAINS.ethereum = {
     chainId: "ethereum",
     name: "Ethereum Mainnet",
     rpcUrl: env.ETH_RPC_URL,
@@ -444,7 +444,7 @@ if (env.ETH_RPC_URL) {
   };
 }
 if (env.ARB_RPC_URL) {
-  EVM_CHAINS["arbitrum"] = {
+  EVM_CHAINS.arbitrum = {
     chainId: "arbitrum",
     name: "Arbitrum One",
     rpcUrl: env.ARB_RPC_URL,
@@ -452,7 +452,7 @@ if (env.ARB_RPC_URL) {
   };
 }
 if (env.BASE_RPC_URL) {
-  EVM_CHAINS["base"] = {
+  EVM_CHAINS.base = {
     chainId: "base",
     name: "Base",
     rpcUrl: env.BASE_RPC_URL,
@@ -460,7 +460,7 @@ if (env.BASE_RPC_URL) {
   };
 }
 if (env.OP_RPC_URL) {
-  EVM_CHAINS["optimism"] = {
+  EVM_CHAINS.optimism = {
     chainId: "optimism",
     name: "Optimism",
     rpcUrl: env.OP_RPC_URL,

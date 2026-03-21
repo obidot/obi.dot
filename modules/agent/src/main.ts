@@ -1,8 +1,8 @@
-import { env } from "./config/env.js";
-import { logger } from "./utils/logger.js";
 import { AutonomousLoop } from "./agent/loop.js";
-import { startTelegramBot } from "./telegram/bot.js";
 import { startApiServer } from "./api/server.js";
+import { env } from "./config/env.js";
+import { startTelegramBot } from "./telegram/bot.js";
+import { logger } from "./utils/logger.js";
 
 /**
  * Bootstrap and run the Obidot AI agent.
@@ -88,7 +88,6 @@ async function main(): Promise<void> {
 // ─────────────────────────────────────────────────────────────────────────────
 
 main().catch((error: unknown) => {
-  // eslint-disable-next-line no-console
   console.error("Fatal startup error:", error);
   process.exit(1);
 });

@@ -1,21 +1,20 @@
-import Fastify from "fastify";
 import cors from "@fastify/cors";
 import websocket from "@fastify/websocket";
 import type { StructuredToolInterface } from "@langchain/core/tools";
-
-import { SignerService } from "../services/signer.service.js";
-import { YieldService } from "../services/yield.service.js";
-import { CrossChainService } from "../services/crosschain.service.js";
-import { SwapRouterService } from "../services/swap-router.service.js";
+import Fastify from "fastify";
+import { env } from "../config/env.js";
+import type { CrossChainService } from "../services/crosschain.service.js";
 import { eventBus } from "../services/event-bus.service.js";
+import type { SignerService } from "../services/signer.service.js";
+import type { SwapRouterService } from "../services/swap-router.service.js";
+import type { YieldService } from "../services/yield.service.js";
+import { logger } from "../utils/logger.js";
+import { registerAgentRoutes } from "./routes/agent.js";
+import { registerCrossChainRoutes } from "./routes/crosschain.js";
+import { registerStrategyRoutes } from "./routes/strategies.js";
+import { registerSwapRoutes } from "./routes/swap.js";
 import { registerVaultRoutes } from "./routes/vault.js";
 import { registerYieldRoutes } from "./routes/yields.js";
-import { registerStrategyRoutes } from "./routes/strategies.js";
-import { registerCrossChainRoutes } from "./routes/crosschain.js";
-import { registerAgentRoutes } from "./routes/agent.js";
-import { registerSwapRoutes } from "./routes/swap.js";
-import { env } from "../config/env.js";
-import { logger } from "../utils/logger.js";
 
 const apiLog = logger.child({ module: "api" });
 
