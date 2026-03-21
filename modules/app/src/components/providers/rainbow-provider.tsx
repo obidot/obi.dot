@@ -11,8 +11,8 @@ export function RainbowKitClientProvider({
   return (
     <RainbowKitProvider
       theme={lightTheme({
-        accentColor: "#00ff88",
-        accentColorForeground: "#0a0a0f",
+        accentColor: "#ff4fa3",
+        accentColorForeground: "#180d16",
         borderRadius: "medium",
         overlayBlur: "small",
       })}

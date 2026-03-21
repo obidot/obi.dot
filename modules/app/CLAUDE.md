@@ -33,6 +33,8 @@ This is a **Next.js 15 App Router** frontend for the Obidot DEX aggregator on Po
 
 **Provider stack** — `src/app/providers.tsx` wraps `WagmiProvider → QueryProvider → RainbowKitClientProvider`. All are client components; the root layout is a server component.
 
+**Theme presets** — `src/app/globals.css` contains named palette presets on `:root[data-theme=...]`. The active preset is selected in `src/app/layout.tsx` via the `<html data-theme="...">` attribute. Current presets are `retro-classic`, `obidot-polkadot`, `obidot-orbital`, and `obidot-signal`. Keep palette work additive so prior presets remain easy to restore.
+
 ### Supported chains
 
 Only two chains are defined (`src/lib/chains.ts`):

@@ -32,6 +32,8 @@ export default function RootLayout({
   return (
     <html
       lang="en"
+      // Available presets: retro-classic, obidot-polkadot, obidot-orbital, obidot-signal.
+      data-theme="obidot-polkadot"
       className={cn(
         "antialiased",
         atlasFont.className,
