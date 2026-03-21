@@ -82,8 +82,8 @@ const IL_ESTIMATES: Record<string, number> = {
 
 /** APY variance for confidence intervals */
 const APY_VARIANCE = {
-  LOW: 0.6,   // 60% of base APY (bear case)
-  HIGH: 1.3,  // 130% of base APY (bull case)
+  LOW: 0.6, // 60% of base APY (bear case)
+  HIGH: 1.3, // 130% of base APY (bull case)
 } as const;
 
 // ── Public API ────────────────────────────────────────────────────────────
@@ -98,7 +98,7 @@ export function simulatePosition(input: SimulationInput): SimulationResult {
   const dailyRate = apyPercent / 100 / 365;
 
   // Base projection (compound)
-  const finalBalanceUsd = amountUsd * Math.pow(1 + dailyRate, durationDays);
+  const finalBalanceUsd = amountUsd * (1 + dailyRate) ** durationDays;
   const projectedReturnUsd = finalBalanceUsd - amountUsd;
   const dailyYieldUsd = amountUsd * dailyRate;
   const monthlyYieldUsd = dailyYieldUsd * 30;
@@ -108,7 +108,7 @@ export function simulatePosition(input: SimulationInput): SimulationResult {
   const effectiveReturn = projectedReturnUsd - totalCosts;
   const effectiveApy =
     durationDays > 0
-      ? ((effectiveReturn / amountUsd) * (365 / durationDays)) * 100
+      ? (effectiveReturn / amountUsd) * (365 / durationDays) * 100
       : 0;
 
   // Break-even: days to earn back entry+exit costs
@@ -140,21 +140,24 @@ export function simulatePosition(input: SimulationInput): SimulationResult {
     const highRate = highApy / 100 / 365;
     timeline.push({
       day,
-      balanceLow: amountUsd * Math.pow(1 + lowRate, day),
-      balanceMid: amountUsd * Math.pow(1 + midRate, day),
-      balanceHigh: amountUsd * Math.pow(1 + highRate, day),
+      balanceLow: amountUsd * (1 + lowRate) ** day,
+      balanceMid: amountUsd * (1 + midRate) ** day,
+      balanceHigh: amountUsd * (1 + highRate) ** day,
     });
   }
   // Ensure final day is included
-  if (timeline.length > 0 && timeline[timeline.length - 1].day !== durationDays) {
+  if (
+    timeline.length > 0 &&
+    timeline[timeline.length - 1].day !== durationDays
+  ) {
     const lowRate = lowApy / 100 / 365;
     const midRate = dailyRate;
     const highRate = highApy / 100 / 365;
     timeline.push({
       day: durationDays,
-      balanceLow: amountUsd * Math.pow(1 + lowRate, durationDays),
-      balanceMid: amountUsd * Math.pow(1 + midRate, durationDays),
-      balanceHigh: amountUsd * Math.pow(1 + highRate, durationDays),
+      balanceLow: amountUsd * (1 + lowRate) ** durationDays,
+      balanceMid: amountUsd * (1 + midRate) ** durationDays,
+      balanceHigh: amountUsd * (1 + highRate) ** durationDays,
     });
   }
 
@@ -165,7 +168,7 @@ export function simulatePosition(input: SimulationInput): SimulationResult {
     monthlyYieldUsd,
     finalBalanceUsd,
     effectiveApy,
-    breakEvenDays: isFinite(breakEvenDays) ? breakEvenDays : 999,
+    breakEvenDays: Number.isFinite(breakEvenDays) ? breakEvenDays : 999,
     estimatedIlPercent,
     returnAfterIlUsd,
     confidence,
@@ -180,7 +183,7 @@ function buildProjection(
   days: number,
 ): SimulationProjection {
   const rate = apy / 100 / 365;
-  const finalBalance = amount * Math.pow(1 + rate, days);
+  const finalBalance = amount * (1 + rate) ** days;
   return {
     label,
     apy,

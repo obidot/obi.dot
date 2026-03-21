@@ -1,15 +1,9 @@
 "use client";
 
+import { Activity, Gauge, Minus, TrendingDown, TrendingUp } from "lucide-react";
 import { useMemo } from "react";
-import type { AgentDecision, ProtocolYield, BifrostYield } from "@/types";
 import { cn } from "@/lib/format";
-import {
-  Activity,
-  TrendingUp,
-  TrendingDown,
-  Minus,
-  Gauge,
-} from "lucide-react";
+import type { AgentDecision, BifrostYield, ProtocolYield } from "@/types";
 
 interface MarketPulseProps {
   decisions: AgentDecision[];
@@ -22,7 +16,12 @@ interface PulseMetrics {
   /** Overall sentiment -100 to +100 */
   sentiment: number;
   /** Label */
-  label: "BULLISH" | "CAUTIOUSLY_BULLISH" | "NEUTRAL" | "CAUTIOUSLY_BEARISH" | "BEARISH";
+  label:
+    | "BULLISH"
+    | "CAUTIOUSLY_BULLISH"
+    | "NEUTRAL"
+    | "CAUTIOUSLY_BEARISH"
+    | "BEARISH";
   /** Color */
   color: string;
   /** Factors */
@@ -50,7 +49,10 @@ function computePulse(
     ...yields.map((y) => y.apyPercent),
     ...bifrostYields.map((y) => y.apyPercent),
   ];
-  const avgApy = allApys.length > 0 ? allApys.reduce((a, b) => a + b, 0) / allApys.length : 0;
+  const avgApy =
+    allApys.length > 0
+      ? allApys.reduce((a, b) => a + b, 0) / allApys.length
+      : 0;
   const apySignal = avgApy > 10 ? 40 : avgApy > 7 ? 20 : avgApy > 4 ? 0 : -20;
   factors.push({
     name: "APY Level",
@@ -70,8 +72,18 @@ function computePulse(
   });
 
   // Factor 3: TVL strength — higher TVL = more confidence in the ecosystem
-  const totalTvl = [...yields, ...bifrostYields].reduce((a, y) => a + y.tvlUsd, 0);
-  const tvlSignal = totalTvl > 200_000_000 ? 25 : totalTvl > 50_000_000 ? 10 : totalTvl > 10_000_000 ? 0 : -15;
+  const totalTvl = [...yields, ...bifrostYields].reduce(
+    (a, y) => a + y.tvlUsd,
+    0,
+  );
+  const tvlSignal =
+    totalTvl > 200_000_000
+      ? 25
+      : totalTvl > 50_000_000
+        ? 10
+        : totalTvl > 10_000_000
+          ? 0
+          : -15;
   factors.push({
     name: "TVL Depth",
     value: tvlSignal,
@@ -88,7 +100,14 @@ function computePulse(
   });
 
   // Factor 5: On-chain swap volume — more swaps = more active ecosystem
-  const volumeSignal = recentSwapCount > 100 ? 20 : recentSwapCount > 30 ? 10 : recentSwapCount > 5 ? 0 : -10;
+  const volumeSignal =
+    recentSwapCount > 100
+      ? 20
+      : recentSwapCount > 30
+        ? 10
+        : recentSwapCount > 5
+          ? 0
+          : -10;
   factors.push({
     name: "Swap Volume",
     value: volumeSignal,
@@ -100,15 +119,27 @@ function computePulse(
 
   let label: PulseMetrics["label"];
   let color: string;
-  if (clamped >= 40) { label = "BULLISH"; color = "text-primary"; }
-  else if (clamped >= 15) { label = "CAUTIOUSLY_BULLISH"; color = "text-primary/80"; }
-  else if (clamped >= -15) { label = "NEUTRAL"; color = "text-text-secondary"; }
-  else if (clamped >= -40) { label = "CAUTIOUSLY_BEARISH"; color = "text-warning"; }
-  else { label = "BEARISH"; color = "text-danger"; }
+  if (clamped >= 40) {
+    label = "BULLISH";
+    color = "text-primary";
+  } else if (clamped >= 15) {
+    label = "CAUTIOUSLY_BULLISH";
+    color = "text-primary/80";
+  } else if (clamped >= -15) {
+    label = "NEUTRAL";
+    color = "text-text-secondary";
+  } else if (clamped >= -40) {
+    label = "CAUTIOUSLY_BEARISH";
+    color = "text-warning";
+  } else {
+    label = "BEARISH";
+    color = "text-danger";
+  }
 
-  const agentActivity = recent.length > 0
-    ? `${actions} active deployment${actions !== 1 ? "s" : ""} in last ${recent.length} cycles`
-    : "No recent agent activity";
+  const agentActivity =
+    recent.length > 0
+      ? `${actions} active deployment${actions !== 1 ? "s" : ""} in last ${recent.length} cycles`
+      : "No recent agent activity";
 
   return { sentiment: clamped, label, color, factors, agentActivity };
 }
@@ -125,24 +156,25 @@ export function MarketPulse({
   );
 
   const SentimentIcon =
-    pulse.sentiment >= 15 ? TrendingUp :
-    pulse.sentiment <= -15 ? TrendingDown :
-    Minus;
+    pulse.sentiment >= 15
+      ? TrendingUp
+      : pulse.sentiment <= -15
+        ? TrendingDown
+        : Minus;
 
   return (
-    <div className="panel overflow-hidden rounded-lg">
-      {/* Header */}
-      <div className="flex items-center justify-between border-b border-border px-4 py-3">
-        <div className="flex items-center gap-2.5">
-          <div className="flex h-7 w-7 items-center justify-center rounded-md bg-accent/10">
-            <Gauge className="h-3.5 w-3.5 text-accent" />
+    <div className="panel overflow-hidden">
+      <div className="panel-header">
+        <div className="panel-header-block">
+          <div className="panel-header-icon bg-accent">
+            <Gauge className="h-4 w-4 text-foreground" />
           </div>
-          <div>
-            <h3 className="text-base font-semibold text-text-primary">
-              Market Pulse
-            </h3>
-            <p className="font-mono text-xs text-text-muted">
-              Aggregated market sentiment from AI analysis
+          <div className="panel-heading">
+            <span className="panel-kicker">Sentiment Engine</span>
+            <h3 className="panel-title">Market Pulse</h3>
+            <p className="panel-subtitle">
+              Composite sentiment based on yield levels, agent actions,
+              liquidity depth, and swap flow.
             </p>
           </div>
         </div>
@@ -153,24 +185,22 @@ export function MarketPulse({
               {pulse.label.replace(/_/g, " ")}
             </p>
             <p className="font-mono text-xs text-text-muted">
-              Score: {pulse.sentiment > 0 ? "+" : ""}{pulse.sentiment}
+              Score: {pulse.sentiment > 0 ? "+" : ""}
+              {pulse.sentiment}
             </p>
           </div>
         </div>
       </div>
 
-      {/* Sentiment Gauge */}
       <div className="px-4 py-3">
-        <div className="relative h-3 overflow-hidden rounded-full bg-surface-hover">
-          {/* Gradient background */}
+        <div className="relative h-4 overflow-hidden border-[3px] border-border bg-surface-hover">
           <div className="absolute inset-0 flex">
             <div className="h-full flex-1 bg-danger/30" />
             <div className="h-full flex-1 bg-warning/30" />
             <div className="h-full flex-1 bg-primary/30" />
           </div>
-          {/* Needle */}
           <div
-            className="absolute top-0 h-full w-1 rounded-full bg-text-primary shadow-lg transition-all duration-500"
+            className="absolute top-0 h-full w-1.5 bg-text-primary shadow-lg transition-all duration-500"
             style={{ left: `${((pulse.sentiment + 100) / 200) * 100}%` }}
           />
         </div>
@@ -181,12 +211,11 @@ export function MarketPulse({
         </div>
       </div>
 
-      {/* Factors */}
-      <div className="border-t border-border divide-y divide-border-subtle">
+      <div className="border-t-[3px] border-border divide-y divide-border-subtle">
         {pulse.factors.map((factor) => (
-          <div key={factor.name} className="flex items-center gap-3 px-4 py-2">
+          <div key={factor.name} className="flex items-center gap-3 px-4 py-3">
             <div className="w-20 shrink-0">
-              <span className="font-mono text-xs font-semibold text-text-secondary">
+              <span className="retro-label text-sm text-text-secondary">
                 {factor.name}
               </span>
             </div>
@@ -194,24 +223,39 @@ export function MarketPulse({
               <div className="flex h-1.5 items-center">
                 <div className="h-full flex-1 overflow-hidden rounded-full bg-surface-hover">
                   {factor.value >= 0 ? (
-                    <div className="ml-[50%] h-full rounded-r-full bg-primary" style={{ width: `${(factor.value / 100) * 50}%` }} />
+                    <div
+                      className="ml-[50%] h-full rounded-r-full bg-primary"
+                      style={{ width: `${(factor.value / 100) * 50}%` }}
+                    />
                   ) : (
-                    <div className="mr-[50%] ml-auto h-full rounded-l-full bg-danger" style={{ width: `${(Math.abs(factor.value) / 100) * 50}%` }} />
+                    <div
+                      className="mr-[50%] ml-auto h-full rounded-l-full bg-danger"
+                      style={{
+                        width: `${(Math.abs(factor.value) / 100) * 50}%`,
+                      }}
+                    />
                   )}
                 </div>
               </div>
             </div>
-            <span className={cn("w-8 text-right font-mono text-xs font-bold", factor.value >= 0 ? "text-primary" : "text-danger")}>
-              {factor.value > 0 ? "+" : ""}{factor.value}
+            <span
+              className={cn(
+                "w-8 text-right font-mono text-xs font-bold",
+                factor.value >= 0 ? "text-primary" : "text-danger",
+              )}
+            >
+              {factor.value > 0 ? "+" : ""}
+              {factor.value}
             </span>
           </div>
         ))}
       </div>
 
-      {/* Agent Activity Summary */}
-      <div className="flex items-center gap-2 border-t border-border px-4 py-2">
+      <div className="section-strip flex items-center gap-2">
         <Activity className="h-3 w-3 text-accent" />
-        <p className="font-mono text-xs text-text-muted">{pulse.agentActivity}</p>
+        <p className="font-mono text-xs text-text-muted">
+          {pulse.agentActivity}
+        </p>
       </div>
     </div>
   );

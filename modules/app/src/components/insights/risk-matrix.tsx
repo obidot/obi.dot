@@ -1,15 +1,10 @@
 "use client";
 
+import { Crosshair, Shield } from "lucide-react";
 import { useMemo } from "react";
-import type { ProtocolYield, BifrostYield } from "@/types";
-import {
-  analyzeRisks,
-  riskTierColor,
-  riskTierBg,
-  type RiskProfile,
-} from "@/lib/risk-analyzer";
 import { cn, formatUsdNumber } from "@/lib/format";
-import { Shield, Crosshair } from "lucide-react";
+import { analyzeRisks, riskTierBg, riskTierColor } from "@/lib/risk-analyzer";
+import type { BifrostYield, ProtocolYield } from "@/types";
 
 interface RiskMatrixProps {
   yields: ProtocolYield[];
@@ -17,10 +12,34 @@ interface RiskMatrixProps {
 }
 
 const QUADRANT_LABELS = [
-  { x: 25, y: 75, label: "Sweet Spot", desc: "Low risk, High reward", color: "text-primary" },
-  { x: 75, y: 75, label: "High Alpha", desc: "High risk, High reward", color: "text-warning" },
-  { x: 25, y: 25, label: "Safe Haven", desc: "Low risk, Low reward", color: "text-accent" },
-  { x: 75, y: 25, label: "Avoid", desc: "High risk, Low reward", color: "text-danger" },
+  {
+    x: 25,
+    y: 75,
+    label: "Sweet Spot",
+    desc: "Low risk, High reward",
+    color: "text-primary",
+  },
+  {
+    x: 75,
+    y: 75,
+    label: "High Alpha",
+    desc: "High risk, High reward",
+    color: "text-warning",
+  },
+  {
+    x: 25,
+    y: 25,
+    label: "Safe Haven",
+    desc: "Low risk, Low reward",
+    color: "text-accent",
+  },
+  {
+    x: 75,
+    y: 25,
+    label: "Avoid",
+    desc: "High risk, Low reward",
+    color: "text-danger",
+  },
 ];
 
 export function RiskMatrix({ yields, bifrostYields }: RiskMatrixProps) {
@@ -33,42 +52,41 @@ export function RiskMatrix({ yields, bifrostYields }: RiskMatrixProps) {
   const maxApy = Math.max(...profiles.map((p) => p.apy), 1);
 
   return (
-    <div className="panel overflow-hidden rounded-lg">
-      {/* Header */}
-      <div className="flex items-center justify-between border-b border-border px-4 py-3">
-        <div className="flex items-center gap-2.5">
-          <div className="flex h-7 w-7 items-center justify-center rounded-md bg-secondary/10">
-            <Crosshair className="h-3.5 w-3.5 text-secondary" />
+    <div className="panel overflow-hidden">
+      <div className="panel-header">
+        <div className="panel-header-block">
+          <div className="panel-header-icon bg-secondary">
+            <Crosshair className="h-4 w-4 text-foreground" />
           </div>
-          <div>
-            <h3 className="text-base font-semibold text-text-primary">
-              Risk / Reward Matrix
-            </h3>
-            <p className="font-mono text-xs text-text-muted">
-              Interactive scatter — find alpha in the sweet spot quadrant
+          <div className="panel-heading">
+            <span className="panel-kicker">Risk Surface</span>
+            <h3 className="panel-title">Risk / Reward Matrix</h3>
+            <p className="panel-subtitle">
+              Quadrant view of reward potential against aggregate protocol risk.
             </p>
           </div>
         </div>
       </div>
 
-      {/* Scatter Plot */}
-      <div className="relative mx-4 my-3 h-[300px] rounded-md border border-border-subtle bg-background">
-        {/* Grid lines */}
+      <div className="relative mx-4 my-4 h-[320px] border-[3px] border-border bg-background">
         <div className="absolute inset-0">
-          {/* Vertical center */}
           <div className="absolute left-1/2 top-0 h-full w-px bg-border-subtle" />
-          {/* Horizontal center */}
           <div className="absolute left-0 top-1/2 h-px w-full bg-border-subtle" />
         </div>
 
-        {/* Quadrant labels */}
         {QUADRANT_LABELS.map((q) => (
           <div
             key={q.label}
             className="absolute flex flex-col items-center"
-            style={{ left: `${q.x}%`, top: `${100 - q.y}%`, transform: "translate(-50%, -50%)" }}
+            style={{
+              left: `${q.x}%`,
+              top: `${100 - q.y}%`,
+              transform: "translate(-50%, -50%)",
+            }}
           >
-            <span className={cn("font-mono text-xs font-bold opacity-40", q.color)}>
+            <span
+              className={cn("font-mono text-xs font-bold opacity-40", q.color)}
+            >
               {q.label}
             </span>
             <span className="font-mono text-[10px] text-text-muted opacity-30">
@@ -77,11 +95,13 @@ export function RiskMatrix({ yields, bifrostYields }: RiskMatrixProps) {
           </div>
         ))}
 
-        {/* Data points */}
         {profiles.map((profile) => {
           const x = (profile.overallRisk / 100) * 100;
           const y = Math.min((profile.apy / (maxApy * 1.2)) * 100, 95);
-          const size = Math.max(8, Math.min(24, (profile.tvl / 50_000_000) * 20));
+          const size = Math.max(
+            8,
+            Math.min(24, (profile.tvl / 50_000_000) * 20),
+          );
 
           return (
             <div
@@ -93,17 +113,18 @@ export function RiskMatrix({ yields, bifrostYields }: RiskMatrixProps) {
                 transform: "translate(-50%, 50%)",
               }}
             >
-              {/* Point */}
               <div
                 className={cn(
                   "rounded-full border-2 transition-all duration-200 group-hover:scale-150",
-                  profile.isBifrost ? "border-secondary bg-secondary/40" : "border-primary bg-primary/40",
+                  profile.isBifrost
+                    ? "border-secondary bg-secondary/40"
+                    : "border-primary bg-primary/40",
                 )}
                 style={{ width: `${size}px`, height: `${size}px` }}
               />
 
-              {/* Tooltip on hover */}
-              <div className="pointer-events-none absolute bottom-full left-1/2 z-20 mb-2 -translate-x-1/2 scale-0 rounded-md border border-border bg-surface p-2 shadow-lg transition-transform group-hover:scale-100"
+              <div
+                className="pointer-events-none absolute bottom-full left-1/2 z-20 mb-2 -translate-x-1/2 scale-0 border-[3px] border-border bg-surface p-2 shadow-lg transition-transform group-hover:scale-100"
                 style={{ width: "180px" }}
               >
                 <p className="truncate text-xs font-semibold text-text-primary">
@@ -113,7 +134,13 @@ export function RiskMatrix({ yields, bifrostYields }: RiskMatrixProps) {
                   <span className="font-mono text-xs text-text-muted">
                     Risk: {profile.overallRisk}%
                   </span>
-                  <span className={cn("pill text-[10px]", riskTierBg(profile.tier), riskTierColor(profile.tier))}>
+                  <span
+                    className={cn(
+                      "pill text-[10px]",
+                      riskTierBg(profile.tier),
+                      riskTierColor(profile.tier),
+                    )}
+                  >
                     {profile.tier}
                   </span>
                 </div>
@@ -130,7 +157,6 @@ export function RiskMatrix({ yields, bifrostYields }: RiskMatrixProps) {
           );
         })}
 
-        {/* Axes labels */}
         <div className="absolute -bottom-5 left-1/2 -translate-x-1/2">
           <span className="font-mono text-xs uppercase tracking-wider text-text-muted">
             Risk →
@@ -143,8 +169,7 @@ export function RiskMatrix({ yields, bifrostYields }: RiskMatrixProps) {
         </div>
       </div>
 
-      {/* Risk Table */}
-      <div className="border-t border-border">
+      <div className="border-t-[3px] border-border">
         <table className="table-pro w-full">
           <thead>
             <tr>
@@ -159,11 +184,16 @@ export function RiskMatrix({ yields, bifrostYields }: RiskMatrixProps) {
           </thead>
           <tbody>
             {profiles.map((p) => (
-              <tr key={`${p.protocol}-${p.name}`} className="hover:bg-surface-hover">
+              <tr
+                key={`${p.protocol}-${p.name}`}
+                className="hover:bg-surface-hover"
+              >
                 <td className="px-4 py-2 text-left">
                   <div className="flex items-center gap-2">
                     <Shield className={cn("h-3 w-3", riskTierColor(p.tier))} />
-                    <span className="truncate text-xs text-text-primary">{p.name}</span>
+                    <span className="truncate text-xs text-text-primary">
+                      {p.name}
+                    </span>
                   </div>
                 </td>
                 <td className="px-4 py-2 text-right">
@@ -182,7 +212,13 @@ export function RiskMatrix({ yields, bifrostYields }: RiskMatrixProps) {
                   <RiskBar value={p.dimensions.liquidityRisk} />
                 </td>
                 <td className="px-4 py-2 text-center">
-                  <span className={cn("pill text-[11px]", riskTierBg(p.tier), riskTierColor(p.tier))}>
+                  <span
+                    className={cn(
+                      "pill text-[11px]",
+                      riskTierBg(p.tier),
+                      riskTierColor(p.tier),
+                    )}
+                  >
                     {p.tier}
                   </span>
                 </td>
@@ -196,11 +232,15 @@ export function RiskMatrix({ yields, bifrostYields }: RiskMatrixProps) {
 }
 
 function RiskBar({ value }: { value: number }) {
-  const color = value < 30 ? "bg-primary" : value < 60 ? "bg-warning" : "bg-danger";
+  const color =
+    value < 30 ? "bg-primary" : value < 60 ? "bg-warning" : "bg-danger";
   return (
     <div className="flex items-center gap-1.5">
       <div className="h-1.5 w-12 overflow-hidden rounded-full bg-surface-hover">
-        <div className={cn("h-full rounded-full", color)} style={{ width: `${value}%` }} />
+        <div
+          className={cn("h-full rounded-full", color)}
+          style={{ width: `${value}%` }}
+        />
       </div>
       <span className="font-mono text-xs text-text-muted">{value}</span>
     </div>

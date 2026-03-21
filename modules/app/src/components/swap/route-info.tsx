@@ -1,15 +1,15 @@
 "use client";
 
-import { useSwapRoutes } from "@/hooks/use-swap";
-import { cn } from "@/lib/format";
-import { PoolType, POOL_TYPE_LABELS } from "@/types";
 import {
   Activity,
-  CheckCircle2,
-  XCircle,
   AlertTriangle,
+  CheckCircle2,
   RefreshCw,
+  XCircle,
 } from "lucide-react";
+import { useSwapRoutes } from "@/hooks/use-swap";
+import { cn } from "@/lib/format";
+import { POOL_TYPE_LABELS, type PoolType } from "@/types";
 
 /** Shows available pool adapters and SwapRouter status */
 export function RouteInfo() {

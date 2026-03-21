@@ -12,7 +12,7 @@ export function Skeleton({ className }: SkeletonProps) {
 /** Full-panel skeleton for loading states */
 export function PanelSkeleton({ rows = 5 }: { rows?: number }) {
   return (
-    <div className="panel rounded-lg p-4 space-y-3" aria-busy="true" aria-label="Loading...">
+    <div className="panel rounded-lg p-4 space-y-3" aria-busy="true">
       <Skeleton className="h-4 w-32" />
       {Array.from({ length: rows }).map((_, i) => (
         <div key={i} className="flex items-center gap-3">

@@ -1,10 +1,10 @@
 // modules/app/src/hooks/use-user-vault-position.ts
 "use client";
 
-import { useAccount, useReadContract } from "wagmi";
 import type { Address } from "viem";
-import { CONTRACTS } from "@/lib/constants";
+import { useAccount, useReadContract } from "wagmi";
 import { VAULT_ABI } from "@/lib/abi";
+import { CONTRACTS } from "@/lib/constants";
 
 const VAULT_ADDRESS = CONTRACTS.VAULT as Address;
 

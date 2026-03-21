@@ -1,19 +1,19 @@
 "use client";
 
-import { useState, useCallback } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { useAccount } from "wagmi";
+import { ExternalLink, History, Loader2 } from "lucide-react";
+import { useCallback, useState } from "react";
 import { formatUnits } from "viem";
-import { History, ExternalLink, Loader2 } from "lucide-react";
+import { useAccount } from "wagmi";
 import {
-  useSwapSubscription,
   type SwapEvent,
+  useSwapSubscription,
 } from "@/hooks/use-graphql-subscription";
+import { CHAIN } from "@/lib/constants";
 import {
   getSwapExecutionsByRecipient,
   type IndexedSwapExecution,
 } from "@/lib/graphql";
-import { CHAIN } from "@/lib/constants";
 
 function timeAgo(isoTimestamp: string): string {
   const diff = Date.now() - new Date(isoTimestamp).getTime();
@@ -60,14 +60,16 @@ export function TradeHistory() {
     error,
   } = useQuery({
     queryKey: ["trade-history", address],
-    queryFn: () => getSwapExecutionsByRecipient(address!, 20),
+    queryFn: () =>
+      address ? getSwapExecutionsByRecipient(address, 20) : Promise.resolve([]),
     enabled: isConnected && !!address,
     staleTime: 60_000,
   });
 
   const handleNewSwap = useCallback(
     (event: SwapEvent) => {
-      if (!address || event.recipient.toLowerCase() !== address.toLowerCase()) return;
+      if (!address || event.recipient.toLowerCase() !== address.toLowerCase())
+        return;
       const asIndexed: IndexedSwapExecution = {
         id: event.id,
         txHash: event.txHash,

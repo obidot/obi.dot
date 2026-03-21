@@ -1,21 +1,21 @@
-import { logger } from "../utils/logger.js";
-import type {
-  AggregatedPrice,
-  SourcePrice,
-  PricePairConfig,
-} from "../types/oracle.types.js";
 import {
-  PYTH_HERMES_URL,
-  COINGECKO_API_URL,
-  COINGECKO_API_KEY,
   BINANCE_API_URL,
+  CIRCUIT_BREAKER_MIN_SOURCES,
+  CIRCUIT_BREAKER_PERCENT,
+  COINGECKO_API_KEY,
+  COINGECKO_API_URL,
   MAX_SOURCE_LATENCY_MS,
   OUTLIER_REJECTION_PERCENT,
-  CIRCUIT_BREAKER_PERCENT,
-  CIRCUIT_BREAKER_MIN_SOURCES,
   PRICE_CACHE_TTL_MS,
   PRICE_PAIRS,
+  PYTH_HERMES_URL,
 } from "../config/oracle.config.js";
+import type {
+  AggregatedPrice,
+  PricePairConfig,
+  SourcePrice,
+} from "../types/oracle.types.js";
+import { logger } from "../utils/logger.js";
 
 const aggregatorLog = logger.child({ module: "price-aggregator" });
 
@@ -265,7 +265,7 @@ export class PriceAggregator {
       const priceEntry = data.parsed?.[0]?.price;
       if (!priceEntry) throw new Error("No price data in Pyth response");
 
-      const price = Number(priceEntry.price) * Math.pow(10, priceEntry.expo);
+      const price = Number(priceEntry.price) * 10 ** priceEntry.expo;
 
       return {
         source: "pyth",
@@ -354,7 +354,7 @@ export class PriceAggregator {
       };
       const price = parseFloat(data.price);
 
-      if (isNaN(price) || price <= 0) {
+      if (Number.isNaN(price) || price <= 0) {
         throw new Error(`Invalid price from Binance: ${data.price}`);
       }
 
@@ -436,7 +436,7 @@ export class PriceAggregator {
       }
 
       const price = parseFloat(priceEntry.price);
-      if (isNaN(price) || price <= 0) {
+      if (Number.isNaN(price) || price <= 0) {
         throw new Error(`Invalid Subsquid price: ${priceEntry.price}`);
       }
 

@@ -1,9 +1,5 @@
-import React from "react";
 import { notFound, redirect } from "next/navigation";
-import {
-  isTradeActionType,
-  getDefaultRouterForChain,
-} from "@/shared/trade";
+import { getDefaultRouterForChain, isTradeActionType } from "@/shared/trade";
 
 const DEFAULT_CHAIN = "polkadot-hub-testnet";
 

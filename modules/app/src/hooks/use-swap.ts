@@ -1,21 +1,16 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useReadContract, useReadContracts } from "wagmi";
-import { CONTRACTS } from "@/lib/constants";
-import {
-  SWAP_QUOTER_ABI,
-  SWAP_ROUTER_ABI,
-  POOL_ADAPTER_ABI,
-} from "@/lib/abi";
+import { POOL_ADAPTER_ABI, SWAP_QUOTER_ABI, SWAP_ROUTER_ABI } from "@/lib/abi";
+import { CONTRACTS, ZERO_ADDRESS } from "@/lib/constants";
 import type {
-  SwapQuoteResult,
-  SwapRoutesResponse,
   PoolAdapterInfo,
+  SwapQuoteResult,
   SwapRouteResult,
+  SwapRoutesResponse,
 } from "@/types";
-import { PoolType, POOL_TYPE_LABELS } from "@/types";
-import { ZERO_ADDRESS } from "@/lib/constants";
+import { POOL_TYPE_LABELS, PoolType } from "@/types";
 
 export function useSwapQuote(params: {
   pool: string;
@@ -36,11 +31,11 @@ export function useSwapQuote(params: {
     functionName: "getBestQuote",
     args: enabled
       ? [
-        params.pool as `0x${string}`,
-        params.tokenIn as `0x${string}`,
-        params.tokenOut as `0x${string}`,
-        BigInt(params.amountIn),
-      ]
+          params.pool as `0x${string}`,
+          params.tokenIn as `0x${string}`,
+          params.tokenOut as `0x${string}`,
+          BigInt(params.amountIn),
+        ]
       : undefined,
     query: {
       enabled,
@@ -52,12 +47,12 @@ export function useSwapQuote(params: {
   // Map on-chain tuple (bigint fields) to the serialized SwapQuoteResult shape
   const data: SwapQuoteResult | undefined = result.data
     ? {
-      source: result.data.source as PoolType,
-      pool: result.data.pool,
-      feeBps: Number(result.data.feeBps),
-      amountIn: result.data.amountIn.toString(),
-      amountOut: result.data.amountOut.toString(),
-    }
+        source: result.data.source as PoolType,
+        pool: result.data.pool,
+        feeBps: Number(result.data.feeBps),
+        amountIn: result.data.amountIn.toString(),
+        amountOut: result.data.amountOut.toString(),
+      }
     : undefined;
 
   return { ...result, data };
@@ -67,21 +62,29 @@ const ADAPTER_REGISTRY: Array<{
   poolType: PoolType;
   adapter: `0x${string}`;
 }> = [
-    {
-      poolType: PoolType.HydrationOmnipool,
-      adapter: CONTRACTS.HYDRATION_ADAPTER as `0x${string}`,
-    },
-    {
-      poolType: PoolType.AssetHubPair,
-      adapter: CONTRACTS.ASSET_HUB_ADAPTER as `0x${string}`,
-    },
-    {
-      poolType: PoolType.BifrostDEX,
-      adapter: CONTRACTS.BIFROST_DEX_ADAPTER as `0x${string}`,
-    },
-  ];
+  {
+    poolType: PoolType.HydrationOmnipool,
+    adapter: CONTRACTS.HYDRATION_ADAPTER as `0x${string}`,
+  },
+  {
+    poolType: PoolType.AssetHubPair,
+    adapter: CONTRACTS.ASSET_HUB_ADAPTER as `0x${string}`,
+  },
+  {
+    poolType: PoolType.BifrostDEX,
+    adapter: CONTRACTS.BIFROST_DEX_ADAPTER as `0x${string}`,
+  },
+];
 
 export function useSwapRoutes() {
+  type ReadContractSpec = {
+    address: `0x${string}`;
+    abi: typeof SWAP_ROUTER_ABI | typeof POOL_ADAPTER_ABI;
+    functionName: "paused" | "supportsPair";
+    args: readonly unknown[];
+  };
+  type ReadContractResult = { result?: unknown };
+
   const contracts = [
     // [0] Router paused?
     {
@@ -104,31 +107,30 @@ export function useSwapRoutes() {
   ] as const;
 
   const result = useReadContracts({
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    contracts: contracts as any,
+    contracts: contracts as readonly ReadContractSpec[],
     query: { staleTime: 30_000 },
   });
 
   const data: SwapRoutesResponse | undefined = result.data
     ? (() => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const anyData = result.data as any[];
-      const routerPaused =
-        (anyData[0]?.result as boolean | undefined) ?? false;
-      const adapters: PoolAdapterInfo[] = ADAPTER_REGISTRY.map(
-        ({ poolType, adapter }, i) => ({
-          poolType,
-          label: POOL_TYPE_LABELS[poolType],
-          adapter,
-          deployed: (anyData[i + 1]?.result as boolean | undefined) ?? false,
-        }),
-      );
-      return {
-        adapters,
-        routerDeployed: true,
-        routerPaused,
-      };
-    })()
+        const contractData = result.data as ReadonlyArray<ReadContractResult>;
+        const routerPaused =
+          (contractData[0]?.result as boolean | undefined) ?? false;
+        const adapters: PoolAdapterInfo[] = ADAPTER_REGISTRY.map(
+          ({ poolType, adapter }, i) => ({
+            poolType,
+            label: POOL_TYPE_LABELS[poolType],
+            adapter,
+            deployed:
+              (contractData[i + 1]?.result as boolean | undefined) ?? false,
+          }),
+        );
+        return {
+          adapters,
+          routerDeployed: true,
+          routerPaused,
+        };
+      })()
     : undefined;
 
   return { ...result, data };
@@ -166,13 +168,15 @@ export function useAllQuotes(params: {
   });
 
   const data: SwapQuoteResult[] | undefined = result.data
-    ? (result.data as Array<{
-        source: number;
-        pool: string;
-        feeBps: bigint;
-        amountIn: bigint;
-        amountOut: bigint;
-      }>).map((q) => ({
+    ? (
+        result.data as Array<{
+          source: number;
+          pool: string;
+          feeBps: bigint;
+          amountIn: bigint;
+          amountOut: bigint;
+        }>
+      ).map((q) => ({
         source: q.source as PoolType,
         pool: q.pool,
         feeBps: Number(q.feeBps),

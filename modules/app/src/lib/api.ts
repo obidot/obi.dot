@@ -1,15 +1,15 @@
-import { API_BASE } from "./constants";
 import type {
-  VaultState,
-  VaultPerformance,
-  ProtocolYield,
-  BifrostYield,
-  UniswapV2Yield,
-  CrossChainVaultState,
-  StrategyRecord,
   AgentDecision,
+  BifrostYield,
   ChatMessage,
+  CrossChainVaultState,
+  ProtocolYield,
+  StrategyRecord,
+  UniswapV2Yield,
+  VaultPerformance,
+  VaultState,
 } from "@/types";
+import { API_BASE } from "./constants";
 
 // ── Generic Fetch Wrapper ─────────────────────────────────────────────────
 
@@ -77,7 +77,11 @@ export async function getStrategies(): Promise<StrategyRecord[]> {
 // ── Agent ─────────────────────────────────────────────────────────────────
 
 export async function getAgentLog(): Promise<AgentDecision[]> {
-  return fetchJson<AgentDecision[]>("/agent/log");
+  const decisions = await fetchJson<AgentDecision[]>("/agent/log");
+  return [...decisions].sort((a, b) => {
+    if (b.timestamp !== a.timestamp) return b.timestamp - a.timestamp;
+    return b.cycle - a.cycle;
+  });
 }
 
 export async function sendChatMessage(

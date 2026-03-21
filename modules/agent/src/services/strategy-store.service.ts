@@ -60,7 +60,10 @@ class StrategyStore {
     if (this.strategies.length > MAX_STRATEGIES) {
       this.strategies.pop();
     }
-    storeLog.debug({ id: record.id, action: record.action }, "Strategy recorded");
+    storeLog.debug(
+      { id: record.id, action: record.action },
+      "Strategy recorded",
+    );
   }
 
   updateStrategyStatus(

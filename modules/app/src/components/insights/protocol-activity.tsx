@@ -1,21 +1,21 @@
 "use client";
 
-import { formatUnits } from "viem";
-import { cn } from "@/lib/format";
-import type { ProtocolActivityData } from "@/hooks/use-protocol-activity";
-import type { IndexedSwapExecution } from "@/lib/graphql";
 import {
-  ArrowRightLeft,
-  Landmark,
-  ArrowUpFromLine,
-  Compass,
-  Globe,
-  BarChart3,
-  Loader2,
-  ExternalLink,
   Activity,
+  ArrowRightLeft,
+  ArrowUpFromLine,
+  BarChart3,
+  Compass,
+  ExternalLink,
+  Globe,
+  Landmark,
+  Loader2,
 } from "lucide-react";
+import { formatUnits } from "viem";
+import type { ProtocolActivityData } from "@/hooks/use-protocol-activity";
 import { CHAIN } from "@/lib/constants";
+import { cn } from "@/lib/format";
+import type { IndexedSwapExecution } from "@/lib/graphql";
 
 function timeAgo(iso: string): string {
   const diff = Date.now() - new Date(iso).getTime();
@@ -38,21 +38,38 @@ function StatCard({
   color: string;
 }) {
   return (
-    <div className="flex items-center gap-3 border border-border bg-surface p-4">
-      <div className={cn("flex h-9 w-9 items-center justify-center rounded-md", color)}>
+    <div className="metric-cell flex items-start gap-3">
+      <div
+        className={cn(
+          "flex h-10 w-10 items-center justify-center border-[3px] border-border",
+          color,
+        )}
+      >
         {icon}
       </div>
       <div>
-        <p className="text-xs uppercase tracking-wider text-text-muted">{label}</p>
-        <p className="font-mono text-lg font-bold text-text-primary">{value}</p>
+        <p className="metric-label">{label}</p>
+        <p className="metric-value mt-3 text-[1.35rem]">{value}</p>
       </div>
     </div>
   );
 }
 
 function SwapFeedRow({ swap }: { swap: IndexedSwapExecution }) {
-  const amtIn = (() => { try { return parseFloat(formatUnits(BigInt(swap.amountIn), 18)).toFixed(4); } catch { return "—"; } })();
-  const amtOut = (() => { try { return parseFloat(formatUnits(BigInt(swap.amountOut), 18)).toFixed(4); } catch { return "—"; } })();
+  const amtIn = (() => {
+    try {
+      return parseFloat(formatUnits(BigInt(swap.amountIn), 18)).toFixed(4);
+    } catch {
+      return "—";
+    }
+  })();
+  const amtOut = (() => {
+    try {
+      return parseFloat(formatUnits(BigInt(swap.amountOut), 18)).toFixed(4);
+    } catch {
+      return "—";
+    }
+  })();
   return (
     <div className="flex items-center justify-between py-2.5 border-b border-border/40 last:border-0">
       <div className="min-w-0">
@@ -83,10 +100,15 @@ interface ProtocolActivityProps {
   connected: boolean;
 }
 
-export function ProtocolActivity({ data, isLoading, error, connected }: ProtocolActivityProps) {
+export function ProtocolActivity({
+  data,
+  isLoading,
+  error,
+  connected,
+}: ProtocolActivityProps) {
   if (isLoading) {
     return (
-      <div className="panel rounded-lg flex items-center justify-center py-16">
+      <div className="panel retro-empty min-h-[220px]">
         <Loader2 className="h-5 w-5 animate-spin text-text-muted" />
       </div>
     );
@@ -94,7 +116,7 @@ export function ProtocolActivity({ data, isLoading, error, connected }: Protocol
 
   if (error || !data) {
     return (
-      <div className="panel rounded-lg p-8 text-center">
+      <div className="panel retro-empty">
         <p className="font-mono text-sm text-danger">
           Indexer unavailable — on-chain stats could not be loaded
         </p>
@@ -105,37 +127,34 @@ export function ProtocolActivity({ data, isLoading, error, connected }: Protocol
   const { stats, recentSwaps, recentVolume } = data;
 
   return (
-    <div className="panel overflow-hidden rounded-lg">
-      {/* Header */}
-      <div className="flex items-center justify-between border-b border-border px-5 py-3">
-        <div className="flex items-center gap-2.5">
-          <div className="flex h-8 w-8 items-center justify-center rounded-md bg-primary/10">
-            <Activity className="h-4 w-4 text-primary" />
+    <div className="panel overflow-hidden">
+      <div className="panel-header">
+        <div className="panel-header-block">
+          <div className="panel-header-icon bg-primary">
+            <Activity className="h-4 w-4 text-foreground" />
           </div>
-          <div>
-            <h3 className="text-base font-semibold text-text-primary">
-              Protocol Activity
-            </h3>
-            <p className="font-mono text-xs text-text-muted">
-              On-chain stats from obi.index
+          <div className="panel-heading">
+            <span className="panel-kicker">Indexer Feed</span>
+            <h3 className="panel-title">Protocol Activity</h3>
+            <p className="panel-subtitle">
+              On-chain volume, deposits, and recent swap executions streamed
+              from `obi.index`.
             </p>
           </div>
         </div>
-        {!connected && (
-          <span className="font-mono text-xs text-text-muted animate-pulse">
-            Live updates paused
-          </span>
-        )}
-        {connected && (
-          <div className="flex items-center gap-1.5">
-            <span className="h-2 w-2 rounded-full bg-primary animate-pulse" />
-            <span className="font-mono text-xs text-text-muted">Live</span>
-          </div>
-        )}
+        <span
+          className={cn(
+            "pill",
+            connected
+              ? "bg-accent text-accent-foreground"
+              : "bg-surface-alt text-text-secondary",
+          )}
+        >
+          {connected ? "Live" : "Updates paused"}
+        </span>
       </div>
 
-      {/* Stat Cards */}
-      <div className="grid grid-cols-2 gap-px bg-border md:grid-cols-3 lg:grid-cols-6">
+      <div className="metric-grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6">
         <StatCard
           icon={<ArrowRightLeft className="h-4 w-4 text-primary" />}
           label="Total Swaps"
@@ -174,9 +193,8 @@ export function ProtocolActivity({ data, isLoading, error, connected }: Protocol
         />
       </div>
 
-      {/* Recent Activity Feed */}
       {recentSwaps.length > 0 && (
-        <div className="border-t border-border px-5 py-3">
+        <div className="section-strip">
           <p className="text-xs uppercase tracking-wider text-text-muted mb-2">
             Recent Swaps
           </p>

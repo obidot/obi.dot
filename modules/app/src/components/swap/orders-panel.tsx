@@ -1,14 +1,14 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { CheckCircle2, ClipboardList, Clock3, Trash2 } from "lucide-react";
+import { useCallback, useEffect, useState } from "react";
 import { parseUnits } from "viem";
-import { cn } from "@/lib/format";
-import { Clock3, Trash2, ClipboardList, CheckCircle2 } from "lucide-react";
-import type { PendingOrder } from "@/types";
 import {
-  useSwapSubscription,
   type SwapEvent,
+  useSwapSubscription,
 } from "@/hooks/use-graphql-subscription";
+import { cn } from "@/lib/format";
+import type { PendingOrder } from "@/types";
 
 const LS_KEY = "obidot_limit_orders";
 
@@ -90,10 +90,7 @@ function OrderRow({
           {order.tokenInSymbol}
           {showDelta && (
             <span
-              className={cn(
-                "ml-2",
-                delta > 0 ? "text-bull" : "text-danger",
-              )}
+              className={cn("ml-2", delta > 0 ? "text-bull" : "text-danger")}
             >
               ({delta > 0 ? "+" : ""}
               {delta.toFixed(1)}% vs placed)
@@ -129,7 +126,11 @@ export default function OrdersPanel() {
   useEffect(() => {
     reload();
     window.addEventListener("obidot:order-placed", reload as EventListener);
-    return () => window.removeEventListener("obidot:order-placed", reload as EventListener);
+    return () =>
+      window.removeEventListener(
+        "obidot:order-placed",
+        reload as EventListener,
+      );
   }, [reload]);
 
   const handleCancel = useCallback((id: string) => {
@@ -142,7 +143,9 @@ export default function OrdersPanel() {
 
   const handleClearExpired = useCallback(() => {
     setOrders((prev) => {
-      const next = prev.filter((o) => o.expiry > Date.now() || o.status === "filled");
+      const next = prev.filter(
+        (o) => o.expiry > Date.now() || o.status === "filled",
+      );
       saveOrders(next);
       return next;
     });
@@ -160,8 +163,11 @@ export default function OrdersPanel() {
           const tokenOutMatch =
             event.tokenOut.toLowerCase() === o.tokenOutAddress.toLowerCase();
           const amountInWei = parseUnits(o.amountIn, 18);
+          const minAmountIn = (amountInWei * 95n) / 100n;
+          const maxAmountIn = (amountInWei * 105n) / 100n;
           const amountInMatch =
-            BigInt(event.amountIn) >= (amountInWei * 95n) / 100n;
+            BigInt(event.amountIn) >= minAmountIn &&
+            BigInt(event.amountIn) <= maxAmountIn;
           if (tokenInMatch && tokenOutMatch && amountInMatch) {
             changed = true;
             return { ...o, status: "filled" as const };
@@ -179,8 +185,12 @@ export default function OrdersPanel() {
   useSwapSubscription(handleSwapEvent);
 
   const filledOrders = orders.filter((o) => o.status === "filled");
-  const activeOrders = orders.filter((o) => o.status !== "filled" && o.expiry > Date.now());
-  const expiredOrders = orders.filter((o) => o.status !== "filled" && o.expiry <= Date.now());
+  const activeOrders = orders.filter(
+    (o) => o.status !== "filled" && o.expiry > Date.now(),
+  );
+  const expiredOrders = orders.filter(
+    (o) => o.status !== "filled" && o.expiry <= Date.now(),
+  );
 
   return (
     <div className="flex flex-col h-full overflow-hidden">

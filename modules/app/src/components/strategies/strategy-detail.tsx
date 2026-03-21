@@ -1,10 +1,11 @@
 "use client";
 
+import { Copy, ExternalLink, X } from "lucide-react";
 import { useEffect, useRef } from "react";
-import type { StrategyRecord } from "@/types";
-import { formatUsd, truncateAddress, formatTimestamp, cn } from "@/lib/format";
+import { CHAIN } from "@/lib/constants";
+import { cn, formatTimestamp, formatUsd, truncateAddress } from "@/lib/format";
 import { STATUS_CONFIG } from "@/lib/strategy-config";
-import { X, Copy, ExternalLink } from "lucide-react";
+import type { StrategyRecord } from "@/types";
 
 interface StrategyDetailProps {
   strategy: StrategyRecord;
@@ -17,6 +18,7 @@ export function StrategyDetail({ strategy, onClose }: StrategyDetailProps) {
   const panelRef = useRef<HTMLDivElement>(null);
   const status = STATUS_CONFIG[strategy.status];
   const StatusIcon = status.icon;
+  const txHash = strategy.txHash;
 
   // Focus trap: on mount focus the panel; on Escape close
   useEffect(() => {
@@ -37,7 +39,10 @@ export function StrategyDetail({ strategy, onClose }: StrategyDetailProps) {
       }
       // Trap focus within the panel
       if (e.key === "Tab") {
-        if (focusable.length === 0) { e.preventDefault(); return; }
+        if (focusable.length === 0) {
+          e.preventDefault();
+          return;
+        }
         const last = focusable[focusable.length - 1];
         if (e.shiftKey) {
           if (document.activeElement === first) {
@@ -72,75 +77,97 @@ export function StrategyDetail({ strategy, onClose }: StrategyDetailProps) {
         role="dialog"
         aria-modal="true"
         aria-labelledby={TITLE_ID}
-        className="fixed right-0 top-0 z-50 flex h-full w-full max-w-md flex-col border-l border-border bg-surface shadow-2xl"
+        className="fixed right-0 top-0 z-50 flex h-full w-full max-w-lg flex-col border-l-[4px] border-border bg-background shadow-[10px_0_0_0_var(--border)]"
       >
-        {/* Header */}
-        <div className="flex items-center justify-between border-b border-border px-5 py-4">
-          <h2 id={TITLE_ID} className="stat-number text-base text-text-primary">
-            Strategy Detail
-          </h2>
+        <div className="panel-header sticky top-0 z-10">
+          <div className="panel-header-block">
+            <div className={cn("panel-header-icon", status.className)}>
+              <StatusIcon className="h-4 w-4" />
+            </div>
+            <div className="panel-heading">
+              <p className="panel-kicker">Execution Detail</p>
+              <h2 id={TITLE_ID} className="panel-title">
+                Strategy Ticket
+              </h2>
+              <p className="panel-subtitle">
+                Full action context, reasoning trace, and settlement link.
+              </p>
+            </div>
+          </div>
           <button
             type="button"
             onClick={onClose}
             aria-label="Close detail panel"
-            className="rounded-md p-1.5 text-text-muted transition-colors hover:bg-surface-hover hover:text-text-secondary"
+            className="btn-ghost h-11 w-11 p-0"
           >
             <X className="h-4 w-4" />
           </button>
         </div>
 
-        {/* Body */}
         <div className="flex-1 overflow-y-auto px-5 py-5">
-          {/* Status badge */}
-          <span
-            className={cn(
-              "pill text-xs",
-              status.className,
-            )}
-          >
-            <StatusIcon className="h-3.5 w-3.5" />
-            {status.label}
-          </span>
+          <div className="flex flex-wrap items-center gap-2">
+            <span className={cn("pill text-xs", status.className)}>
+              <StatusIcon className="h-3.5 w-3.5" />
+              {status.label}
+            </span>
+            <span className="pill bg-surface-hover text-text-secondary text-[10px]">
+              {strategy.action}
+            </span>
+          </div>
 
-          {/* Fields */}
           <div className="mt-5 space-y-4">
-            <DetailField label="Action" value={strategy.action} />
-            <DetailField label="Amount" value={formatUsd(strategy.amount)} mono />
-            <DetailField label="Time" value={formatTimestamp(strategy.timestamp)} />
-            <DetailField
-              label="Target"
-              value={truncateAddress(strategy.target)}
-              mono
-              copyable={strategy.target}
-            />
-
-            {/* Reasoning */}
-            <div>
-              <p className="text-[10px] font-medium uppercase tracking-wider text-text-muted">
-                AI Reasoning
-              </p>
-              <div className="mt-1.5 rounded-md border border-border-subtle bg-background p-3">
-                <p className="font-mono text-xs leading-relaxed text-text-secondary">
-                  {strategy.reasoning}
-                </p>
-              </div>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <DetailField label="Action" value={strategy.action} />
+              <DetailField
+                label="Amount"
+                value={formatUsd(strategy.amount)}
+                mono
+              />
+              <DetailField
+                label="Executed"
+                value={formatTimestamp(strategy.timestamp)}
+              />
+              <DetailField
+                label="Target"
+                value={truncateAddress(strategy.target)}
+                mono
+                copyable={strategy.target}
+              />
             </div>
 
-            {/* Transaction */}
-            {strategy.txHash && (
-              <div>
-                <p className="text-[10px] font-medium uppercase tracking-wider text-text-muted">
-                  Transaction
+            <div className="border-[3px] border-border bg-surface px-4 py-4 shadow-[3px_3px_0_0_var(--border)]">
+              <p className="retro-label text-[0.8rem] text-text-muted">
+                AI Reasoning
+              </p>
+              <p className="mt-3 font-mono text-xs leading-relaxed text-text-secondary">
+                {strategy.reasoning}
+              </p>
+            </div>
+
+            {txHash && (
+              <div className="border-[3px] border-border bg-surface-alt px-4 py-4 shadow-[3px_3px_0_0_var(--border)]">
+                <p className="retro-label text-[0.8rem] text-text-muted">
+                  Settlement Receipt
                 </p>
-                <a
-                  href={`https://blockscout-paseo.parity-chains.parity.io/tx/${strategy.txHash}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="mt-1.5 inline-flex items-center gap-2 font-mono text-xs text-accent hover:text-accent/80"
-                >
-                  {truncateAddress(strategy.txHash, 8)}
-                  <ExternalLink className="h-3 w-3" />
-                </a>
+                <div className="mt-3 flex flex-wrap items-center gap-2">
+                  <a
+                    href={`${CHAIN.blockExplorer}/tx/${txHash}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="btn-secondary inline-flex items-center gap-2 px-3 py-2 text-xs"
+                  >
+                    {truncateAddress(txHash, 8)}
+                    <ExternalLink className="h-3.5 w-3.5" />
+                  </a>
+                  <button
+                    type="button"
+                    onClick={() => navigator.clipboard.writeText(txHash ?? "")}
+                    className="btn-ghost inline-flex items-center gap-2 px-3 py-2 text-xs"
+                  >
+                    <Copy className="h-3.5 w-3.5" />
+                    Copy Tx Hash
+                  </button>
+                </div>
               </div>
             )}
           </div>
@@ -166,12 +193,15 @@ function DetailField({
   };
 
   return (
-    <div>
-      <p className="text-[10px] font-medium uppercase tracking-wider text-text-muted">
-        {label}
-      </p>
-      <div className="mt-1 flex items-center gap-2">
-        <p className={cn("text-sm text-text-primary", mono && "font-mono")}>
+    <div className="border-[3px] border-border bg-surface px-4 py-3 shadow-[3px_3px_0_0_var(--border)]">
+      <p className="retro-label text-[0.8rem] text-text-muted">{label}</p>
+      <div className="mt-2 flex items-center gap-2">
+        <p
+          className={cn(
+            "text-sm font-semibold text-text-primary",
+            mono && "font-mono",
+          )}
+        >
           {value}
         </p>
         {copyable && (
@@ -179,9 +209,9 @@ function DetailField({
             type="button"
             onClick={handleCopy}
             aria-label={`Copy ${label}`}
-            className="rounded p-0.5 text-text-muted transition-colors hover:bg-surface-hover hover:text-text-secondary"
+            className="btn-ghost h-7 w-7 p-0"
           >
-            <Copy className="h-3 w-3" />
+            <Copy className="h-3.5 w-3.5" />
           </button>
         )}
       </div>

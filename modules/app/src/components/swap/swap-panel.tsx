@@ -1,10 +1,14 @@
 "use client";
 
+import { ArrowLeftRight, Clock3, Info, Link2, Settings2 } from "lucide-react";
 import { useCallback, useRef } from "react";
 import { cn } from "@/lib/format";
 import { TRADE_ACTIONS } from "@/shared/trade";
-import { Info, Settings2, ArrowLeftRight, Clock3, Link2 } from "lucide-react";
-import type { SwapRouteResult, SplitRouteSelection, TradeActionType } from "@/types";
+import type {
+  SplitRouteSelection,
+  SwapRouteResult,
+  TradeActionType,
+} from "@/types";
 import CrossChainSwapPanel from "./cross-chain-panel";
 import LimitOrderPanel from "./limit-order-panel";
 import SwapForm from "./swap-form";
@@ -24,7 +28,13 @@ interface SwapPanelProps {
   selectedRoute: SwapRouteResult | null;
   selectedSplitRoutes?: SplitRouteSelection[];
   onTabChange: (tab: TradeActionType) => void;
-  onSwapInputChange: (p: { tokenIn: string; tokenOut: string; amountIn: string; tokenOutSymbol: string; tokenOutDecimals: number }) => void;
+  onSwapInputChange: (p: {
+    tokenIn: string;
+    tokenOut: string;
+    amountIn: string;
+    tokenOutSymbol: string;
+    tokenOutDecimals: number;
+  }) => void;
   onRouteSelect: (route: SwapRouteResult | null) => void;
   onSplitRoutesSelect?: (selections: SplitRouteSelection[]) => void;
 }
@@ -40,11 +50,13 @@ export default function SwapPanel({
   onTabChange,
   onSwapInputChange,
   onRouteSelect,
-  onSplitRoutesSelect,
+  onSplitRoutesSelect: _onSplitRoutesSelect,
 }: SwapPanelProps) {
   // Track the previous token pair so we only clear the selected route when
   // tokens actually change — not on every amount keystroke.
-  const prevTokenPairRef = useRef<{ tokenIn: string; tokenOut: string } | null>(null);
+  const prevTokenPairRef = useRef<{ tokenIn: string; tokenOut: string } | null>(
+    null,
+  );
 
   const handleInputChange = useCallback(
     (p: {
@@ -65,26 +77,20 @@ export default function SwapPanel({
   );
 
   return (
-    <div className="border-r border-border bg-surface overflow-hidden flex flex-col">
-      <div className="border-b border-border px-5 pt-4 pb-0">
+    <div className="panel overflow-hidden flex flex-col">
+      <div className="border-b-[3px] border-border bg-surface-alt px-5 pt-4 pb-0">
         <div className="flex items-center justify-between">
-          <div className="flex items-center">
-            {TRADE_ACTIONS.map((action, i) => (
+          <div className="flex items-center gap-1">
+            {TRADE_ACTIONS.map((action, _i) => (
               <div key={action.id} className="flex items-center">
-                {i > 0 && (
-                  <span className="mx-1 text-border text-[16px] font-light select-none">
-                    |
-                  </span>
-                )}
                 <button
                   type="button"
                   onClick={() => onTabChange(action.id)}
                   className={cn(
-                    "flex items-center gap-1.5 px-2.5 pb-3.5 text-[16px] font-medium transition-colors",
-                    "border-b-2 -mb-px",
+                    "retro-label flex items-center gap-1.5 px-3 py-3 text-[1rem] transition-colors",
                     activeTab === action.id
-                      ? "border-primary text-primary"
-                      : "border-transparent text-text-muted hover:text-text-secondary",
+                      ? "border-[3px] border-border bg-primary text-primary-foreground shadow-[2px_2px_0_0_var(--border)]"
+                      : "border-[3px] border-transparent text-text-muted hover:border-border/30 hover:bg-surface hover:text-text-secondary",
                   )}
                 >
                   {TAB_ICONS[action.id]}
@@ -97,14 +103,14 @@ export default function SwapPanel({
           <div className="flex items-center gap-1 pb-3">
             <button
               type="button"
-              className="btn-ghost p-1.5 rounded-none text-text-muted hover:text-text-secondary"
+              className="btn-ghost min-h-0 px-2 py-2 text-text-muted hover:text-text-secondary"
               aria-label="More info"
             >
               <Info className="h-4 w-4" />
             </button>
             <button
               type="button"
-              className="btn-ghost p-1.5 rounded-none text-text-muted hover:text-text-secondary"
+              className="btn-ghost min-h-0 px-2 py-2 text-text-muted hover:text-text-secondary"
               aria-label="Settings"
             >
               <Settings2 className="h-4 w-4" />
@@ -113,7 +119,7 @@ export default function SwapPanel({
         </div>
       </div>
 
-      <p className="px-5 pt-2.5 pb-0 text-[14px] text-text-muted">
+      <p className="px-5 pt-3 pb-0 text-[13px] text-text-muted">
         {activeDescription}
       </p>
 

@@ -1,34 +1,33 @@
 import {
+  type Address,
+  type Chain,
   createPublicClient,
   createWalletClient,
-  http,
-  type Address,
   type Hex,
+  http,
   type PublicClient,
   type WalletClient,
-  type Chain,
 } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
-
-import { env } from "../config/env.js";
 import { CHAIN_ID, RPC_URL } from "../config/constants.js";
+import { env } from "../config/env.js";
 import {
-  KEEPER_ORACLE_ADDRESS,
-  ORACLE_REGISTRY_ADDRESS,
   KEEPER_ORACLE_ABI,
-  ORACLE_REGISTRY_ABI,
-  STALENESS_WARNING_RATIO,
+  KEEPER_ORACLE_ADDRESS,
   ORACLE_HEARTBEAT_MS,
+  ORACLE_REGISTRY_ABI,
+  ORACLE_REGISTRY_ADDRESS,
   PRICE_PAIRS,
+  STALENESS_WARNING_RATIO,
 } from "../config/oracle.config.js";
-import { PriceAggregator } from "./price-aggregator.service.js";
 import type {
-  PriceData,
   FeedStatus,
-  PriceUpdate,
   OracleHealthStatus,
+  PriceData,
+  PriceUpdate,
 } from "../types/oracle.types.js";
 import { logger } from "../utils/logger.js";
+import { PriceAggregator } from "./price-aggregator.service.js";
 
 const oracleLog = logger.child({ module: "oracle" });
 

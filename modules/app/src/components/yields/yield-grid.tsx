@@ -1,11 +1,15 @@
 "use client";
 
-import { useState, useMemo } from "react";
-import type { ProtocolYield, BifrostYield, UniswapV2Yield } from "@/types";
-import { cn, formatApy, formatUsdNumber } from "@/lib/format";
-import type { LiquidityPairMeta } from "@/types";
+import { ChevronDown, ChevronUp, Search } from "lucide-react";
+import { useMemo, useState } from "react";
 import { LP_PAIRS } from "@/lib/constants";
-import { Search, ChevronUp, ChevronDown } from "lucide-react";
+import { cn, formatApy, formatUsdNumber } from "@/lib/format";
+import type {
+  BifrostYield,
+  LiquidityPairMeta,
+  ProtocolYield,
+  UniswapV2Yield,
+} from "@/types";
 
 type SourceFilter = "all" | "bifrost" | "defi" | "uniswap";
 type SortKey = "apy" | "tvl" | "name";
@@ -60,6 +64,36 @@ function SortIcon({ active, dir }: { active: boolean; dir: SortDir }) {
   );
 }
 
+function SortableHeader({
+  label,
+  active,
+  dir,
+  align = "left",
+  onSort,
+}: {
+  label: string;
+  active: boolean;
+  dir: SortDir;
+  align?: "left" | "right";
+  onSort: () => void;
+}) {
+  return (
+    <th scope="col" className={align === "right" ? "text-right" : undefined}>
+      <button
+        type="button"
+        onClick={onSort}
+        className={cn(
+          "inline-flex items-center gap-1 text-xs font-medium uppercase tracking-wider text-text-muted hover:text-text-secondary",
+          align === "right" && "ml-auto flex",
+        )}
+      >
+        {label}
+        <SortIcon active={active} dir={dir} />
+      </button>
+    </th>
+  );
+}
+
 // ── Type pill ─────────────────────────────────────────────────────────────
 
 function TypePill({ category }: { category?: string }) {
@@ -92,7 +126,12 @@ interface YieldGridProps {
   onEarn?: (name: string, apy: number, pairMeta?: LiquidityPairMeta) => void;
 }
 
-export function YieldGrid({ yields, bifrostYields, uniswapV2Yields, onEarn }: YieldGridProps) {
+export function YieldGrid({
+  yields,
+  bifrostYields,
+  uniswapV2Yields,
+  onEarn,
+}: YieldGridProps) {
   const [filter, setFilter] = useState<SourceFilter>("all");
   const [sortBy, setSortBy] = useState<SortKey>("apy");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
@@ -170,7 +209,11 @@ export function YieldGrid({ yields, bifrostYields, uniswapV2Yields, onEarn }: Yi
     return items;
   }, [yields, bifrostYields, uniswapV2Yields, filter, sortBy, sortDir, search]);
 
-  if (yields.length === 0 && bifrostYields.length === 0 && uniswapV2Yields.length === 0) {
+  if (
+    yields.length === 0 &&
+    bifrostYields.length === 0 &&
+    uniswapV2Yields.length === 0
+  ) {
     return (
       <div className="panel flex min-h-[400px] items-center justify-center rounded-lg p-8">
         <div className="text-center">
@@ -187,7 +230,30 @@ export function YieldGrid({ yields, bifrostYields, uniswapV2Yields, onEarn }: Yi
 
   return (
     <div className="panel overflow-hidden rounded-lg">
-      {/* Toolbar */}
+      <div className="panel-header">
+        <div className="panel-header-block">
+          <div className="panel-header-icon bg-accent">
+            <Search className="h-4 w-4 text-accent-foreground" />
+          </div>
+          <div className="panel-heading">
+            <p className="panel-kicker">Yield Radar</p>
+            <h2 className="panel-title">Source Board</h2>
+            <p className="panel-subtitle">
+              Bifrost, DeFi, and UniswapV2 opportunities in a single retro
+              ledger.
+            </p>
+          </div>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="pill bg-surface-hover text-text-secondary text-[10px]">
+            {combined.length} visible
+          </span>
+          <span className="pill bg-warning/15 text-warning text-[10px]">
+            {uniswapV2Yields.length} LP rows
+          </span>
+        </div>
+      </div>
+
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-4 py-3">
         <div className="tab-group">
           {FILTER_TABS.map((tab) => (
@@ -210,51 +276,39 @@ export function YieldGrid({ yields, bifrostYields, uniswapV2Yields, onEarn }: Yi
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search yields..."
+            aria-label="Search yield sources"
             className="input-trading py-1.5 pl-9 pr-3 text-xs"
             style={{ width: "200px" }}
           />
         </div>
       </div>
 
-      {/* Table */}
       <div className="overflow-x-auto">
         <table className="table-pro">
           <thead>
             <tr>
-              {/* Protocol */}
-              <th
-                className="cursor-pointer select-none"
-                onClick={() => handleSort("name")}
-              >
-                Protocol
-                <SortIcon active={sortBy === "name"} dir={sortDir} />
-              </th>
-
-              {/* Asset */}
+              <SortableHeader
+                label="Protocol"
+                active={sortBy === "name"}
+                dir={sortDir}
+                onSort={() => handleSort("name")}
+              />
               <th>Asset</th>
-
-              {/* APR */}
-              <th
-                className="cursor-pointer select-none text-right"
-                onClick={() => handleSort("apy")}
-              >
-                APR
-                <SortIcon active={sortBy === "apy"} dir={sortDir} />
-              </th>
-
-              {/* TVL */}
-              <th
-                className="cursor-pointer select-none text-right"
-                onClick={() => handleSort("tvl")}
-              >
-                TVL
-                <SortIcon active={sortBy === "tvl"} dir={sortDir} />
-              </th>
-
-              {/* Type */}
+              <SortableHeader
+                label="APR"
+                active={sortBy === "apy"}
+                dir={sortDir}
+                align="right"
+                onSort={() => handleSort("apy")}
+              />
+              <SortableHeader
+                label="TVL"
+                active={sortBy === "tvl"}
+                dir={sortDir}
+                align="right"
+                onSort={() => handleSort("tvl")}
+              />
               <th>Type</th>
-
-              {/* Action */}
               <th />
             </tr>
           </thead>
@@ -274,7 +328,7 @@ export function YieldGrid({ yields, bifrostYields, uniswapV2Yields, onEarn }: Yi
                     <div className="flex items-center gap-2">
                       <span
                         className={cn(
-                          "flex h-6 w-6 shrink-0 items-center justify-center rounded text-[10px] font-bold",
+                          "retro-label flex h-7 w-7 shrink-0 items-center justify-center border-2 border-border text-[0.8rem] font-bold",
                           colors,
                         )}
                       >
@@ -315,7 +369,11 @@ export function YieldGrid({ yields, bifrostYields, uniswapV2Yields, onEarn }: Yi
                   {/* Type cell */}
                   <td>
                     <TypePill
-                      category={item.isBifrost || item.isUniswap ? item.category : undefined}
+                      category={
+                        item.isBifrost || item.isUniswap
+                          ? item.category
+                          : undefined
+                      }
                     />
                   </td>
 
@@ -328,15 +386,17 @@ export function YieldGrid({ yields, bifrostYields, uniswapV2Yields, onEarn }: Yi
                           ? LP_PAIRS.find((p) => p.label === y.name)
                           : undefined;
                         if (item.isUniswap && !pairMeta) {
-                          console.warn(`[YieldGrid] No LP_PAIRS entry for UV2 row "${y.name}"`);
+                          console.warn(
+                            `[YieldGrid] No LP_PAIRS entry for UV2 row "${y.name}"`,
+                          );
                         }
                         onEarn?.(y.name, y.apyPercent, pairMeta);
                       }}
                       className={cn(
-                        "rounded border px-2.5 py-1 font-mono text-[10px] font-semibold transition-colors",
+                        "retro-label border-[2px] border-border px-3 py-1 text-[0.85rem] shadow-[2px_2px_0_0_var(--border)] transition-transform",
                         onEarn
-                          ? "border-primary/30 text-primary hover:bg-primary/10 cursor-pointer"
-                          : "border-border text-text-muted cursor-default",
+                          ? "bg-primary text-primary-foreground hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none cursor-pointer"
+                          : "bg-surface-alt text-text-muted cursor-default",
                       )}
                     >
                       + Earn
@@ -351,7 +411,7 @@ export function YieldGrid({ yields, bifrostYields, uniswapV2Yields, onEarn }: Yi
 
       {/* Footer */}
       <div className="border-t border-border px-4 py-2">
-        <p className="font-mono text-[10px] text-text-muted">
+        <p className="retro-label text-[0.8rem] text-text-muted">
           Showing {combined.length} yield sources
         </p>
       </div>

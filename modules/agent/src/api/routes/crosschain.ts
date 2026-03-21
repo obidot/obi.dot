@@ -27,8 +27,7 @@ export function registerCrossChainRoutes(
       }
 
       const vaultState = await signerService.fetchVaultState();
-      const state =
-        await crossChainService.fetchCrossChainState(vaultState);
+      const state = await crossChainService.fetchCrossChainState(vaultState);
 
       return {
         success: true,

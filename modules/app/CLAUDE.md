@@ -10,15 +10,16 @@ bun --bun next dev --turbopack -p 3010
 # or via pnpm from monorepo root:
 pnpm --filter @obidot/app run dev
 
-# Build / lint / typecheck
+# Build / start / lint / typecheck
 pnpm --filter @obidot/app run build
+pnpm --filter @obidot/app run start
 pnpm --filter @obidot/app run lint
 pnpm --filter @obidot/app run typecheck
 ```
 
 ## Architecture
 
-This is a **Next.js 15 App Router** frontend for the Obidot DEX aggregator on Polkadot Hub. It runs on **Bun** with Turbopack and uses **wagmi + RainbowKit** for wallet/chain connectivity, **TanStack Query** for server state, and **Tailwind CSS v4 + shadcn/ui** for styling.
+This is a **Next.js 15 App Router** frontend for the Obidot DEX aggregator on Polkadot Hub. It uses **Bun + Turbopack** for local development, and the stable **Next CLI** for production build/start. Wallet/chain connectivity is handled with **wagmi + RainbowKit**, server state with **TanStack Query**, and styling with **Tailwind CSS v4 + shadcn/ui**.
 
 ### Key structural patterns
 

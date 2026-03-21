@@ -1,7 +1,7 @@
 import { useMemo } from "react";
-import { parseUnits, formatUnits } from "viem";
-import { useRouteFinder } from "./use-swap";
+import { formatUnits, parseUnits } from "viem";
 import type { SwapToken } from "@/types";
+import { useRouteFinder } from "./use-swap";
 
 export function useMarketPrice(
   tokenIn: SwapToken,
@@ -20,7 +20,10 @@ export function useMarketPrice(
 
   const price = useMemo(() => {
     const locals = routes.filter(
-      (r) => r.routeType === "local" && r.amountOut !== "0" && /^\d+$/.test(r.amountOut),
+      (r) =>
+        r.routeType === "local" &&
+        r.amountOut !== "0" &&
+        /^\d+$/.test(r.amountOut),
     );
     if (locals.length === 0) return null;
     try {

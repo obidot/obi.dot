@@ -1,15 +1,15 @@
 "use client";
 
-import type { CrossChainVaultState, SatelliteChainState } from "@/types";
-import { formatUsd, cn } from "@/lib/format";
 import {
-  Landmark,
-  Globe,
-  Zap,
   CheckCircle2,
-  ShieldAlert,
+  Globe,
+  Landmark,
   Network,
+  ShieldAlert,
+  Zap,
 } from "lucide-react";
+import { cn, formatUsd } from "@/lib/format";
+import type { CrossChainVaultState, SatelliteChainState } from "@/types";
 
 // ── Chain color palette ────────────────────────────────────────────────────
 
@@ -145,27 +145,33 @@ export function ChainTopology({ state }: { state: CrossChainVaultState }) {
     globalTotal > 0n ? Number((hubAssets * 10000n) / globalTotal) / 100 : 100;
 
   return (
-    <div className="panel overflow-hidden rounded-lg">
-      {/* ── Panel header ────────────────────────────────────────── */}
-      <div className="flex items-center justify-between border-b border-border px-4 py-3">
+    <div className="panel overflow-hidden">
+      <div className="panel-header">
+        <div className="panel-header-block">
+          <div className="panel-header-icon bg-secondary">
+            <Network className="h-4 w-4 text-foreground" />
+          </div>
+          <div className="panel-heading">
+            <span className="panel-kicker">Cross-Chain Map</span>
+            <h3 className="panel-title">Chain Topology</h3>
+            <p className="panel-subtitle">
+              Hub-to-satellite layout for capital deployed across Polkadot Hub
+              TestNet rails.
+            </p>
+          </div>
+        </div>
         <div className="flex items-center gap-2">
-          <Network className="h-3.5 w-3.5 text-text-muted" />
-          <h3 className="text-xs font-medium uppercase tracking-widest text-text-muted">
-            Chain Topology
-          </h3>
-          <span className="pill bg-border text-text-muted text-[9px]">
+          <span className="pill bg-surface-alt text-text-secondary text-[9px]">
             {state.satellites.length + 1} nodes
           </span>
+          <span className="pill bg-accent text-accent-foreground text-[9px]">
+            XCM v3
+          </span>
         </div>
-        <span className="font-mono text-[10px] text-text-muted">
-          Polkadot · XCM v3
-        </span>
       </div>
 
-      {/* ── Layout: Hub | XCM Connector | Satellites ──────────── */}
-      <div className="flex min-h-[180px]">
-        {/* Hub Vault — left column */}
-        <div className="flex w-52 shrink-0 flex-col justify-center border-r border-border bg-surface p-5">
+      <div className="flex min-h-[180px] flex-col lg:flex-row">
+        <div className="flex w-full shrink-0 flex-col justify-center border-b-[3px] border-border bg-surface p-5 lg:w-52 lg:border-b-0 lg:border-r-[3px]">
           <div className="mb-4 flex items-center gap-2.5">
             <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary/10">
               <Landmark className="h-4 w-4 text-primary" />
@@ -217,10 +223,8 @@ export function ChainTopology({ state }: { state: CrossChainVaultState }) {
           </div>
         </div>
 
-        {/* ── XCM Connector — center spine ──────────────────────── */}
-        <div className="relative flex w-14 shrink-0 flex-col items-center justify-center gap-2.5 border-r border-border bg-background/50">
-          {/* Flowing dots — top half */}
-          <div className="flex flex-col items-center gap-1.5">
+        <div className="relative flex h-14 w-full shrink-0 flex-row items-center justify-center gap-2.5 border-b-[3px] border-border bg-background/50 lg:h-auto lg:w-14 lg:flex-col lg:border-b-0 lg:border-r-[3px]">
+          <div className="flex flex-row items-center gap-1.5 lg:flex-col">
             {[0, 150, 300, 450].map((delay) => (
               <span
                 key={delay}
@@ -230,7 +234,6 @@ export function ChainTopology({ state }: { state: CrossChainVaultState }) {
             ))}
           </div>
 
-          {/* XCM badge */}
           <div className="flex flex-col items-center gap-1">
             <div className="flex h-7 w-7 items-center justify-center rounded-full border border-accent/25 bg-accent/8">
               <Zap className="h-3 w-3 text-accent" />
@@ -240,8 +243,7 @@ export function ChainTopology({ state }: { state: CrossChainVaultState }) {
             </span>
           </div>
 
-          {/* Flowing dots — bottom half (reversed order) */}
-          <div className="flex flex-col items-center gap-1.5">
+          <div className="flex flex-row items-center gap-1.5 lg:flex-col">
             {[450, 300, 150, 0].map((delay, i) => (
               <span
                 key={i}
@@ -252,10 +254,9 @@ export function ChainTopology({ state }: { state: CrossChainVaultState }) {
           </div>
         </div>
 
-        {/* ── Satellite chain list — right column ───────────────── */}
         <div className="flex flex-1 flex-col">
           {state.satellites.length === 0 ? (
-            <div className="flex flex-1 items-center justify-center p-8">
+            <div className="retro-empty flex-1">
               <div className="text-center">
                 <Globe className="mx-auto mb-2 h-7 w-7 text-text-muted opacity-30" />
                 <p className="font-mono text-xs text-text-muted">

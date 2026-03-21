@@ -1,22 +1,21 @@
-import { HumanMessage, SystemMessage } from "@langchain/core/messages";
 import type { BaseChatModel } from "@langchain/core/language_models/chat_models";
+import { HumanMessage, SystemMessage } from "@langchain/core/messages";
 import type { StructuredToolInterface } from "@langchain/core/tools";
-import { ObiKit, type ChainConfig, type VaultConfig } from "@obidot-kit/sdk";
-
-import { env } from "../config/env.js";
+import { type ChainConfig, ObiKit, type VaultConfig } from "@obidot-kit/sdk";
 import { CHAIN_ID, RPC_URL, VAULT_ADDRESS } from "../config/constants.js";
-import { SignerService } from "../services/signer.service.js";
-import { YieldService } from "../services/yield.service.js";
+import { env } from "../config/env.js";
 import { CrossChainService } from "../services/crosschain.service.js";
-import { SwapRouterService } from "../services/swap-router.service.js";
 import { IntentService } from "../services/intent.service.js";
-import { createObidotTools } from "./tools.js";
+import { SignerService } from "../services/signer.service.js";
+import { strategyStore } from "../services/strategy-store.service.js";
+import { SwapRouterService } from "../services/swap-router.service.js";
+import { YieldService } from "../services/yield.service.js";
+import type { CrossChainVaultState, MarketSnapshot } from "../types/index.js";
+import { aiDecisionSchema } from "../types/index.js";
+import { agentLog, loopLog } from "../utils/logger.js";
 import { createLlm } from "./llm.js";
 import { SYSTEM_PROMPT } from "./systemPrompt.js";
-import { aiDecisionSchema } from "../types/index.js";
-import type { MarketSnapshot } from "../types/index.js";
-import { loopLog, agentLog } from "../utils/logger.js";
-import { strategyStore } from "../services/strategy-store.service.js";
+import { createObidotTools } from "./tools.js";
 
 // ─────────────────────────────────────────────────────────────────────────────
 //  Autonomous Loop — The "Brain"
@@ -244,7 +243,7 @@ export class AutonomousLoop {
     }
 
     // Optionally fetch cross-chain state
-    let crossChainState;
+    let crossChainState: CrossChainVaultState | undefined;
     if (this.crossChainService.hasSatellites) {
       try {
         crossChainState =
@@ -329,7 +328,10 @@ export class AutonomousLoop {
         },
       });
     } catch (err) {
-      loopLog.warn({ err }, "Failed to record agent decision — continuing cycle");
+      loopLog.warn(
+        { err },
+        "Failed to record agent decision — continuing cycle",
+      );
     }
 
     if (!decision) {
@@ -351,36 +353,36 @@ export class AutonomousLoop {
         action: decision.action,
         ...(decision.action === "REALLOCATE"
           ? {
-            targetParachain: decision.targetParachain,
-            amount: decision.amount,
-            maxSlippageBps: decision.maxSlippageBps,
-          }
+              targetParachain: decision.targetParachain,
+              amount: decision.amount,
+              maxSlippageBps: decision.maxSlippageBps,
+            }
           : decision.action === "BIFROST_STRATEGY"
             ? {
-              strategyType: decision.strategyType,
-              amount: decision.amount,
-              currencyIn: decision.currencyIn,
-            }
+                strategyType: decision.strategyType,
+                amount: decision.amount,
+                currencyIn: decision.currencyIn,
+              }
             : decision.action === "CROSS_CHAIN_REBALANCE"
               ? {
-                targetChain: decision.targetChain,
-                direction: decision.direction,
-                amount: decision.amount,
-              }
-              : decision.action === "LOCAL_SWAP"
-                ? {
-                  poolType: decision.poolType,
-                  tokenIn: decision.tokenIn,
-                  tokenOut: decision.tokenOut,
+                  targetChain: decision.targetChain,
+                  direction: decision.direction,
                   amount: decision.amount,
                 }
-                : decision.action === "UNIVERSAL_INTENT"
-                  ? {
+              : decision.action === "LOCAL_SWAP"
+                ? {
+                    poolType: decision.poolType,
                     tokenIn: decision.tokenIn,
                     tokenOut: decision.tokenOut,
-                    destType: decision.destType,
                     amount: decision.amount,
                   }
+                : decision.action === "UNIVERSAL_INTENT"
+                  ? {
+                      tokenIn: decision.tokenIn,
+                      tokenOut: decision.tokenOut,
+                      destType: decision.destType,
+                      amount: decision.amount,
+                    }
                   : {}),
         reasoning: decision.reasoning,
       },
@@ -442,10 +444,21 @@ export class AutonomousLoop {
       // Record in strategy store for API consumers
       try {
         const actionTarget = (() => {
-          if (decision.action === "LOCAL_SWAP") return (decision as { tokenOut?: string }).tokenOut ?? "unknown";
-          if (decision.action === "REALLOCATE") return (decision as { targetProtocol?: string }).targetProtocol ?? "unknown";
-          if (decision.action === "BIFROST_STRATEGY") return (decision as { strategyType?: number | string }).strategyType?.toString() ?? "unknown";
-          if (decision.action === "UNIVERSAL_INTENT") return (decision as { tokenOut?: string }).tokenOut ?? "unknown";
+          if (decision.action === "LOCAL_SWAP")
+            return (decision as { tokenOut?: string }).tokenOut ?? "unknown";
+          if (decision.action === "REALLOCATE")
+            return (
+              (decision as { targetProtocol?: string }).targetProtocol ??
+              "unknown"
+            );
+          if (decision.action === "BIFROST_STRATEGY")
+            return (
+              (
+                decision as { strategyType?: number | string }
+              ).strategyType?.toString() ?? "unknown"
+            );
+          if (decision.action === "UNIVERSAL_INTENT")
+            return (decision as { tokenOut?: string }).tokenOut ?? "unknown";
           return "unknown";
         })();
 
@@ -566,13 +579,13 @@ export class AutonomousLoop {
       "",
       ...(CHAIN_ID === 420_420_417
         ? [
-          "⚠️ TESTNET ENVIRONMENT (Polkadot Hub TestNet, chain 420420417):",
-          "  - XCM channels to Bifrost, Hydration, and other parachains are NOT active.",
-          "  - BIFROST_STRATEGY, REALLOCATE, CROSS_CHAIN_REBALANCE, and UNIVERSAL_INTENT will revert.",
-          "  - Only NO_ACTION and LOCAL_SWAP are executable on this network.",
-          "  - Choose NO_ACTION unless a LOCAL_SWAP opportunity is clearly profitable.",
-          "",
-        ]
+            "⚠️ TESTNET ENVIRONMENT (Polkadot Hub TestNet, chain 420420417):",
+            "  - XCM channels to Bifrost, Hydration, and other parachains are NOT active.",
+            "  - BIFROST_STRATEGY, REALLOCATE, CROSS_CHAIN_REBALANCE, and UNIVERSAL_INTENT will revert.",
+            "  - Only NO_ACTION and LOCAL_SWAP are executable on this network.",
+            "  - Choose NO_ACTION unless a LOCAL_SWAP opportunity is clearly profitable.",
+            "",
+          ]
         : []),
       "Based on this data, produce your decision as a JSON object.",
     ].join("\n");

@@ -1,11 +1,11 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
+import { API_BASE } from "@/lib/constants";
 import {
   getIndexedStrategyExecutions,
   type IndexedStrategyExecution,
 } from "@/lib/graphql";
-import { API_BASE } from "@/lib/constants";
 
 // Shape returned by the agent's in-memory /api/strategies endpoint
 interface AgentStrategyRecord {
@@ -20,7 +20,9 @@ interface AgentStrategyRecord {
 }
 
 /** Map agent StrategyRecord → IndexedStrategyExecution shape for uniform display */
-function agentRecordToIndexed(r: AgentStrategyRecord): IndexedStrategyExecution {
+function agentRecordToIndexed(
+  r: AgentStrategyRecord,
+): IndexedStrategyExecution {
   return {
     id: r.id,
     txHash: r.txHash ?? "",

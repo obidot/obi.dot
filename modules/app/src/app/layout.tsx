@@ -1,15 +1,16 @@
 import type { Metadata } from "next";
-import { Outfit } from "next/font/google";
+import { VT323 } from "next/font/google";
 import localFont from "next/font/local";
-import Navbar from "@/components/layout/navbar";
 import { ChatWidget } from "@/components/chat/chat-widget";
+import Navbar from "@/components/layout/navbar";
 import "./globals.css";
-import Providers from "./providers";
 import { cn } from "@/lib/utils";
+import Providers from "./providers";
 
-export const outfitFont = Outfit({
+export const displayFont = VT323({
+  weight: "400",
   subsets: ["latin"],
-  variable: "--font-outfit",
+  variable: "--font-display",
 });
 
 export const atlasFont = localFont({
@@ -31,16 +32,24 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={cn(atlasFont.className, atlasFont.variable, outfitFont.variable)}
+      className={cn(
+        "antialiased",
+        atlasFont.className,
+        atlasFont.variable,
+        displayFont.variable,
+      )}
     >
       <body className="min-h-screen antialiased">
+        <a href="#main-content" className="skip-nav">
+          Skip to content
+        </a>
         <Providers>
           <div className="flex min-h-screen flex-col">
-            {/* Navbar uses Outfit; everything else inherits Atlas */}
-            <div className={outfitFont.className}>
-              <Navbar />
-            </div>
-            <main id="main-content" className="flex-1 px-5 py-4">
+            <Navbar />
+            <main
+              id="main-content"
+              className="mx-auto flex w-full max-w-[1600px] flex-1 px-4 py-5 lg:px-6 lg:py-6"
+            >
               {children}
             </main>
           </div>

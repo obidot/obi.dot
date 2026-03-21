@@ -1,19 +1,19 @@
 import {
+  type Address,
   createPublicClient,
   http,
-  type Address,
   type PublicClient,
 } from "viem";
 
 import {
-  EVM_CHAINS,
-  SATELLITE_VAULT_ABI,
-  VAULT_CROSS_CHAIN_ABI,
-  VAULT_ADDRESS,
-  CROSS_CHAIN_ROUTER_ADDRESS,
   CROSS_CHAIN_ROUTER_ABI,
-  MAX_SATELLITE_SYNC_AGE,
+  CROSS_CHAIN_ROUTER_ADDRESS,
+  EVM_CHAINS,
   type EVMChainConfig,
+  MAX_SATELLITE_SYNC_AGE,
+  SATELLITE_VAULT_ABI,
+  VAULT_ADDRESS,
+  VAULT_CROSS_CHAIN_ABI,
 } from "../config/constants.js";
 import { env } from "../config/env.js";
 import type {

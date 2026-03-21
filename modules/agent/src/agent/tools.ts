@@ -1,10 +1,4 @@
 import { Tool } from "@langchain/core/tools";
-
-import { SignerService } from "../services/signer.service.js";
-import { YieldService } from "../services/yield.service.js";
-import { CrossChainService } from "../services/crosschain.service.js";
-import { SwapRouterService } from "../services/swap-router.service.js";
-import { IntentService } from "../services/intent.service.js";
 import {
   ASSET_ADDRESS,
   INTENT_DEADLINE_SECONDS,
@@ -13,19 +7,24 @@ import {
   TOKEN_ADDRESSES,
   VAULT_ADDRESS,
 } from "../config/constants.js";
+import type { CrossChainService } from "../services/crosschain.service.js";
+import type { IntentService } from "../services/intent.service.js";
+import type { SignerService } from "../services/signer.service.js";
+import type { SwapRouterService } from "../services/swap-router.service.js";
+import type { YieldService } from "../services/yield.service.js";
 import {
   aiDecisionSchema,
-  BifrostStrategyType,
-  BifrostCurrencyId,
   BIFROST_STRATEGY_LABELS,
+  BifrostCurrencyId,
+  type BifrostStrategyType,
   DestType,
-  POOL_TYPE_LABELS,
-  type StrategyIntent,
-  type ReallocateDecision,
   type LocalSwapDecision,
+  POOL_TYPE_LABELS,
+  type ReallocateDecision,
+  type StrategyIntent,
   type UniversalIntentDecision,
 } from "../types/index.js";
-import { agentLog, swapLog, intentLog } from "../utils/logger.js";
+import { agentLog, intentLog, swapLog } from "../utils/logger.js";
 
 // ─────────────────────────────────────────────────────────────────────────────
 //  FetchYieldsTool — Perception phase
@@ -1057,13 +1056,16 @@ export class DepositTool extends Tool {
       try {
         raw = JSON.parse(input) as Record<string, unknown>;
       } catch {
-        return JSON.stringify({ success: false, error: "Invalid JSON input to execute_deposit." });
+        return JSON.stringify({
+          success: false,
+          error: "Invalid JSON input to execute_deposit.",
+        });
       }
 
       // Unwrap LangChain's { input: "..." } wrapper if present
-      const params = (typeof raw.input === "string"
-        ? JSON.parse(raw.input)
-        : raw) as Record<string, unknown>;
+      const params = (
+        typeof raw.input === "string" ? JSON.parse(raw.input) : raw
+      ) as Record<string, unknown>;
 
       const token = params.token as string | undefined;
       const amount = params.amount as string | undefined;
@@ -1132,7 +1134,8 @@ export class FindRoutesTool extends Tool {
       try {
         let raw = JSON.parse(input) as Record<string, unknown>;
         // LangChain bindTools() wraps args as { input: "<json string>" }
-        if (typeof raw.input === "string") raw = JSON.parse(raw.input) as Record<string, unknown>;
+        if (typeof raw.input === "string")
+          raw = JSON.parse(raw.input) as Record<string, unknown>;
         params = raw as typeof params;
       } catch {
         return JSON.stringify({
@@ -1161,7 +1164,9 @@ export class FindRoutesTool extends Tool {
         BigInt(amountIn),
       );
 
-      const liveRoutes = routes.filter((r) => r.status === "live" && r.amountOut !== "0");
+      const liveRoutes = routes.filter(
+        (r) => r.status === "live" && r.amountOut !== "0",
+      );
 
       swapLog.info(
         { tokenIn, tokenOut, liveCount: liveRoutes.length },
@@ -1232,7 +1237,10 @@ export class DirectSwapTool extends Tool {
   private readonly swapRouterService: SwapRouterService;
   private readonly signerService: SignerService;
 
-  constructor(signerService: SignerService, swapRouterService: SwapRouterService) {
+  constructor(
+    signerService: SignerService,
+    swapRouterService: SwapRouterService,
+  ) {
     super();
     this.signerService = signerService;
     this.swapRouterService = swapRouterService;
@@ -1250,12 +1258,14 @@ export class DirectSwapTool extends Tool {
       try {
         let raw = JSON.parse(input) as Record<string, unknown>;
         // LangChain bindTools() wraps args as { input: "<json string>" }
-        if (typeof raw.input === "string") raw = JSON.parse(raw.input) as Record<string, unknown>;
+        if (typeof raw.input === "string")
+          raw = JSON.parse(raw.input) as Record<string, unknown>;
         params = raw as typeof params;
       } catch {
         return JSON.stringify({
           success: false,
-          error: "Invalid JSON. Expected { tokenIn, tokenOut, amountIn, maxSlippageBps }.",
+          error:
+            "Invalid JSON. Expected { tokenIn, tokenOut, amountIn, maxSlippageBps }.",
         });
       }
 
@@ -1288,7 +1298,9 @@ export class DirectSwapTool extends Tool {
         outAddr,
         amountInBig,
       );
-      const best = routes.find((r) => r.status === "live" && r.amountOut !== "0");
+      const best = routes.find(
+        (r) => r.status === "live" && r.amountOut !== "0",
+      );
 
       if (!best) {
         return JSON.stringify({

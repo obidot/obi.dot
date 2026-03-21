@@ -1,9 +1,9 @@
 "use client";
 
+import { Eye, Loader2 } from "lucide-react";
+import { formatUnits } from "viem";
 import { useVaultState, useVaultStats } from "@/hooks/use-vault-state";
 import { formatTokenAmount } from "@/lib/format";
-import { formatUnits } from "viem";
-import { Loader2, Eye } from "lucide-react";
 
 export function VaultOverview() {
   const { data: vault, isLoading, error } = useVaultState();
@@ -11,7 +11,7 @@ export function VaultOverview() {
 
   if (isLoading) {
     return (
-      <div className="hero-banner flex h-[100px] items-center justify-center">
+      <div className="hero-banner flex h-[150px] items-center justify-center">
         <Loader2 className="h-5 w-5 animate-spin text-text-muted" />
       </div>
     );
@@ -31,28 +31,35 @@ export function VaultOverview() {
     totalAssets > 0n ? Number((totalRemoteAssets * 100n) / totalAssets) : 0;
 
   return (
-    <div className="hero-banner relative px-6 py-5">
-      <div className="relative z-10 flex items-center justify-between">
-        {/* TVL */}
-        <div className="flex items-center gap-4">
+    <div className="hero-banner relative px-5 py-5 md:px-7 md:py-6">
+      <div className="relative z-10 flex flex-col gap-5 xl:flex-row xl:items-end xl:justify-between">
+        <div className="space-y-3">
+          <div className="flex flex-wrap gap-2">
+            <span className="pill bg-primary text-primary-foreground">
+              Vault Board
+            </span>
+            <span className="pill bg-surface text-text-secondary">
+              Polkadot Hub TestNet
+            </span>
+          </div>
           <div>
-            <div className="flex items-center gap-2">
-              <h2 className="stat-number text-3xl text-text-primary">
+            <p className="retro-label text-[0.95rem] text-text-muted">
+              Obidot Yield Vault
+            </p>
+            <div className="mt-2 flex items-center gap-3">
+              <h2 className="stat-number text-text-primary">
                 ${parseFloat(formatUnits(totalAssets, 18)).toFixed(2)}
               </h2>
               <Eye className="h-4 w-4 text-text-muted" />
             </div>
-            <p className="mt-1 text-[13px] text-text-secondary">
-              Total Value Locked.{" "}
-              <span className="text-primary cursor-pointer hover:underline">
-                Polkadot Hub EVM
-              </span>
+            <p className="mt-2 max-w-2xl text-[13px] text-text-secondary">
+              Autonomous allocation across Polkadot Hub liquidity surfaces with
+              on-chain vault accounting and live operational telemetry.
             </p>
           </div>
         </div>
 
-        {/* Metrics row */}
-        <div className="flex items-center gap-8">
+        <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
           <MetricItem
             label="Idle"
             value={formatTokenAmount(idle.toString())}
@@ -90,11 +97,9 @@ function MetricItem({
   highlight?: boolean;
 }) {
   return (
-    <div className="text-right">
-      <p className="text-[10px] font-medium uppercase tracking-widest text-text-muted">
-        {label}
-      </p>
-      <p className="mt-0.5 font-mono text-[15px] font-semibold text-text-primary">
+    <div className="min-w-[118px] border-[3px] border-border bg-surface px-3 py-2 shadow-[3px_3px_0_0_var(--border)]">
+      <p className="retro-label text-[0.85rem] text-text-muted">{label}</p>
+      <p className="mt-2 text-[15px] font-semibold text-text-primary">
         {highlight ? <span className="text-primary">{value}</span> : value}
         {suffix && (
           <span className="ml-1 text-[11px] text-text-muted">{suffix}</span>

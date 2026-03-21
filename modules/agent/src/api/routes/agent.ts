@@ -1,12 +1,12 @@
-import type { FastifyInstance } from "fastify";
-import type { StructuredToolInterface } from "@langchain/core/tools";
 import {
   AIMessage,
   HumanMessage,
   SystemMessage,
   ToolMessage,
 } from "@langchain/core/messages";
+import type { StructuredToolInterface } from "@langchain/core/tools";
 import { ChatOpenAI } from "@langchain/openai";
+import type { FastifyInstance } from "fastify";
 
 import { env } from "../../config/env.js";
 import { strategyStore } from "../../services/strategy-store.service.js";
@@ -112,9 +112,7 @@ async function runChat(
 
   // Reconstruct prior turns from the client-provided history
   const priorMessages = history.map((m) =>
-    m.role === "user"
-      ? new HumanMessage(m.content)
-      : new AIMessage(m.content),
+    m.role === "user" ? new HumanMessage(m.content) : new AIMessage(m.content),
   );
 
   const messages: (SystemMessage | HumanMessage | AIMessage | ToolMessage)[] = [

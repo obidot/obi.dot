@@ -1,7 +1,7 @@
+import { formatUnits, parseUnits } from "viem";
 import { logger } from "../utils/logger.js";
 import { eventBus } from "./event-bus.service.js";
 import type { SwapRouterService } from "./swap-router.service.js";
-import { parseUnits, formatUnits } from "viem";
 
 const monLog = logger.child({ module: "limit-order-monitor" });
 
@@ -11,9 +11,9 @@ export interface LimitOrder {
   tokenOutSymbol: string;
   tokenInAddress: string;
   tokenOutAddress: string;
-  amountIn: string;       // human-readable (e.g. "10.5")
-  targetPrice: string;    // human-readable price (tokenOut per tokenIn)
-  expiry: number;         // Unix ms timestamp
+  amountIn: string; // human-readable (e.g. "10.5")
+  targetPrice: string; // human-readable price (tokenOut per tokenIn)
+  expiry: number; // Unix ms timestamp
   createdAt: number;
 }
 
@@ -28,7 +28,13 @@ export class LimitOrderMonitorService {
 
   addOrder(order: LimitOrder): void {
     this.orders.set(order.id, order);
-    monLog.info({ orderId: order.id, pair: `${order.tokenInSymbol}→${order.tokenOutSymbol}` }, "Limit order registered");
+    monLog.info(
+      {
+        orderId: order.id,
+        pair: `${order.tokenInSymbol}→${order.tokenOutSymbol}`,
+      },
+      "Limit order registered",
+    );
   }
 
   cancelOrder(id: string): boolean {
@@ -77,10 +83,17 @@ export class LimitOrderMonitorService {
         );
 
         const bestLocal = routes
-          .filter((r) => r.routeType === "local" && r.amountOut !== "0" && /^\d+$/.test(r.amountOut))
-          .reduce<typeof routes[0] | null>((best, r) =>
-            !best || BigInt(r.amountOut) > BigInt(best.amountOut) ? r : best,
-          null);
+          .filter(
+            (r) =>
+              r.routeType === "local" &&
+              r.amountOut !== "0" &&
+              /^\d+$/.test(r.amountOut),
+          )
+          .reduce<(typeof routes)[0] | null>(
+            (best, r) =>
+              !best || BigInt(r.amountOut) > BigInt(best.amountOut) ? r : best,
+            null,
+          );
 
         if (!bestLocal) continue;
 
@@ -108,7 +121,10 @@ export class LimitOrderMonitorService {
           this.orders.delete(order.id);
         }
       } catch (err) {
-        monLog.warn({ err, orderId: order.id }, "Error checking limit order price");
+        monLog.warn(
+          { err, orderId: order.id },
+          "Error checking limit order price",
+        );
       }
     }
   }

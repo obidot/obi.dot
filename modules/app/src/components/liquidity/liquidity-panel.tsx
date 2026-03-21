@@ -1,17 +1,17 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { CheckCircle, ExternalLink, Loader2, X } from "lucide-react";
+import { useEffect, useState } from "react";
+import { type Address, formatUnits, parseUnits } from "viem";
 import { useAccount } from "wagmi";
-import { formatUnits, parseUnits, type Address } from "viem";
-import { X, Loader2, CheckCircle, ExternalLink } from "lucide-react";
-import { cn } from "@/lib/format";
-import { CHAIN, SLIPPAGE_OPTIONS } from "@/lib/constants";
-import type { LiquidityPairMeta } from "@/types";
 import {
   useAddLiquidity,
-  useRemoveLiquidity,
   usePoolShare,
+  useRemoveLiquidity,
 } from "@/hooks/use-liquidity";
+import { CHAIN, SLIPPAGE_OPTIONS } from "@/lib/constants";
+import { cn } from "@/lib/format";
+import type { LiquidityPairMeta } from "@/types";
 
 interface LiquidityPanelProps {
   pair: LiquidityPairMeta | null;
@@ -26,59 +26,85 @@ const EXPLORER_URL = CHAIN.blockExplorer;
 export function LiquidityPanel({ pair, open, onClose }: LiquidityPanelProps) {
   const [tab, setTab] = useState<Tab>("add");
 
+  useEffect(() => {
+    if (!open) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        onClose();
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [open, onClose]);
+
   if (!pair) return null;
 
   return (
-    <div
-      className={cn(
-        "fixed right-0 top-0 z-50 h-full w-[360px] border-l border-border bg-surface shadow-xl",
-        "transition-transform duration-300 ease-in-out",
-        open ? "translate-x-0" : "translate-x-full",
-      )}
-    >
-      {/* Header */}
-      <div className="flex items-center justify-between border-b border-border px-4 py-3">
-        <div>
-          <p className="font-mono text-[10px] uppercase tracking-widest text-text-muted">
-            UniswapV2 Pool
-          </p>
-          <p className="text-[15px] font-semibold text-text-primary">
-            {pair.label}
-          </p>
-        </div>
-        <button
-          type="button"
-          onClick={onClose}
-          className="rounded border border-border p-1 text-text-muted hover:bg-surface-hover hover:text-text-primary"
-        >
-          <X className="h-4 w-4" />
-        </button>
-      </div>
-
-      {/* Tabs */}
-      <div className="flex border-b border-border">
-        {(["add", "remove"] as const).map((t) => (
+    <>
+      <div
+        className={cn(
+          "fixed inset-0 z-40 bg-black/20 transition-opacity duration-200",
+          open
+            ? "pointer-events-auto opacity-100"
+            : "pointer-events-none opacity-0",
+        )}
+        onClick={onClose}
+        aria-hidden="true"
+      />
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label={`${pair.label} liquidity panel`}
+        className={cn(
+          "fixed right-0 top-0 z-50 h-full w-full max-w-[420px] border-l-[3px] border-border bg-surface shadow-[8px_0_0_0_var(--border)]",
+          "transition-transform duration-300 ease-in-out",
+          open ? "translate-x-0" : "translate-x-full",
+        )}
+      >
+        {/* Header */}
+        <div className="flex items-center justify-between border-b-[3px] border-border px-4 py-4">
+          <div>
+            <p className="retro-label text-[0.85rem] text-text-muted">
+              UniswapV2 Pool
+            </p>
+            <p className="mt-1 text-[15px] font-semibold text-text-primary">
+              {pair.label}
+            </p>
+          </div>
           <button
-            key={t}
             type="button"
-            onClick={() => setTab(t)}
-            className={cn(
-              "flex-1 py-2.5 text-[13px] font-medium transition-colors",
-              tab === t
-                ? "border-b-2 border-primary text-primary"
-                : "text-text-secondary hover:text-text-primary",
-            )}
+            onClick={onClose}
+            className="border-[2px] border-border bg-surface-alt p-1 text-text-muted shadow-[2px_2px_0_0_var(--border)] hover:text-text-primary"
           >
-            {t === "add" ? "+ Add Liquidity" : "− Remove"}
+            <X className="h-4 w-4" />
           </button>
-        ))}
-      </div>
+        </div>
 
-      {/* Content */}
-      <div className="h-[calc(100%-105px)] overflow-y-auto p-4">
-        {tab === "add" ? <AddTab pair={pair} /> : <RemoveTab pair={pair} />}
+        {/* Tabs */}
+        <div className="flex border-b-[3px] border-border bg-surface-alt">
+          {(["add", "remove"] as const).map((t) => (
+            <button
+              key={t}
+              type="button"
+              onClick={() => setTab(t)}
+              className={cn(
+                "retro-label flex-1 py-3 text-[1rem] transition-colors",
+                tab === t
+                  ? "bg-primary text-primary-foreground"
+                  : "text-text-secondary hover:bg-surface hover:text-text-primary",
+              )}
+            >
+              {t === "add" ? "+ Add Liquidity" : "− Remove"}
+            </button>
+          ))}
+        </div>
+
+        {/* Content */}
+        <div className="h-[calc(100%-112px)] overflow-y-auto p-5">
+          {tab === "add" ? <AddTab pair={pair} /> : <RemoveTab pair={pair} />}
+        </div>
       </div>
-    </div>
+    </>
   );
 }
 
@@ -126,8 +152,7 @@ function AddTab({ pair }: { pair: LiquidityPairMeta }) {
     );
   }
 
-  const busy =
-    step !== "idle" && step !== "done" && step !== "error";
+  const busy = step !== "idle" && step !== "done" && step !== "error";
 
   const stepLabel =
     step === "idle" || step === "error"
@@ -168,7 +193,9 @@ function AddTab({ pair }: { pair: LiquidityPairMeta }) {
 
       {lpEstimate !== null && (
         <div className="rounded border border-border bg-surface-alt px-3 py-2 text-[12px]">
-          <span className="text-text-muted">LP tokens you&apos;ll receive: </span>
+          <span className="text-text-muted">
+            LP tokens you&apos;ll receive:{" "}
+          </span>
           <span className="font-mono text-text-primary">
             {formatUnits(lpEstimate, 18).slice(0, 10)}
           </span>
@@ -223,8 +250,15 @@ function RemoveTab({ pair }: { pair: LiquidityPairMeta }) {
   const [lpInput, setLpInput] = useState("");
   const [slippageBps, setSlippageBps] = useState(100);
 
-  const { balance, sharePercent, amount0, amount1, totalSupply, reserve0, reserve1 } =
-    usePoolShare(pair.address as Address);
+  const {
+    balance,
+    sharePercent,
+    amount0,
+    amount1,
+    totalSupply,
+    reserve0,
+    reserve1,
+  } = usePoolShare(pair.address as Address);
   const { step, execute, reset, txHash, error } = useRemoveLiquidity(pair);
 
   const lpAmount = (() => {
@@ -254,8 +288,7 @@ function RemoveTab({ pair }: { pair: LiquidityPairMeta }) {
     );
   }
 
-  const busy =
-    step !== "idle" && step !== "done" && step !== "error";
+  const busy = step !== "idle" && step !== "done" && step !== "error";
 
   const stepLabel =
     step === "idle" || step === "error"
@@ -344,11 +377,15 @@ function RemoveTab({ pair }: { pair: LiquidityPairMeta }) {
           </p>
           <div className="flex justify-between">
             <span className="text-text-secondary">{pair.token0Symbol}</span>
-            <span className="font-mono">{formatUnits(out0, 18).slice(0, 10)}</span>
+            <span className="font-mono">
+              {formatUnits(out0, 18).slice(0, 10)}
+            </span>
           </div>
           <div className="flex justify-between">
             <span className="text-text-secondary">{pair.token1Symbol}</span>
-            <span className="font-mono">{formatUnits(out1, 18).slice(0, 10)}</span>
+            <span className="font-mono">
+              {formatUnits(out1, 18).slice(0, 10)}
+            </span>
           </div>
         </div>
       )}
@@ -411,10 +448,12 @@ function AmountInput({
         type="number"
         min="0"
         step="any"
+        inputMode="decimal"
+        aria-label={label}
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder="0.0"
-        className="w-full bg-transparent px-3 py-2.5 pr-16 font-mono text-[14px] text-text-primary outline-none"
+        className="w-full bg-transparent px-3 py-2.5 pr-16 font-mono text-[14px] text-text-primary"
       />
       <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[11px] font-semibold text-text-muted">
         {label}

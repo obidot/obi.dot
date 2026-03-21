@@ -1,30 +1,46 @@
 "use client";
 
-import { useYields, useBifrostYields } from "@/hooks/use-yields";
-import { useVaultState } from "@/hooks/use-vault-state";
-import { useAgentLog } from "@/hooks/use-agent-log";
-import { PanelSkeleton } from "@/components/ui/skeleton";
-import { OpportunityRadar } from "@/components/insights/opportunity-radar";
-import { RiskMatrix } from "@/components/insights/risk-matrix";
-import { PositionSimulatorPanel } from "@/components/insights/position-simulator";
-import { YieldComparison } from "@/components/insights/yield-comparison";
-import { PortfolioOptimizer } from "@/components/insights/portfolio-optimizer";
-import { MarketPulse } from "@/components/insights/market-pulse";
 import { RefreshCw } from "lucide-react";
-import { useProtocolActivity } from "@/hooks/use-protocol-activity";
+import { MarketPulse } from "@/components/insights/market-pulse";
+import { OpportunityRadar } from "@/components/insights/opportunity-radar";
+import { PortfolioOptimizer } from "@/components/insights/portfolio-optimizer";
+import { PositionSimulatorPanel } from "@/components/insights/position-simulator";
 import { ProtocolActivity } from "@/components/insights/protocol-activity";
+import { RiskMatrix } from "@/components/insights/risk-matrix";
+import { YieldComparison } from "@/components/insights/yield-comparison";
+import { PageHero } from "@/components/ui/page-hero";
+import { PanelSkeleton } from "@/components/ui/skeleton";
+import { useAgentLog } from "@/hooks/use-agent-log";
+import { useProtocolActivity } from "@/hooks/use-protocol-activity";
+import { useVaultState } from "@/hooks/use-vault-state";
+import { useBifrostYields, useYields } from "@/hooks/use-yields";
 
 export default function InsightsPage() {
-  const { data: yields, isLoading: yLoading, error: yError, refetch: yRefetch } = useYields();
+  const {
+    data: yields,
+    isLoading: yLoading,
+    error: yError,
+    refetch: yRefetch,
+  } = useYields();
   const { data: bifrost, isLoading: bLoading } = useBifrostYields();
   const { data: vault } = useVaultState();
   const { data: decisions } = useAgentLog();
-  const { data: activity, isLoading: actLoading, error: actError, connected: actConnected } = useProtocolActivity();
+  const {
+    data: activity,
+    isLoading: actLoading,
+    error: actError,
+    connected: actConnected,
+  } = useProtocolActivity();
 
   const isLoading = yLoading || bLoading || actLoading;
 
   return (
     <div className="space-y-4">
+      <PageHero
+        eyebrow="Insights"
+        title="Market Intelligence"
+        description="Protocol activity, optimizer signals, and simulated allocation decisions in one consistent analysis surface."
+      />
       {isLoading ? (
         <div className="grid gap-4 md:grid-cols-2">
           <PanelSkeleton rows={6} />
@@ -33,7 +49,7 @@ export default function InsightsPage() {
           <PanelSkeleton rows={4} />
         </div>
       ) : yError ? (
-        <div className="panel rounded-lg p-8 text-center">
+        <div className="panel p-8 text-center">
           <p className="font-mono text-sm text-danger">
             Failed to load yield data for insights
           </p>

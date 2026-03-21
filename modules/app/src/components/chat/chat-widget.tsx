@@ -1,17 +1,10 @@
 "use client";
 
-import { useState, useRef, useEffect, useCallback } from "react";
+import { Bot, Loader2, MessageSquare, Send, User, X } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 import { sendChatMessage } from "@/lib/api";
-import type { ChatMessage } from "@/types";
 import { cn } from "@/lib/format";
-import {
-  MessageSquare,
-  X,
-  Send,
-  Loader2,
-  Bot,
-  User,
-} from "lucide-react";
+import type { ChatMessage } from "@/types";
 
 export function ChatWidget() {
   const [open, setOpen] = useState(false);
@@ -21,13 +14,9 @@ export function ChatWidget() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  const scrollToBottom = useCallback(() => {
+  useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, []);
-
-  useEffect(() => {
-    scrollToBottom();
-  }, [messages, scrollToBottom]);
 
   useEffect(() => {
     if (open) inputRef.current?.focus();
@@ -128,9 +117,7 @@ export function ChatWidget() {
                       : "border border-border-subtle bg-background text-text-primary",
                   )}
                 >
-                  <p className="whitespace-pre-wrap leading-6">
-                    {msg.content}
-                  </p>
+                  <p className="whitespace-pre-wrap leading-6">{msg.content}</p>
                 </div>
                 {msg.role === "user" && (
                   <div className="flex h-5 w-5 shrink-0 items-center justify-center self-end rounded bg-secondary/10">

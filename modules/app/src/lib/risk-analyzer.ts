@@ -1,4 +1,4 @@
-import type { ProtocolYield, BifrostYield } from "@/types";
+import type { BifrostYield, ProtocolYield } from "@/types";
 
 // ─────────────────────────────────────────────────────────────────────────────
 //  Risk Analyzer — Multi-dimensional risk decomposition per protocol
@@ -44,24 +44,26 @@ export interface RiskDimensions {
 
 /** Base protocol risk by category */
 const BASE_PROTOCOL_RISK: Record<string, number> = {
-  SLP: 15,      // Liquid staking is well-understood
-  DEX: 30,      // AMM smart contract risk
-  Farming: 50,  // Multiple contract interactions
-  SALP: 40,     // Crowdloan lock-up risk
+  SLP: 15, // Liquid staking is well-understood
+  DEX: 30, // AMM smart contract risk
+  Farming: 50, // Multiple contract interactions
+  SALP: 40, // Crowdloan lock-up risk
   default: 25,
 };
 
 /** Impermanent loss risk by category */
 const IL_RISK: Record<string, number> = {
-  SLP: 5,       // Minimal for staking derivatives
-  DEX: 45,      // Significant for LP positions
-  Farming: 55,  // LP + farming = compounded IL risk
-  SALP: 10,     // Not applicable in same way
+  SLP: 5, // Minimal for staking derivatives
+  DEX: 45, // Significant for LP positions
+  Farming: 55, // LP + farming = compounded IL risk
+  SALP: 10, // Not applicable in same way
   default: 20,
 };
 
 function computeProtocolRisk(category?: string): number {
-  return BASE_PROTOCOL_RISK[category ?? "default"] ?? BASE_PROTOCOL_RISK.default;
+  return (
+    BASE_PROTOCOL_RISK[category ?? "default"] ?? BASE_PROTOCOL_RISK.default
+  );
 }
 
 function computeImpermanentLoss(category?: string): number {
@@ -123,12 +125,22 @@ export function analyzeRisks(
   const profiles: RiskProfile[] = [];
 
   for (const y of yields) {
-    profiles.push(buildProfile(y.name, y.protocol, y.apyPercent, y.tvlUsd, totalTvl, false));
+    profiles.push(
+      buildProfile(y.name, y.protocol, y.apyPercent, y.tvlUsd, totalTvl, false),
+    );
   }
 
   for (const y of bifrostYields) {
     profiles.push(
-      buildProfile(y.name, y.protocol, y.apyPercent, y.tvlUsd, totalTvl, true, y.category),
+      buildProfile(
+        y.name,
+        y.protocol,
+        y.apyPercent,
+        y.tvlUsd,
+        totalTvl,
+        true,
+        y.category,
+      ),
     );
   }
 
@@ -179,20 +191,30 @@ function buildProfile(
  */
 export function riskTierColor(tier: RiskProfile["tier"]): string {
   switch (tier) {
-    case "MINIMAL": return "text-primary";
-    case "LOW": return "text-primary";
-    case "MODERATE": return "text-warning";
-    case "HIGH": return "text-danger";
-    case "EXTREME": return "text-danger";
+    case "MINIMAL":
+      return "text-primary";
+    case "LOW":
+      return "text-primary";
+    case "MODERATE":
+      return "text-warning";
+    case "HIGH":
+      return "text-danger";
+    case "EXTREME":
+      return "text-danger";
   }
 }
 
 export function riskTierBg(tier: RiskProfile["tier"]): string {
   switch (tier) {
-    case "MINIMAL": return "bg-primary/10";
-    case "LOW": return "bg-primary/10";
-    case "MODERATE": return "bg-warning/10";
-    case "HIGH": return "bg-danger/10";
-    case "EXTREME": return "bg-danger/15";
+    case "MINIMAL":
+      return "bg-primary/10";
+    case "LOW":
+      return "bg-primary/10";
+    case "MODERATE":
+      return "bg-warning/10";
+    case "HIGH":
+      return "bg-danger/10";
+    case "EXTREME":
+      return "bg-danger/15";
   }
 }

@@ -1,16 +1,16 @@
 "use client";
 
-import type { AgentDecision } from "@/types";
-import { formatRelativeTime, formatTokenAmount, cn } from "@/lib/format";
 import {
-  ArrowUpRight,
   ArrowLeftRight,
+  ArrowUpRight,
+  ChevronRight,
+  Droplets,
   PauseCircle,
   RefreshCcw,
-  Droplets,
-  ChevronRight,
 } from "lucide-react";
-import { useState } from "react";
+import { useId, useState } from "react";
+import { cn, formatRelativeTime, formatTokenAmount } from "@/lib/format";
+import type { AgentDecision } from "@/types";
 
 const ACTION_CONFIG: Record<
   string,
@@ -50,91 +50,97 @@ const ACTION_CONFIG: Record<
 
 export function DecisionCard({ decision }: { decision: AgentDecision }) {
   const [expanded, setExpanded] = useState(false);
+  const detailsId = useId();
   const config = ACTION_CONFIG[decision.action] ?? ACTION_CONFIG.NO_ACTION;
   const Icon = config.icon;
 
   return (
-    <div
-      className="cursor-pointer px-4 py-3 transition-colors hover:bg-surface-hover"
-      onClick={() => setExpanded(!expanded)}
-      onKeyDown={(e) => e.key === "Enter" && setExpanded(!expanded)}
-      role="button"
-      tabIndex={0}
-      aria-expanded={expanded}
-    >
-      <div className="flex items-center gap-3">
-        {/* Cycle indicator */}
-        <span className="font-mono text-[10px] text-text-muted w-12 shrink-0">
-          #{decision.cycle}
-        </span>
+    <div className="bg-surface">
+      <button
+        type="button"
+        className="w-full px-4 py-4 text-left transition-colors hover:bg-surface-hover"
+        onClick={() => setExpanded(!expanded)}
+        aria-expanded={expanded}
+        aria-controls={detailsId}
+      >
+        <div className="flex flex-wrap items-center gap-3 lg:flex-nowrap">
+          <span className="w-14 shrink-0 font-mono text-[10px] text-text-muted">
+            #{decision.cycle}
+          </span>
 
-        {/* Action icon */}
-        <div className={cn("shrink-0", config.color)}>
-          <Icon className="h-3.5 w-3.5" />
+          <div
+            className={cn(
+              "flex h-8 w-8 shrink-0 items-center justify-center border-2 border-border bg-surface-alt",
+              config.color,
+            )}
+          >
+            <Icon className="h-3.5 w-3.5" />
+          </div>
+
+          <span className={cn("pill text-[10px]", config.pillClass)}>
+            {config.label}
+          </span>
+
+          <div className="min-w-0 flex-1">
+            <p className="truncate font-mono text-xs text-text-secondary">
+              {decision.reasoning}
+            </p>
+            <p className="mt-1 font-mono text-[10px] uppercase tracking-wider text-text-muted">
+              Snapshot {decision.snapshot ? "attached" : "not available"}
+            </p>
+          </div>
+
+          <span className="shrink-0 font-mono text-[10px] text-text-muted">
+            {formatRelativeTime(decision.timestamp)}
+          </span>
+
+          <ChevronRight
+            className={cn(
+              "h-3 w-3 shrink-0 text-text-muted transition-transform duration-150",
+              expanded && "rotate-90",
+            )}
+          />
         </div>
+      </button>
 
-        {/* Action label */}
-        <span className={cn("pill text-[10px]", config.pillClass)}>
-          {config.label}
-        </span>
-
-        {/* Reasoning preview */}
-        <p className="min-w-0 flex-1 truncate font-mono text-xs text-text-secondary">
-          {decision.reasoning}
-        </p>
-
-        {/* Time */}
-        <span className="shrink-0 font-mono text-[10px] text-text-muted">
-          {formatRelativeTime(decision.timestamp)}
-        </span>
-
-        {/* Expand chevron */}
-        <ChevronRight
-          className={cn(
-            "h-3 w-3 shrink-0 text-text-muted transition-transform duration-150",
-            expanded && "rotate-90",
-          )}
-        />
-      </div>
-
-      {/* Expanded section */}
       <div
+        id={detailsId}
         className={cn(
-          "mt-2 ml-12 overflow-hidden transition-all duration-200",
-          expanded ? "max-h-96 opacity-100" : "max-h-0 opacity-0",
+          "overflow-hidden transition-all duration-200",
+          expanded ? "max-h-[28rem] opacity-100" : "max-h-0 opacity-0",
         )}
       >
-        {/* Full reasoning */}
-        <div className="rounded-md border border-border-subtle bg-background p-3 mb-2">
-          <p className="font-mono text-xs leading-relaxed text-text-secondary">
-            {decision.reasoning}
-          </p>
-        </div>
-
-        {/* Snapshot mini-stats (if available) */}
-        {decision.snapshot && (
-          <div className="grid grid-cols-2 gap-1.5">
-            <SnapshotStat
-              label="Total Assets"
-              value={formatTokenAmount(decision.snapshot.totalAssets)}
-              unit="tDOT"
-            />
-            <SnapshotStat
-              label="Idle Balance"
-              value={formatTokenAmount(decision.snapshot.idleBalance)}
-              unit="tDOT"
-            />
-            <SnapshotStat
-              label="Top APY"
-              value={decision.snapshot.topYieldApy}
-              unit="%"
-            />
-            <SnapshotStat
-              label="Top Protocol"
-              value={decision.snapshot.topYieldProtocol}
-            />
+        <div className="border-t-[3px] border-border bg-surface-alt px-4 py-4">
+          <div className="border-[3px] border-border bg-background p-3">
+            <p className="font-mono text-xs leading-relaxed text-text-secondary">
+              {decision.reasoning}
+            </p>
           </div>
-        )}
+
+          {decision.snapshot && (
+            <div className="mt-3 grid grid-cols-2 gap-2 lg:grid-cols-4">
+              <SnapshotStat
+                label="Total Assets"
+                value={formatTokenAmount(decision.snapshot.totalAssets)}
+                unit="tDOT"
+              />
+              <SnapshotStat
+                label="Idle Balance"
+                value={formatTokenAmount(decision.snapshot.idleBalance)}
+                unit="tDOT"
+              />
+              <SnapshotStat
+                label="Top APY"
+                value={decision.snapshot.topYieldApy}
+                unit="%"
+              />
+              <SnapshotStat
+                label="Top Protocol"
+                value={decision.snapshot.topYieldProtocol}
+              />
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
@@ -150,7 +156,7 @@ function SnapshotStat({
   unit?: string;
 }) {
   return (
-    <div className="rounded-md border border-border-subtle bg-background px-2.5 py-2">
+    <div className="border-[3px] border-border bg-background px-3 py-2.5">
       <p className="text-[9px] font-medium uppercase tracking-wider text-text-muted">
         {label}
       </p>

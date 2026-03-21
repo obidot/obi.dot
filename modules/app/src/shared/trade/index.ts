@@ -1,26 +1,26 @@
-import { TradeActionType } from "@/types";
+import type { TradeActionType } from "@/types";
 
 export const TRADE_ACTIONS: {
   id: TradeActionType;
   label: string;
   description: string;
 }[] = [
-    {
-      id: "swap",
-      label: "Swap",
-      description: "Instantly buy or sell tokens at superior prices",
-    },
-    {
-      id: "limit",
-      label: "Limit Order",
-      description: "Buy or sell tokens at customized prices",
-    },
-    {
-      id: "crosschain",
-      label: "Cross-Chain",
-      description: "Swap between tokens on different chains",
-    },
-  ];
+  {
+    id: "swap",
+    label: "Swap",
+    description: "Instantly buy or sell tokens at superior prices",
+  },
+  {
+    id: "limit",
+    label: "Limit Order",
+    description: "Buy or sell tokens at customized prices",
+  },
+  {
+    id: "crosschain",
+    label: "Cross-Chain",
+    description: "Swap between tokens on different chains",
+  },
+];
 
 const DEFAULT_ROUTER_BY_CHAIN: Record<string, string> = {
   "polkadot-hub-testnet": "tdot-to-tusdc",

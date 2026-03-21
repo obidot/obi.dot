@@ -9,7 +9,8 @@ universal intent execution, and a Fastify API server.
 ```sh
 # From repo root
 pnpm --filter @obidot/agent run typecheck     # Strict TypeScript check (mandatory)
-pnpm --filter @obidot/agent run lint          # ESLint
+pnpm --filter @obidot/agent run lint          # Biome check
+pnpm --filter @obidot/agent run format        # Biome format
 pnpm --filter @obidot/agent run dev           # Dev mode with tsx watch
 pnpm --filter @obidot/agent run build         # Compile to dist/
 pnpm --filter @obidot/agent run start         # Run compiled agent

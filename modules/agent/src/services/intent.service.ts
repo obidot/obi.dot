@@ -1,28 +1,27 @@
 import {
+  type Address,
+  type Chain,
   createPublicClient,
   createWalletClient,
-  http,
-  type Address,
   type Hex,
+  http,
   type PublicClient,
   type WalletClient,
-  type Chain,
 } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
-
-import { env } from "../config/env.js";
 import {
+  ASSET_ADDRESS,
   CHAIN_ID,
-  RPC_URL,
-  VAULT_ADDRESS,
-  VAULT_INTENT_ABI,
   EIP712_DOMAIN,
+  INTENT_DEADLINE_SECONDS,
+  RPC_URL,
   STRATEGY_INTENT_TYPES,
   UNIVERSAL_INTENT_TYPES,
-  INTENT_DEADLINE_SECONDS,
-  ASSET_ADDRESS,
+  VAULT_ADDRESS,
+  VAULT_INTENT_ABI,
 } from "../config/constants.js";
-import type { UniversalIntent, StrategyIntent } from "../types/index.js";
+import { env } from "../config/env.js";
+import type { StrategyIntent, UniversalIntent } from "../types/index.js";
 import { intentLog } from "../utils/logger.js";
 
 // ─────────────────────────────────────────────────────────────────────────────

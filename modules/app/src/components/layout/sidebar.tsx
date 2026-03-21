@@ -16,11 +16,16 @@ export function Sidebar() {
   const pathname = usePathname();
 
   return (
-    <nav aria-label="Main navigation" className="sticky top-0 z-50 flex h-14 items-center border-b border-border bg-surface/90 backdrop-blur-xl">
+    <nav
+      aria-label="Main navigation"
+      className="sticky top-0 z-50 flex h-14 items-center border-b border-border bg-surface/90 backdrop-blur-xl"
+    >
       {/* Logo */}
       <Link href="/" className="flex items-center gap-2.5 px-5 shrink-0">
         <div className="flex h-7 w-7 items-center justify-center rounded-md bg-primary">
-          <span className="font-mono text-sm font-black text-background">O</span>
+          <span className="font-mono text-sm font-black text-background">
+            O
+          </span>
         </div>
         <span className="text-[15px] font-bold tracking-tight text-text-primary">
           Obidot

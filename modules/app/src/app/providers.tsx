@@ -1,9 +1,9 @@
 "use client";
+import type { ReactNode } from "react";
 import { WagmiProvider } from "wagmi";
-import { type ReactNode } from "react";
-import { wagmiConfig } from "@/lib/wagmi";
 import { QueryProvider } from "@/components/providers/query-provider";
 import { RainbowKitClientProvider } from "@/components/providers/rainbow-provider";
+import { wagmiConfig } from "@/lib/wagmi";
 
 export default function Providers({ children }: { children: ReactNode }) {
   return (

@@ -1,31 +1,31 @@
 import {
+  type Address,
+  type Chain,
   createPublicClient,
   http,
-  type Address,
   type PublicClient,
-  type Chain,
 } from "viem";
 
 import {
-  CHAIN_ID,
-  RPC_URL,
-  SWAP_ROUTER_ADDRESS,
-  SWAP_QUOTER_ADDRESS,
-  SWAP_ROUTER_ABI,
-  SWAP_QUOTER_ABI,
-  POOL_ADAPTER_ABI,
-  HYDRATION_ADAPTER_ADDRESS,
   ASSET_HUB_ADAPTER_ADDRESS,
   BIFROST_DEX_ADAPTER_ADDRESS,
+  CHAIN_ID,
+  HYDRATION_ADAPTER_ADDRESS,
+  POOL_ADAPTER_ABI,
+  RPC_URL,
+  SWAP_QUOTER_ABI,
+  SWAP_QUOTER_ADDRESS,
+  SWAP_ROUTER_ABI,
+  SWAP_ROUTER_ADDRESS,
   TOKEN_SYMBOLS,
-  UV2_PAIRS,
   UV2_PAIR_ABI,
+  UV2_PAIRS,
 } from "../config/constants.js";
 import {
-  PoolType,
   POOL_TYPE_LABELS,
-  type SwapQuote,
+  PoolType,
   type RouteHop,
+  type SwapQuote,
   type SwapRouteResult,
 } from "../types/index.js";
 import { swapLog } from "../utils/logger.js";
@@ -523,7 +523,7 @@ export class SwapRouterService {
       reserveIn: bigint;
       reserveOut: bigint;
     }
-    const graph = new Map<string, PairEdge[]>();     // live only
+    const graph = new Map<string, PairEdge[]>(); // live only
     const fullGraph = new Map<string, PairEdge[]>(); // includes zero-reserve
 
     for (let i = 0; i < UV2_PAIRS.length; i++) {
@@ -536,23 +536,51 @@ export class SwapRouterService {
 
       // always add to fullGraph (even with zero reserves — shows path exists)
       if (!fullGraph.has(t0)) fullGraph.set(t0, []);
-      fullGraph.get(t0)!.push({ pairIdx: i, neighbour: t1, reserveIn: r0, reserveOut: r1 });
+      const fullT0Edges = fullGraph.get(t0);
+      if (fullT0Edges) {
+        fullT0Edges.push({
+          pairIdx: i,
+          neighbour: t1,
+          reserveIn: r0,
+          reserveOut: r1,
+        });
+      }
       if (!fullGraph.has(t1)) fullGraph.set(t1, []);
-      fullGraph.get(t1)!.push({ pairIdx: i, neighbour: t0, reserveIn: r1, reserveOut: r0 });
+      const fullT1Edges = fullGraph.get(t1);
+      if (fullT1Edges) {
+        fullT1Edges.push({
+          pairIdx: i,
+          neighbour: t0,
+          reserveIn: r1,
+          reserveOut: r0,
+        });
+      }
 
       if (!reserves || r0 === 0n || r1 === 0n) continue; // skip empty pools for live graph
 
       // t0 → t1
       if (!graph.has(t0)) graph.set(t0, []);
-      graph
-        .get(t0)!
-        .push({ pairIdx: i, neighbour: t1, reserveIn: r0, reserveOut: r1 });
+      const t0Edges = graph.get(t0);
+      if (t0Edges) {
+        t0Edges.push({
+          pairIdx: i,
+          neighbour: t1,
+          reserveIn: r0,
+          reserveOut: r1,
+        });
+      }
 
       // t1 → t0
       if (!graph.has(t1)) graph.set(t1, []);
-      graph
-        .get(t1)!
-        .push({ pairIdx: i, neighbour: t0, reserveIn: r1, reserveOut: r0 });
+      const t1Edges = graph.get(t1);
+      if (t1Edges) {
+        t1Edges.push({
+          pairIdx: i,
+          neighbour: t0,
+          reserveIn: r1,
+          reserveOut: r0,
+        });
+      }
     }
 
     // ── 3. V2 AMM output math ────────────────────────────────────────────────
@@ -687,14 +715,18 @@ export class SwapRouterService {
       if (currentToken === tokenOutLc && path.length > 0) {
         const hopSymbols = [
           TOKEN_SYMBOLS[tokenInLc] ?? tokenInLc.slice(0, 8),
-          ...path.map((s) => TOKEN_SYMBOLS[s.tokenOut] ?? s.tokenOut.slice(0, 8)),
+          ...path.map(
+            (s) => TOKEN_SYMBOLS[s.tokenOut] ?? s.tokenOut.slice(0, 8),
+          ),
         ];
         const id = hopSymbols.join("→");
         if (!liveRouteIds.has(id)) {
           const hops: RouteHop[] = path.map((step) => {
             const pair = UV2_PAIRS[step.pairIdx];
-            const tokenInSymbol = TOKEN_SYMBOLS[step.tokenIn] ?? step.tokenIn.slice(0, 8);
-            const tokenOutSymbol = TOKEN_SYMBOLS[step.tokenOut] ?? step.tokenOut.slice(0, 8);
+            const tokenInSymbol =
+              TOKEN_SYMBOLS[step.tokenIn] ?? step.tokenIn.slice(0, 8);
+            const tokenOutSymbol =
+              TOKEN_SYMBOLS[step.tokenOut] ?? step.tokenOut.slice(0, 8);
             return {
               pool: pair.address,
               poolLabel: pair.label,
@@ -730,7 +762,11 @@ export class SwapRouterService {
       for (const edge of edges) {
         if (visited2.has(edge.neighbour)) continue;
         visited2.add(edge.neighbour);
-        path.push({ pairIdx: edge.pairIdx, tokenIn: currentToken, tokenOut: edge.neighbour });
+        path.push({
+          pairIdx: edge.pairIdx,
+          tokenIn: currentToken,
+          tokenOut: edge.neighbour,
+        });
         dryDfs(edge.neighbour, path, visited2);
         path.pop();
         visited2.delete(edge.neighbour);

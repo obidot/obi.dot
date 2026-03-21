@@ -1,22 +1,17 @@
 "use client";
 
-import { useState, useMemo } from "react";
-import type { ProtocolYield, BifrostYield } from "@/types";
 import {
-  simulatePosition,
-  formatSimUsd,
-  type SimulationResult,
-} from "@/lib/position-simulator";
-import { cn, formatApy } from "@/lib/format";
-import {
-  Calculator,
-  TrendingUp,
-  TrendingDown,
-  Clock,
   AlertTriangle,
-  DollarSign,
+  Calculator,
   Calendar,
+  Clock,
+  DollarSign,
+  TrendingUp,
 } from "lucide-react";
+import { useId, useMemo, useState } from "react";
+import { cn, formatApy } from "@/lib/format";
+import { formatSimUsd, simulatePosition } from "@/lib/position-simulator";
+import type { BifrostYield, ProtocolYield } from "@/types";
 
 interface PositionSimulatorProps {
   yields: ProtocolYield[];
@@ -39,6 +34,9 @@ export function PositionSimulatorPanel({
   yields,
   bifrostYields,
 }: PositionSimulatorProps) {
+  const protocolInputId = useId();
+  const amountInputId = useId();
+  const durationGroupId = useId();
   const allYields = useMemo(() => {
     const items: {
       yield_: ProtocolYield | BifrostYield;
@@ -67,57 +65,66 @@ export function PositionSimulatorPanel({
 
   if (!selected || !sim) {
     return (
-      <div className="panel flex min-h-[300px] items-center justify-center rounded-lg">
-        <p className="font-mono text-xs text-text-muted">No yield data available</p>
+      <div className="panel retro-empty min-h-[300px]">
+        <p className="font-mono text-xs text-text-muted">
+          No yield data available
+        </p>
       </div>
     );
   }
 
   return (
-    <div className="panel overflow-hidden rounded-lg">
-      {/* Header */}
-      <div className="flex items-center justify-between border-b border-border px-4 py-3">
-        <div className="flex items-center gap-2.5">
-          <div className="flex h-7 w-7 items-center justify-center rounded-md bg-accent/10">
-            <Calculator className="h-3.5 w-3.5 text-accent" />
+    <div className="panel overflow-hidden">
+      <div className="panel-header">
+        <div className="panel-header-block">
+          <div className="panel-header-icon bg-accent">
+            <Calculator className="h-4 w-4 text-foreground" />
           </div>
-          <div>
-            <h3 className="text-base font-semibold text-text-primary">
-              Position Simulator
-            </h3>
-            <p className="font-mono text-xs text-text-muted">
-              What-if scenario engine with confidence intervals
+          <div className="panel-heading">
+            <span className="panel-kicker">Scenario Lab</span>
+            <h3 className="panel-title">Position Simulator</h3>
+            <p className="panel-subtitle">
+              What-if return estimates with break-even timing, IL drag, and
+              confidence bands.
             </p>
           </div>
         </div>
       </div>
 
-      {/* Controls */}
-      <div className="grid grid-cols-1 gap-4 border-b border-border p-4 md:grid-cols-3">
-        {/* Protocol selector */}
+      <div className="grid grid-cols-1 gap-4 border-b-[3px] border-border p-4 md:grid-cols-3">
         <div>
-          <label className="mb-1.5 block text-xs uppercase tracking-wider text-text-muted">
+          <label
+            htmlFor={protocolInputId}
+            className="mb-1.5 block text-xs uppercase tracking-wider text-text-muted"
+          >
             Protocol
           </label>
           <select
+            id={protocolInputId}
             value={selectedIdx}
             onChange={(e) => setSelectedIdx(Number(e.target.value))}
             className="input-trading w-full py-2 text-xs"
           >
             {allYields.map((item, idx) => (
-              <option key={`${item.yield_.protocol}-${item.yield_.name}`} value={idx}>
+              <option
+                key={`${item.yield_.protocol}-${item.yield_.name}`}
+                value={idx}
+              >
                 {item.yield_.name} ({formatApy(item.yield_.apyPercent)})
               </option>
             ))}
           </select>
         </div>
 
-        {/* Amount */}
         <div>
-          <label className="mb-1.5 block text-xs uppercase tracking-wider text-text-muted">
+          <label
+            htmlFor={amountInputId}
+            className="mb-1.5 block text-xs uppercase tracking-wider text-text-muted"
+          >
             Amount (USD)
           </label>
           <input
+            id={amountInputId}
             type="number"
             value={amount}
             onChange={(e) => setAmount(Math.max(0, Number(e.target.value)))}
@@ -144,12 +151,18 @@ export function PositionSimulatorPanel({
           </div>
         </div>
 
-        {/* Duration */}
         <div>
-          <label className="mb-1.5 block text-xs uppercase tracking-wider text-text-muted">
+          <label
+            htmlFor={durationGroupId}
+            className="mb-1.5 block text-xs uppercase tracking-wider text-text-muted"
+          >
             Duration
           </label>
-          <div className="flex gap-1">
+          <fieldset
+            id={durationGroupId}
+            className="flex gap-1"
+            aria-label="Duration presets"
+          >
             {DURATION_PRESETS.map((preset) => (
               <button
                 key={preset.days}
@@ -165,12 +178,11 @@ export function PositionSimulatorPanel({
                 {preset.label}
               </button>
             ))}
-          </div>
+          </fieldset>
         </div>
       </div>
 
-      {/* Results Grid */}
-      <div className="grid grid-cols-2 gap-px bg-border md:grid-cols-4">
+      <div className="metric-grid grid-cols-2 md:grid-cols-4">
         <ResultCard
           icon={<DollarSign className="h-3.5 w-3.5 text-primary" />}
           label="Projected Return"
@@ -200,8 +212,7 @@ export function PositionSimulatorPanel({
         />
       </div>
 
-      {/* Confidence Intervals */}
-      <div className="border-t border-border px-4 py-3">
+      <div className="section-strip">
         <p className="mb-2 text-xs uppercase tracking-wider text-text-muted">
           Confidence Intervals
         </p>
@@ -213,7 +224,7 @@ export function PositionSimulatorPanel({
               <div
                 key={key}
                 className={cn(
-                  "rounded-md border p-3",
+                  "border-[3px] p-3",
                   isActive
                     ? "border-primary/30 bg-primary/5"
                     : "border-border-subtle bg-background",
@@ -254,27 +265,28 @@ export function PositionSimulatorPanel({
         </div>
       </div>
 
-      {/* Mini Timeline Chart (ASCII-style bar chart) */}
-      <div className="border-t border-border px-4 py-3">
+      <div className="section-strip">
         <div className="flex items-center justify-between">
           <p className="text-xs uppercase tracking-wider text-text-muted">
             <Calendar className="mr-1 inline h-3 w-3" />
             Growth Timeline
           </p>
           <p className="font-mono text-xs text-text-muted">
-            Daily: {formatSimUsd(sim.dailyYieldUsd)} | Monthly: {formatSimUsd(sim.monthlyYieldUsd)}
+            Daily: {formatSimUsd(sim.dailyYieldUsd)} | Monthly:{" "}
+            {formatSimUsd(sim.monthlyYieldUsd)}
           </p>
         </div>
         <div className="mt-2 flex h-[80px] items-end gap-px">
-          {sim.timeline.map((point, idx) => {
+          {sim.timeline.map((point) => {
             const maxVal = sim.confidence.high.finalBalance;
             const minVal = amount * 0.95;
             const range = maxVal - minVal;
-            const barH = range > 0 ? ((point.balanceMid - minVal) / range) * 100 : 50;
+            const barH =
+              range > 0 ? ((point.balanceMid - minVal) / range) * 100 : 50;
 
             return (
               <div
-                key={idx}
+                key={point.day}
                 className="group relative flex-1"
                 style={{ minWidth: "2px" }}
               >
@@ -282,8 +294,7 @@ export function PositionSimulatorPanel({
                   className="w-full rounded-t bg-primary/60 transition-all group-hover:bg-primary"
                   style={{ height: `${Math.max(2, barH)}%` }}
                 />
-                {/* Hover tooltip */}
-                <div className="pointer-events-none absolute bottom-full left-1/2 z-10 mb-1 hidden -translate-x-1/2 whitespace-nowrap rounded border border-border bg-surface px-1.5 py-0.5 text-[11px] shadow group-hover:block">
+                <div className="pointer-events-none absolute bottom-full left-1/2 z-10 mb-1 hidden -translate-x-1/2 whitespace-nowrap border-[3px] border-border bg-surface px-1.5 py-0.5 text-[11px] shadow group-hover:block">
                   Day {point.day}: {formatSimUsd(point.balanceMid)}
                 </div>
               </div>
@@ -309,19 +320,15 @@ function ResultCard({
   sub?: string;
 }) {
   return (
-    <div className="bg-surface p-3">
+    <div className="metric-cell">
       <div className="flex items-center gap-1.5">
         {icon}
-        <span className="text-xs uppercase tracking-wider text-text-muted">
-          {label}
-        </span>
+        <span className="metric-label">{label}</span>
       </div>
-      <p className={cn("mt-1 font-mono text-lg font-bold", valueColor)}>
+      <p className={cn("metric-value mt-3 text-[1.35rem]", valueColor)}>
         {value}
       </p>
-      {sub && (
-        <p className="font-mono text-xs text-text-muted">{sub}</p>
-      )}
+      {sub && <p className="font-mono text-xs text-text-muted">{sub}</p>}
     </div>
   );
 }

@@ -1,10 +1,13 @@
 "use client";
 
-import { useState } from "react";
-import { useDepositSubscription, useSwapSubscription } from "@/hooks/use-graphql-subscription";
-import type { DepositEvent, SwapEvent } from "@/hooks/use-graphql-subscription";
-import { cn } from "@/lib/format";
 import { ArrowLeftRight, TrendingDown } from "lucide-react";
+import { useState } from "react";
+import type { DepositEvent, SwapEvent } from "@/hooks/use-graphql-subscription";
+import {
+  useDepositSubscription,
+  useSwapSubscription,
+} from "@/hooks/use-graphql-subscription";
+import { cn } from "@/lib/format";
 
 type LiveEvent =
   | { kind: "deposit"; data: DepositEvent; ts: number }
@@ -43,32 +46,41 @@ export function LiveEvents() {
   const connected = depositConnected || swapConnected;
 
   return (
-    <div className="panel rounded-lg">
-      {/* Header */}
-      <div className="flex items-center justify-between border-b border-border px-4 py-3">
-        <h3 className="font-mono text-sm font-medium text-text-primary">
-          Live Events
-        </h3>
+    <div className="panel overflow-hidden">
+      <div className="panel-header">
+        <div className="panel-header-block">
+          <div className="panel-header-icon bg-accent">
+            <ArrowLeftRight className="h-4 w-4 text-foreground" />
+          </div>
+          <div className="panel-heading">
+            <span className="panel-kicker">Event Stream</span>
+            <h3 className="panel-title">Live Events</h3>
+            <p className="panel-subtitle">
+              Deposit and swap events streamed from the indexer in real time.
+            </p>
+          </div>
+        </div>
         <span
           className={cn(
-            "flex items-center gap-1.5 font-mono text-xs",
-            connected ? "text-primary" : "text-text-muted",
+            "pill",
+            connected
+              ? "bg-accent text-accent-foreground"
+              : "bg-surface-alt text-text-secondary",
           )}
         >
           <span
             className={cn(
               "h-1.5 w-1.5 rounded-full",
-              connected ? "animate-pulse bg-primary" : "bg-text-muted",
+              connected ? "animate-pulse bg-foreground" : "bg-text-muted",
             )}
           />
-          {connected ? "Live" : "Connecting..."}
+          {connected ? "Live" : "Connecting"}
         </span>
       </div>
 
-      {/* Event list */}
-      <div className="divide-y divide-border">
+      <div className="divide-y-[3px] divide-border bg-border">
         {events.length === 0 ? (
-          <div className="flex min-h-[120px] items-center justify-center p-6">
+          <div className="retro-empty min-h-[180px]">
             <p className="font-mono text-xs text-text-muted">
               Waiting for on-chain events…
             </p>
@@ -91,15 +103,13 @@ export function LiveEvents() {
 function DepositRow({ event }: { event: DepositEvent }) {
   const assets = formatTokenAmount(event.assets, 18);
   return (
-    <div className="flex items-start gap-3">
-      <div className="mt-0.5 rounded-md bg-primary/10 p-1.5">
-        <TrendingDown className="h-3 w-3 text-primary" />
+    <div className="flex items-start gap-3 bg-surface px-4 py-4">
+      <div className="mt-0.5 border-2 border-border bg-primary/15 p-2">
+        <TrendingDown className="h-3.5 w-3.5 text-primary" />
       </div>
       <div className="min-w-0 flex-1">
         <div className="flex items-center justify-between gap-2">
-          <span className="font-mono text-xs font-medium text-text-primary">
-            Deposit
-          </span>
+          <span className="retro-label text-sm text-text-primary">Deposit</span>
           <span className="font-mono text-xs text-text-muted">
             #{event.blockNumber}
           </span>
@@ -117,13 +127,13 @@ function SwapRow({ event }: { event: SwapEvent }) {
   const amountOut = formatTokenAmount(event.amountOut, 18);
   const poolLabel = POOL_LABELS[event.poolType] ?? `Pool ${event.poolType}`;
   return (
-    <div className="flex items-start gap-3">
-      <div className="mt-0.5 rounded-md bg-accent/10 p-1.5">
-        <ArrowLeftRight className="h-3 w-3 text-accent" />
+    <div className="flex items-start gap-3 bg-surface px-4 py-4">
+      <div className="mt-0.5 border-2 border-border bg-accent/15 p-2">
+        <ArrowLeftRight className="h-3.5 w-3.5 text-accent" />
       </div>
       <div className="min-w-0 flex-1">
         <div className="flex items-center justify-between gap-2">
-          <span className="font-mono text-xs font-medium text-text-primary">
+          <span className="retro-label text-sm text-text-primary">
             Swap · {poolLabel}
           </span>
           <span className="font-mono text-xs text-text-muted">
@@ -156,4 +166,3 @@ function shortenAddress(addr: string): string {
   if (addr.length < 10) return addr;
   return `${addr.slice(0, 6)}…${addr.slice(-4)}`;
 }
-

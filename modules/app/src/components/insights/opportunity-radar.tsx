@@ -1,21 +1,21 @@
 "use client";
 
-import { useMemo } from "react";
-import type { ProtocolYield, BifrostYield } from "@/types";
 import {
-  scoreOpportunities,
-  type ScoredOpportunity,
-} from "@/lib/yield-opportunity-score";
-import { formatApy, formatUsdNumber, cn } from "@/lib/format";
-import {
-  Zap,
-  TrendingUp,
-  ShieldCheck,
   AlertTriangle,
   Ban,
   ChevronRight,
+  ShieldCheck,
   Target,
+  TrendingUp,
+  Zap,
 } from "lucide-react";
+import { useMemo } from "react";
+import { cn, formatApy, formatUsdNumber } from "@/lib/format";
+import {
+  type ScoredOpportunity,
+  scoreOpportunities,
+} from "@/lib/yield-opportunity-score";
+import type { BifrostYield, ProtocolYield } from "@/types";
 
 const SIGNAL_CONFIG = {
   STRONG_BUY: {
@@ -82,19 +82,18 @@ export function OpportunityRadar({
       : 0;
 
   return (
-    <div className="panel overflow-hidden rounded-lg">
-      {/* Header */}
-      <div className="flex items-center justify-between border-b border-border px-4 py-3">
-        <div className="flex items-center gap-2.5">
-          <div className="flex h-7 w-7 items-center justify-center rounded-md bg-primary/10">
-            <Target className="h-3.5 w-3.5 text-primary" />
+    <div className="panel overflow-hidden">
+      <div className="panel-header">
+        <div className="panel-header-block">
+          <div className="panel-header-icon bg-primary">
+            <Target className="h-4 w-4 text-foreground" />
           </div>
-          <div>
-            <h3 className="text-base font-semibold text-text-primary">
-              Opportunity Radar
-            </h3>
-            <p className="font-mono text-xs text-text-muted">
-              AI-scored yield opportunities ranked by risk-adjusted returns
+          <div className="panel-heading">
+            <span className="panel-kicker">Yield Scanner</span>
+            <h3 className="panel-title">Opportunity Radar</h3>
+            <p className="panel-subtitle">
+              Ranked opportunities scored for return quality, size, freshness,
+              and category risk.
             </p>
           </div>
         </div>
@@ -102,13 +101,21 @@ export function OpportunityRadar({
           <p className="text-xs uppercase tracking-wider text-text-muted">
             Avg Score
           </p>
-          <p className={cn("stat-number text-lg", avgScore >= 60 ? "text-primary" : avgScore >= 40 ? "text-warning" : "text-danger")}>
+          <p
+            className={cn(
+              "stat-number text-lg",
+              avgScore >= 60
+                ? "text-primary"
+                : avgScore >= 40
+                  ? "text-warning"
+                  : "text-danger",
+            )}
+          >
             {avgScore}
           </p>
         </div>
       </div>
 
-      {/* Opportunity List */}
       <div className="divide-y divide-border-subtle">
         {scored.map((opp, idx) => {
           const config = SIGNAL_CONFIG[opp.signal];
@@ -119,7 +126,7 @@ export function OpportunityRadar({
               key={`${opp.yield.protocol}-${opp.yield.name}`}
               type="button"
               onClick={() => onSelectOpportunity?.(opp)}
-              className="flex w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-surface-hover"
+              className="flex w-full items-center gap-3 bg-surface px-4 py-3 text-left transition-colors hover:bg-surface-hover"
             >
               {/* Rank */}
               <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-surface-hover font-mono text-xs font-bold text-text-muted">
@@ -131,7 +138,14 @@ export function OpportunityRadar({
                 <div className="flex items-center gap-1">
                   <div className="h-2 flex-1 overflow-hidden rounded-full bg-surface-hover">
                     <div
-                      className={cn("h-full rounded-full transition-all", opp.score >= 60 ? "bg-primary" : opp.score >= 40 ? "bg-warning" : "bg-danger")}
+                      className={cn(
+                        "h-full rounded-full transition-all",
+                        opp.score >= 60
+                          ? "bg-primary"
+                          : opp.score >= 40
+                            ? "bg-warning"
+                            : "bg-danger",
+                      )}
                       style={{ width: `${opp.score}%` }}
                     />
                   </div>
@@ -179,8 +193,7 @@ export function OpportunityRadar({
         })}
       </div>
 
-      {/* Footer: Score breakdown legend */}
-      <div className="flex items-center gap-4 border-t border-border px-4 py-2">
+      <div className="section-strip flex flex-wrap items-center gap-4">
         <span className="font-mono text-[11px] text-text-muted">Score = </span>
         {[
           { label: "APY", w: 30 },
@@ -189,10 +202,7 @@ export function OpportunityRadar({
           { label: "Category", w: 15 },
           { label: "Fresh", w: 10 },
         ].map((s) => (
-          <span
-            key={s.label}
-            className="font-mono text-[11px] text-text-muted"
-          >
+          <span key={s.label} className="font-mono text-[11px] text-text-muted">
             {s.label}({s.w})
           </span>
         ))}

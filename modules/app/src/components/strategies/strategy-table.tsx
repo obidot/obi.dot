@@ -1,15 +1,17 @@
 "use client";
 
-import { useState, useMemo } from "react";
-import type { StrategyRecord } from "@/types";
-import { formatUsd, truncateAddress, formatRelativeTime, cn } from "@/lib/format";
-import { STATUS_CONFIG } from "@/lib/strategy-config";
+import { ArrowUpDown, ExternalLink, Search } from "lucide-react";
+import { useMemo, useState } from "react";
 import { StrategyDetail } from "@/components/strategies/strategy-detail";
+import { CHAIN } from "@/lib/constants";
 import {
-  ArrowUpDown,
-  ExternalLink,
-  Search,
-} from "lucide-react";
+  cn,
+  formatRelativeTime,
+  formatUsd,
+  truncateAddress,
+} from "@/lib/format";
+import { STATUS_CONFIG } from "@/lib/strategy-config";
+import type { StrategyRecord } from "@/types";
 
 type SortKey = "timestamp" | "amount" | "status";
 type SortDir = "asc" | "desc";
@@ -23,7 +25,19 @@ const FILTER_TABS: { key: StatusFilter; label: string }[] = [
   { key: "timeout", label: "Timeout" },
 ];
 
-export function StrategyTable({ strategies }: { strategies: StrategyRecord[] }) {
+function compareAmountStrings(left: string, right: string): number {
+  const leftAmount = BigInt(left);
+  const rightAmount = BigInt(right);
+
+  if (leftAmount === rightAmount) return 0;
+  return leftAmount > rightAmount ? 1 : -1;
+}
+
+export function StrategyTable({
+  strategies,
+}: {
+  strategies: StrategyRecord[];
+}) {
   const [sortKey, setSortKey] = useState<SortKey>("timestamp");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
   const [selected, setSelected] = useState<StrategyRecord | null>(null);
@@ -63,7 +77,7 @@ export function StrategyTable({ strategies }: { strategies: StrategyRecord[] }) 
         case "timestamp":
           return dir * (a.timestamp - b.timestamp);
         case "amount":
-          return dir * Number(BigInt(a.amount) - BigInt(b.amount));
+          return dir * compareAmountStrings(a.amount, b.amount);
         case "status": {
           const order = { executed: 0, pending: 1, failed: 2, timeout: 3 };
           return dir * (order[a.status] - order[b.status]);
@@ -89,7 +103,30 @@ export function StrategyTable({ strategies }: { strategies: StrategyRecord[] }) 
   return (
     <>
       <div className="panel overflow-hidden rounded-lg">
-        {/* Toolbar: Filter tabs + Search */}
+        <div className="panel-header">
+          <div className="panel-header-block">
+            <div className="panel-header-icon bg-secondary">
+              <ArrowUpDown className="h-4 w-4 text-secondary-foreground" />
+            </div>
+            <div className="panel-heading">
+              <p className="panel-kicker">Strategy Records</p>
+              <h2 className="panel-title">Execution Ledger</h2>
+              <p className="panel-subtitle">
+                Sortable history of autonomous routes, outcomes, and on-chain
+                receipts.
+              </p>
+            </div>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="pill bg-surface-hover text-text-secondary text-[10px]">
+              {strategies.length} total
+            </span>
+            <span className="pill bg-primary/15 text-primary text-[10px]">
+              {sorted.length} visible
+            </span>
+          </div>
+        </div>
+
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-4 py-3">
           <div className="tab-group">
             {FILTER_TABS.map((tab) => {
@@ -110,19 +147,19 @@ export function StrategyTable({ strategies }: { strategies: StrategyRecord[] }) 
               );
             })}
           </div>
-          <div className="relative">
+          <div className="relative w-full sm:w-auto">
             <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-text-muted" />
             <input
               type="text"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Search strategies..."
-              className="input-trading w-[220px] py-1.5 pl-9 pr-3 text-xs"
+              aria-label="Search strategies"
+              className="input-trading w-full py-1.5 pl-9 pr-3 text-xs sm:w-[240px]"
             />
           </div>
         </div>
 
-        {/* Table */}
         <div className="overflow-x-auto">
           <table className="table-pro">
             <thead>
@@ -156,7 +193,10 @@ export function StrategyTable({ strategies }: { strategies: StrategyRecord[] }) 
             <tbody>
               {sorted.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="py-12 text-center font-mono text-xs text-text-muted">
+                  <td
+                    colSpan={6}
+                    className="py-12 text-center font-mono text-xs text-text-muted"
+                  >
                     No strategies match your filter
                   </td>
                 </tr>
@@ -180,7 +220,7 @@ export function StrategyTable({ strategies }: { strategies: StrategyRecord[] }) 
                       aria-label={`Strategy: ${strategy.action}, ${strategy.status}`}
                     >
                       <td className="text-text-secondary">
-                        {formatRelativeTime(new Date(strategy.timestamp).toISOString())}
+                        {formatRelativeTime(strategy.timestamp)}
                       </td>
                       <td className="font-sans text-text-primary">
                         {strategy.action}
@@ -192,12 +232,7 @@ export function StrategyTable({ strategies }: { strategies: StrategyRecord[] }) 
                         {formatUsd(strategy.amount)}
                       </td>
                       <td>
-                        <span
-                          className={cn(
-                            "pill",
-                            status.className,
-                          )}
-                        >
+                        <span className={cn("pill", status.className)}>
                           <StatusIcon className="h-3 w-3" />
                           {status.label}
                         </span>
@@ -205,7 +240,7 @@ export function StrategyTable({ strategies }: { strategies: StrategyRecord[] }) 
                       <td>
                         {strategy.txHash ? (
                           <a
-                            href={`https://blockscout-paseo.parity-chains.parity.io/tx/${strategy.txHash}`}
+                            href={`${CHAIN.blockExplorer}/tx/${strategy.txHash}`}
                             target="_blank"
                             rel="noopener noreferrer"
                             onClick={(e) => e.stopPropagation()}
@@ -227,7 +262,7 @@ export function StrategyTable({ strategies }: { strategies: StrategyRecord[] }) 
 
         {/* Footer */}
         <div className="border-t border-border px-4 py-2">
-          <p className="font-mono text-[10px] text-text-muted">
+          <p className="retro-label text-[0.8rem] text-text-muted">
             Showing {sorted.length} of {strategies.length} strategies
           </p>
         </div>
@@ -235,10 +270,7 @@ export function StrategyTable({ strategies }: { strategies: StrategyRecord[] }) 
 
       {/* Detail slide-over */}
       {selected && (
-        <StrategyDetail
-          strategy={selected}
-          onClose={() => setSelected(null)}
-        />
+        <StrategyDetail strategy={selected} onClose={() => setSelected(null)} />
       )}
     </>
   );

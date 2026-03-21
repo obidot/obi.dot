@@ -1,4 +1,4 @@
-import { clsx, type ClassValue } from "clsx";
+import { type ClassValue, clsx } from "clsx";
 import { twMerge } from "tailwind-merge";
 
 /** Merge Tailwind classes with conflict resolution */
@@ -56,9 +56,7 @@ export function truncateAddress(address: string, chars = 4): string {
 export function formatRelativeTime(timestamp: string | number): string {
   const now = Date.now();
   const then =
-    typeof timestamp === "string"
-      ? new Date(timestamp).getTime()
-      : timestamp; // agent stores Unix ms (Date.now())
+    typeof timestamp === "string" ? new Date(timestamp).getTime() : timestamp; // agent stores Unix ms (Date.now())
   const diff = now - then;
 
   if (diff < 60_000) return "just now";
