@@ -1,9 +1,9 @@
 "use client";
 
-import type { AgentDecision } from "@/types";
+import { RefreshCw, Terminal } from "lucide-react";
 import { DecisionCard } from "@/components/agent/decision-card";
-import { Terminal, RefreshCw } from "lucide-react";
 import { cn } from "@/lib/format";
+import type { AgentDecision } from "@/types";
 
 function timeAgo(ms: number): string {
   const s = Math.floor((Date.now() - ms) / 1000);
@@ -22,11 +22,13 @@ export function DecisionFeed({
   refetch?: () => void;
   isRefetching?: boolean;
 }) {
+  const latestDecision = decisions[0];
+
   if (decisions.length === 0) {
     return (
-      <div className="panel flex min-h-[300px] items-center justify-center rounded-lg p-8">
+      <div className="panel retro-empty">
         <div className="text-center">
-          <Terminal className="mx-auto h-6 w-6 text-text-muted" />
+          <Terminal className="mx-auto h-7 w-7 text-text-muted" />
           <p className="mt-2 font-mono text-sm text-text-muted">
             No decisions yet
           </p>
@@ -39,38 +41,46 @@ export function DecisionFeed({
   }
 
   return (
-    <div className="panel overflow-hidden rounded-lg">
-      {/* Header */}
-      <div className="flex items-center justify-between border-b border-border px-4 py-3">
-        <div className="flex items-center gap-2">
-          <Terminal className="h-3.5 w-3.5 text-text-muted" />
-          <h3 className="text-xs font-medium uppercase tracking-wider text-text-muted">
-            Decision Log
-          </h3>
+    <div className="panel overflow-hidden">
+      <div className="panel-header">
+        <div className="panel-header-block">
+          <div className="panel-header-icon bg-secondary">
+            <Terminal className="h-4 w-4 text-foreground" />
+          </div>
+          <div className="panel-heading">
+            <span className="panel-kicker">Execution Tape</span>
+            <h3 className="panel-title">Decision Log</h3>
+            <p className="panel-subtitle">
+              Latest cycles first, with full reasoning and vault snapshot
+              details on expansion.
+            </p>
+          </div>
         </div>
         <div className="flex items-center gap-2">
           <span className="font-mono text-[10px] text-text-muted">
-            {decisions.length > 0
-              ? `Updated ${timeAgo(decisions[decisions.length - 1].timestamp)}`
+            {latestDecision
+              ? `Updated ${timeAgo(latestDecision.timestamp)}`
               : "No data yet"}
           </span>
-          <span className="pill bg-surface-hover text-text-secondary text-[10px]">
+          <span className="pill bg-surface-alt text-text-secondary text-[10px]">
             {decisions.length} entries
           </span>
           <button
             type="button"
             onClick={refetch}
             disabled={isRefetching}
-            className="btn-ghost p-1"
+            className="btn-ghost min-h-0 px-3 py-2"
             aria-label="Refresh decisions"
           >
-            <RefreshCw className={cn("h-3 w-3", isRefetching && "animate-spin")} />
+            <RefreshCw
+              className={cn("h-3 w-3", isRefetching && "animate-spin")}
+            />
           </button>
         </div>
       </div>
 
       {/* Decision list — terminal style */}
-      <div className="divide-y divide-border-subtle">
+      <div className="divide-y-[3px] divide-border bg-border">
         {decisions.map((decision) => (
           <DecisionCard
             key={`${decision.cycle}-${decision.timestamp}`}

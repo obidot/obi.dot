@@ -1,10 +1,10 @@
 "use client";
 
-import { useReadContracts } from "wagmi";
 import { useQuery } from "@tanstack/react-query";
-import { formatUnits, type Address } from "viem";
-import { CONTRACTS } from "@/lib/constants";
+import { type Address, formatUnits } from "viem";
+import { useReadContracts } from "wagmi";
 import { VAULT_ABI } from "@/lib/abi";
+import { CONTRACTS } from "@/lib/constants";
 import {
   getIndexedVaultState,
   getIndexedVaultStats,

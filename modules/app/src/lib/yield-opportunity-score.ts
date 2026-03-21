@@ -1,4 +1,4 @@
-import type { ProtocolYield, BifrostYield } from "@/types";
+import type { BifrostYield, ProtocolYield } from "@/types";
 
 // ─────────────────────────────────────────────────────────────────────────────
 //  Opportunity Scoring Engine — composite 0-100 score per yield source
@@ -70,7 +70,7 @@ const CATEGORY_RISK: Record<string, number> = {
   DEX: 0.35,
   Farming: 0.55,
   SALP: 0.45,
-  default: 0.30,
+  default: 0.3,
 };
 
 const CATEGORY_BONUS: Record<string, number> = {
@@ -100,7 +100,8 @@ function scoreStability(tvl: number): number {
 }
 
 function scoreRiskAdjusted(apy: number, category?: string): number {
-  const riskWeight = CATEGORY_RISK[category ?? "default"] ?? CATEGORY_RISK.default;
+  const riskWeight =
+    CATEGORY_RISK[category ?? "default"] ?? CATEGORY_RISK.default;
   // Risk-adjusted = APY * (1 - risk_weight) / max_apy_expected
   const riskAdjustedApy = apy * (1 - riskWeight);
   const maxExpected = APY_TIERS.EXCELLENT * (1 - 0.15); // best case
@@ -138,7 +139,8 @@ function getRecommendation(
     return `Solid opportunity — ${apy.toFixed(1)}% APY with adequate liquidity and manageable risk`;
   }
   if (score >= 40) {
-    const reason = category === "Farming" ? "farming volatility" : "moderate TVL";
+    const reason =
+      category === "Farming" ? "farming volatility" : "moderate TVL";
     return `Acceptable yield but watch ${reason} — consider partial allocation only`;
   }
   if (score >= 25) {
@@ -222,7 +224,8 @@ function computeBreakdown(
     apyScore: scoreApy(apy),
     stabilityScore: scoreStability(tvl),
     riskAdjustedScore: scoreRiskAdjusted(apy, category),
-    categoryScore: CATEGORY_BONUS[category ?? "default"] ?? CATEGORY_BONUS.default,
+    categoryScore:
+      CATEGORY_BONUS[category ?? "default"] ?? CATEGORY_BONUS.default,
     freshnessScore: scoreFreshness(fetchedAt),
   };
 }

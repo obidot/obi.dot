@@ -1,16 +1,16 @@
 "use client";
 
-import { useState, useMemo } from "react";
-import type { SatelliteChainState } from "@/types";
-import { formatUsd, formatRelativeTime, cn } from "@/lib/format";
 import {
-  ShieldAlert,
+  ArrowDown,
+  ArrowUp,
+  ArrowUpDown,
   CheckCircle2,
   Globe,
-  ArrowUpDown,
-  ArrowUp,
-  ArrowDown,
+  ShieldAlert,
 } from "lucide-react";
+import { useMemo, useState } from "react";
+import { cn, formatRelativeTime, formatUsd } from "@/lib/format";
+import type { SatelliteChainState } from "@/types";
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -75,7 +75,9 @@ function SortableTh({
         className={cn(
           "flex items-center gap-1 transition-colors",
           "text-xs font-medium uppercase tracking-wider",
-          active ? "text-text-secondary" : "text-text-muted hover:text-text-secondary",
+          active
+            ? "text-text-secondary"
+            : "text-text-muted hover:text-text-secondary",
         )}
       >
         {label}
@@ -135,7 +137,7 @@ export function SatelliteTable({
 
   if (satellites.length === 0) {
     return (
-      <div className="panel flex min-h-[220px] items-center justify-center rounded-lg p-8">
+      <div className="panel retro-empty">
         <div className="text-center">
           <Globe className="mx-auto mb-3 h-8 w-8 text-text-muted opacity-25" />
           <p className="font-mono text-xs text-text-muted">
@@ -150,23 +152,31 @@ export function SatelliteTable({
   }
 
   return (
-    <div className="panel overflow-hidden rounded-lg">
-      {/* ── Header ────────────────────────────────────────────────── */}
-      <div className="flex items-center justify-between border-b border-border px-4 py-3">
-        <h3 className="text-xs font-medium uppercase tracking-widest text-text-muted">
-          Satellite Vaults
-        </h3>
+    <div className="panel overflow-hidden">
+      <div className="panel-header">
+        <div className="panel-header-block">
+          <div className="panel-header-icon bg-warning">
+            <Globe className="h-4 w-4 text-foreground" />
+          </div>
+          <div className="panel-heading">
+            <span className="panel-kicker">Detailed View</span>
+            <h3 className="panel-title">Satellite Vaults</h3>
+            <p className="panel-subtitle">
+              Sortable chain table for allocation, last sync freshness, and
+              emergency flags.
+            </p>
+          </div>
+        </div>
         <div className="flex items-center gap-2">
           <span className="pill bg-secondary/10 text-secondary text-[9px]">
             {satellites.length} {satellites.length === 1 ? "chain" : "chains"}
           </span>
-          <span className="font-mono text-[10px] text-text-muted">
-            Click column to sort
+          <span className="pill bg-surface-alt text-text-secondary text-[9px]">
+            Click a column to sort
           </span>
         </div>
       </div>
 
-      {/* ── Table ─────────────────────────────────────────────────── */}
       <div className="overflow-x-auto">
         <table className="table-pro">
           <thead>
@@ -188,7 +198,10 @@ export function SatelliteTable({
                 dir={sortDir}
                 onSort={handleSort}
               />
-              <th scope="col" className="text-xs font-medium uppercase tracking-wider text-text-muted">
+              <th
+                scope="col"
+                className="text-xs font-medium uppercase tracking-wider text-text-muted"
+              >
                 Allocation
               </th>
               <SortableTh
@@ -304,8 +317,7 @@ export function SatelliteTable({
         </table>
       </div>
 
-      {/* ── Footer ──────────────────────────────────────────────────── */}
-      <div className="border-t border-border px-4 py-2">
+      <div className="section-strip">
         <p className="font-mono text-[10px] text-text-muted">
           {satellites.filter((s) => !s.emergencyMode).length} healthy ·{" "}
           {satellites.filter((s) => s.emergencyMode).length} emergency ·{" "}

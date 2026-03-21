@@ -180,9 +180,11 @@ export const POOL_TYPE_LABELS: Record<PoolType, string> = {
 export function resolvePoolType(value: string | number): PoolType | undefined {
   if (typeof value === "number") return value as PoolType;
   const n = Number(value);
-  if (!isNaN(n)) return n as PoolType;
+  if (!Number.isNaN(n)) return n as PoolType;
   // Reverse label lookup
-  const entry = Object.entries(POOL_TYPE_LABELS).find(([, label]) => label === value);
+  const entry = Object.entries(POOL_TYPE_LABELS).find(
+    ([, label]) => label === value,
+  );
   if (entry) return Number(entry[0]) as PoolType;
   return undefined;
 }
@@ -269,14 +271,14 @@ export type WsEvent =
   | { type: "strategy:executed"; data: StrategyRecord }
   | { type: "agent:decision"; data: AgentDecision }
   | {
-    type: "swap:executed";
-    data: {
-      txHash: string;
-      amountIn: string;
-      amountOut: string;
-      source: PoolType;
-    };
-  }
+      type: "swap:executed";
+      data: {
+        txHash: string;
+        amountIn: string;
+        amountOut: string;
+        source: PoolType;
+      };
+    }
   | { type: "heartbeat"; data: { timestamp: string } };
 
 /** Navigation item */
@@ -288,10 +290,10 @@ export interface NavItem {
 
 /** Metadata for a deployed LiquidityPair (LP-token-enabled UV2 pair). */
 export interface LiquidityPairMeta {
-  label: string;               // e.g. "tDOT/tUSDC"
-  address: `0x${string}`;      // deployed LiquidityPair contract
-  token0: `0x${string}`;       // lower-address token
-  token1: `0x${string}`;       // higher-address token
+  label: string; // e.g. "tDOT/tUSDC"
+  address: `0x${string}`; // deployed LiquidityPair contract
+  token0: `0x${string}`; // lower-address token
+  token1: `0x${string}`; // higher-address token
   token0Symbol: string;
   token1Symbol: string;
 }

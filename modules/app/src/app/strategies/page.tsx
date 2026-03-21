@@ -1,12 +1,13 @@
 "use client";
 
-import { useMemo } from "react";
-import { useStrategies } from "@/hooks/use-strategies";
-import { StrategyTable } from "@/components/strategies/strategy-table";
-import { PanelSkeleton } from "@/components/ui/skeleton";
 import { RefreshCw } from "lucide-react";
-import type { StrategyRecord } from "@/types";
+import { useMemo } from "react";
+import { StrategyTable } from "@/components/strategies/strategy-table";
+import { PageHero } from "@/components/ui/page-hero";
+import { PanelSkeleton } from "@/components/ui/skeleton";
+import { useStrategies } from "@/hooks/use-strategies";
 import type { IndexedStrategyExecution } from "@/lib/graphql";
+import type { StrategyRecord } from "@/types";
 
 /** Map obi.index IndexedStrategyExecution → the StrategyRecord shape used by StrategyTable. */
 function toStrategyRecord(s: IndexedStrategyExecution): StrategyRecord {
@@ -32,6 +33,11 @@ export default function StrategiesPage() {
 
   return (
     <div className="space-y-4">
+      <PageHero
+        eyebrow="Strategies"
+        title="Execution Ledger"
+        description="Tracked strategy actions, outcomes, and on-chain execution links in the same retro operations frame."
+      />
       {isLoading ? (
         <PanelSkeleton rows={8} />
       ) : error ? (

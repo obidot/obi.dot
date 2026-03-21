@@ -1,10 +1,10 @@
 "use client";
 
+import { Lightbulb, PieChart } from "lucide-react";
 import { useMemo } from "react";
-import type { ProtocolYield, BifrostYield } from "@/types";
 import type { VaultOnChainState } from "@/hooks/use-vault-state";
-import { formatUsdNumber, cn } from "@/lib/format";
-import { PieChart, Lightbulb } from "lucide-react";
+import { cn, formatUsdNumber } from "@/lib/format";
+import type { BifrostYield, ProtocolYield } from "@/types";
 
 interface PortfolioOptimizerProps {
   yields: ProtocolYield[];
@@ -126,20 +126,18 @@ export function PortfolioOptimizer({
   const weightedApy = allocations.reduce((a, s) => a + s.apy * s.weight, 0);
 
   return (
-    <div className="panel overflow-hidden rounded-lg">
-      {/* Header */}
-      <div className="flex items-center justify-between border-b border-border px-4 py-3">
-        <div className="flex items-center gap-2.5">
-          <div className="flex h-7 w-7 items-center justify-center rounded-md bg-primary/10">
-            <PieChart className="h-3.5 w-3.5 text-primary" />
+    <div className="panel overflow-hidden">
+      <div className="panel-header">
+        <div className="panel-header-block">
+          <div className="panel-header-icon bg-primary">
+            <PieChart className="h-4 w-4 text-foreground" />
           </div>
-          <div>
-            <h3 className="text-base font-semibold text-text-primary">
-              Portfolio Optimizer
-            </h3>
-            <p className="font-mono text-xs text-text-muted">
-              Risk-adjusted allocation for {formatUsdNumber(totalUsd, true)}{" "}
-              portfolio
+          <div className="panel-heading">
+            <span className="panel-kicker">Allocation Engine</span>
+            <h3 className="panel-title">Portfolio Optimizer</h3>
+            <p className="panel-subtitle">
+              Risk-adjusted allocation for {formatUsdNumber(totalUsd, true)} of
+              deployable capital.
             </p>
           </div>
         </div>
@@ -153,9 +151,8 @@ export function PortfolioOptimizer({
         </div>
       </div>
 
-      {/* Allocation Bar */}
       <div className="px-4 py-3">
-        <div className="flex h-6 overflow-hidden rounded-full">
+        <div className="flex h-8 overflow-hidden border-[3px] border-border">
           {allocations.map((slice) => (
             <div
               key={slice.name}
@@ -170,8 +167,7 @@ export function PortfolioOptimizer({
         </div>
       </div>
 
-      {/* Allocation Table */}
-      <div className="border-t border-border">
+      <div className="border-t-[3px] border-border">
         <table className="table-pro w-full">
           <thead>
             <tr>
@@ -211,8 +207,7 @@ export function PortfolioOptimizer({
         </table>
       </div>
 
-      {/* Recommendation */}
-      <div className="flex items-start gap-2.5 border-t border-border px-4 py-3">
+      <div className="section-strip flex items-start gap-2.5">
         <Lightbulb className="mt-0.5 h-3.5 w-3.5 shrink-0 text-warning" />
         <p className="font-mono text-xs leading-relaxed text-text-secondary">
           {allocations[0]

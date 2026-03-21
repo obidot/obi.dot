@@ -1,39 +1,39 @@
 "use client";
 
-import { useState, useMemo, useCallback, useEffect } from "react";
+import {
+  AlertTriangle,
+  ArrowDownUp,
+  ExternalLink,
+  Loader2,
+  TriangleAlert,
+  Wallet,
+} from "lucide-react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { type Address, formatUnits, parseUnits } from "viem";
 import {
   useAccount,
   useBalance,
   useChainId,
   useReadContract,
-  useWriteContract,
   useWaitForTransactionReceipt,
+  useWriteContract,
 } from "wagmi";
-import { parseUnits, formatUnits, type Address } from "viem";
-import { cn, formatTokenAmount } from "@/lib/format";
+import { useSwapQuote, useSwapRoutes } from "@/hooks/use-swap";
+import { ERC20_APPROVE_ABI, SWAP_ROUTER_ABI } from "@/lib/abi";
+import { polkadotHubTestnet } from "@/lib/chains";
 import {
+  CHAIN,
   CONTRACTS,
+  GAS_LIMITS,
   SLIPPAGE_OPTIONS,
   ZERO_ADDRESS,
   ZERO_BYTES32,
-  CHAIN,
-  GAS_LIMITS,
 } from "@/lib/constants";
-import { SWAP_ROUTER_ABI, ERC20_APPROVE_ABI } from "@/lib/abi";
-import { useSwapQuote, useSwapRoutes } from "@/hooks/use-swap";
-import { QuoteDisplay } from "./quote-display";
-import {
-  Loader2,
-  ArrowDownUp,
-  AlertTriangle,
-  Wallet,
-  ExternalLink,
-  TriangleAlert,
-} from "lucide-react";
-import type { SwapToken, SwapRouteResult, SwapStep, SplitRouteSelection } from "@/types";
-import { PoolType, POOL_TYPE_LABELS, resolvePoolType } from "@/types";
+import { cn, formatTokenAmount } from "@/lib/format";
 import { TOKENS } from "@/shared/trade/swap";
-import { polkadotHubTestnet } from "@/lib/chains";
+import type { SplitRouteSelection, SwapRouteResult, SwapStep } from "@/types";
+import { POOL_TYPE_LABELS, PoolType, resolvePoolType } from "@/types";
+import { QuoteDisplay } from "./quote-display";
 import TokenPicker from "./token-picker";
 
 interface SwapFormProps {
@@ -115,7 +115,8 @@ export default function SwapForm({
 
   // ── Quote ──────────────────────────────────────────────────────────────
   const parsedAmountIn = useMemo(() => {
-    if (!amountIn || isNaN(Number(amountIn)) || Number(amountIn) <= 0) return "";
+    if (!amountIn || Number.isNaN(Number(amountIn)) || Number(amountIn) <= 0)
+      return "";
     try {
       return parseUnits(amountIn, tokenIn.decimals).toString();
     } catch {
@@ -143,20 +144,46 @@ export default function SwapForm({
       tokenOutSymbol: tokenOut.symbol,
       tokenOutDecimals: tokenOut.decimals,
     });
-  }, [tokenIn.address, tokenOut.address, tokenOut.symbol, tokenOut.decimals, parsedAmountIn, onInputChange]);
+  }, [
+    tokenIn.address,
+    tokenOut.address,
+    tokenOut.symbol,
+    tokenOut.decimals,
+    parsedAmountIn,
+    onInputChange,
+  ]);
 
   // ── Price impact check ──────────────────────────────────────────────────
   const activeImpactBps = isSplitMode
-    ? Math.max(...selectedSplitRoutes!.map((s) => Number(s.route.totalPriceImpactBps)))
+    ? Math.max(
+        0,
+        ...(selectedSplitRoutes ?? []).map((s) =>
+          Number(s.route.totalPriceImpactBps),
+        ),
+      )
     : selectedRoute
       ? Number(selectedRoute.totalPriceImpactBps)
       : 0;
   const highImpact = activeImpactBps > 200; // >2%
+  const impactResetKey = useMemo(
+    () =>
+      JSON.stringify({
+        routeId: selectedRoute?.id ?? null,
+        splitRoutes: (selectedSplitRoutes ?? []).map(
+          ({ route, weight }) => `${route.id}:${weight}`,
+        ),
+        amountIn,
+        tokenInIdx,
+        tokenOutIdx,
+      }),
+    [selectedRoute?.id, selectedSplitRoutes, amountIn, tokenInIdx, tokenOutIdx],
+  );
 
   // Reset impact confirmation when route changes
   useEffect(() => {
+    if (!impactConfirmed || impactResetKey.length === 0) return;
     setImpactConfirmed(false);
-  }, [selectedRoute?.id, selectedSplitRoutes?.length]);
+  }, [impactConfirmed, impactResetKey]);
 
   // ── Effective output amount — prefer route finder (accurate) over on-chain quote ──
   // The on-chain quoter can return placeholder values on testnet.
@@ -192,16 +219,18 @@ export default function SwapForm({
   }, [isSplitMode, selectedSplitRoutes, slippageBps]);
 
   // ── Allowance check ─────────────────────────────────────────────────────
-  const { data: currentAllowance, refetch: refetchAllowance } = useReadContract({
-    address: tokenIn.address as Address,
-    abi: ERC20_APPROVE_ABI,
-    functionName: "allowance",
-    args: [address as Address, routerAddress as Address],
-    query: {
-      enabled: isConnected && !!address && !!parsedAmountIn,
-      staleTime: 5_000,
+  const { data: currentAllowance, refetch: refetchAllowance } = useReadContract(
+    {
+      address: tokenIn.address as Address,
+      abi: ERC20_APPROVE_ABI,
+      functionName: "allowance",
+      args: [address as Address, routerAddress as Address],
+      query: {
+        enabled: isConnected && !!address && !!parsedAmountIn,
+        staleTime: 5_000,
+      },
     },
-  });
+  );
 
   const needsApproval = useMemo(() => {
     if (!parsedAmountIn) return false;
@@ -217,8 +246,9 @@ export default function SwapForm({
     error: approveError,
   } = useWriteContract();
 
-  const { isLoading: approveConfirming, isSuccess: approveConfirmed } =
-    useWaitForTransactionReceipt({ hash: approveTxHash });
+  const { isSuccess: approveConfirmed } = useWaitForTransactionReceipt({
+    hash: approveTxHash,
+  });
 
   // ── Swap execution ──────────────────────────────────────────────────────
   const {
@@ -228,8 +258,9 @@ export default function SwapForm({
     error: swapError,
   } = useWriteContract();
 
-  const { isLoading: swapConfirming, isSuccess: swapConfirmed } =
-    useWaitForTransactionReceipt({ hash: swapTxHash });
+  const { isSuccess: swapConfirmed } = useWaitForTransactionReceipt({
+    hash: swapTxHash,
+  });
 
   // Extracted swap writer — called directly (sufficient allowance) or after approval
   const executeSwap = useCallback(() => {
@@ -238,18 +269,32 @@ export default function SwapForm({
     if (!isSplitMode && !selectedRouteExecutable) return;
     const deadline = BigInt(Math.floor(Date.now() / 1000) + 300);
 
-    if (isSplitMode && selectedSplitRoutes && selectedSplitRoutes.length === 2) {
-      const legs = selectedSplitRoutes.map((s) => ({
-        route: {
-          poolType: s.route.hops[0] ? 3 : 0,
-          pool: (s.route.hops[0]?.pool ?? ZERO_ADDRESS) as Address,
-          tokenIn: tokenIn.address as Address,
-          tokenOut: tokenOut.address as Address,
-          feeBps: BigInt(s.route.hops[0]?.feeBps ?? 30),
-          data: ZERO_BYTES32,
-        },
-        weight: BigInt(s.weight),
-      }));
+    if (
+      isSplitMode &&
+      selectedSplitRoutes &&
+      selectedSplitRoutes.length === 2
+    ) {
+      const legs = selectedSplitRoutes
+        .map((selection) => {
+          const hop = selection.route.hops[0];
+          if (!hop) return null;
+
+          return {
+            route: {
+              poolType: resolvePoolType(hop.poolType) ?? PoolType.Custom,
+              pool: hop.pool as Address,
+              tokenIn: hop.tokenIn as Address,
+              tokenOut: hop.tokenOut as Address,
+              feeBps: BigInt(hop.feeBps),
+              data: ZERO_BYTES32,
+            },
+            weight: BigInt(selection.weight),
+          };
+        })
+        .filter((leg): leg is NonNullable<typeof leg> => leg !== null);
+
+      if (legs.length !== 2) return;
+
       writeSwap({
         address: routerAddress as Address,
         abi: SWAP_ROUTER_ABI,
@@ -273,7 +318,8 @@ export default function SwapForm({
 
       if (isMultiHop && selectedRoute) {
         const routeHops = selectedRoute.hops.map((hop) => ({
-          poolType: (resolvePoolType(hop.poolType) ?? PoolType.Custom) as unknown as number,
+          poolType: (resolvePoolType(hop.poolType) ??
+            PoolType.Custom) as unknown as number,
           pool: hop.pool as Address,
           tokenIn: hop.tokenIn as Address,
           tokenOut: hop.tokenOut as Address,
@@ -285,7 +331,13 @@ export default function SwapForm({
           abi: SWAP_ROUTER_ABI,
           functionName: "swapMultiHop",
           gas: GAS_LIMITS.SWAP,
-          args: [routeHops, BigInt(parsedAmountIn), minAmountOut, address, deadline],
+          args: [
+            routeHops,
+            BigInt(parsedAmountIn),
+            minAmountOut,
+            address,
+            deadline,
+          ],
         });
       } else if (isSingleHopSelected && selectedRoute) {
         // Single-hop selected route — use the route's pool/poolType (not the on-chain quoter)
@@ -312,22 +364,47 @@ export default function SwapForm({
       }
     }
   }, [
-    quote, parsedAmountIn, address, routerAddress, tokenIn, tokenOut,
-    minAmountOut, splitMinAmountOut, selectedRoute, isSplitMode,
-    selectedSplitRoutes, writeSwap, selectedRouteExecutable, splitRoutesExecutable,
+    quote,
+    parsedAmountIn,
+    address,
+    tokenIn,
+    tokenOut,
+    minAmountOut,
+    splitMinAmountOut,
+    selectedRoute,
+    isSplitMode,
+    selectedSplitRoutes,
+    writeSwap,
+    selectedRouteExecutable,
+    splitRoutesExecutable,
   ]);
 
   // Step progression: approval confirmed → fire swap
   useEffect(() => {
-    if (swapStep === "approve-confirming" && approveConfirmed && quote && parsedAmountIn && address) {
+    if (
+      swapStep === "approve-confirming" &&
+      approveConfirmed &&
+      quote &&
+      parsedAmountIn &&
+      address
+    ) {
       void refetchAllowance();
       setSwapStep("swapping");
       executeSwap();
     }
-  }, [swapStep, approveConfirmed, quote, parsedAmountIn, address, executeSwap, refetchAllowance]);
+  }, [
+    swapStep,
+    approveConfirmed,
+    quote,
+    parsedAmountIn,
+    address,
+    executeSwap,
+    refetchAllowance,
+  ]);
 
   useEffect(() => {
-    if (swapStep === "swapping" && swapWalletPending) setSwapStep("swap-confirming");
+    if (swapStep === "swapping" && swapWalletPending)
+      setSwapStep("swap-confirming");
   }, [swapStep, swapWalletPending]);
 
   useEffect(() => {
@@ -353,7 +430,9 @@ export default function SwapForm({
 
   const handlePct = (fraction: number) => {
     if (!isConnected || !balanceInData) return;
-    const bal = Number(formatUnits(balanceInData.value, balanceInData.decimals));
+    const bal = Number(
+      formatUnits(balanceInData.value, balanceInData.decimals),
+    );
     if (bal <= 0) return;
     const val = (bal * fraction).toFixed(6).replace(/\.?0+$/, "");
     setAmountIn(val);
@@ -381,15 +460,31 @@ export default function SwapForm({
         args: [routerAddress as Address, BigInt(parsedAmountIn)],
       });
     }
-  }, [routerReady, quote, parsedAmountIn, address, swapStep, highImpact, impactConfirmed, needsApproval, executeSwap, writeApprove, tokenIn, routerAddress, isSplitMode, splitRoutesExecutable, selectedRouteExecutable]);
+  }, [
+    routerReady,
+    quote,
+    parsedAmountIn,
+    address,
+    swapStep,
+    highImpact,
+    impactConfirmed,
+    needsApproval,
+    executeSwap,
+    writeApprove,
+    tokenIn,
+    isSplitMode,
+    splitRoutesExecutable,
+    selectedRouteExecutable,
+  ]);
 
   useEffect(() => {
-    if (swapStep === "approving" && approveWalletPending) setSwapStep("approve-confirming");
+    if (swapStep === "approving" && approveWalletPending)
+      setSwapStep("approve-confirming");
   }, [swapStep, approveWalletPending]);
 
   useEffect(() => {
     setSwapStep("idle");
-  }, [tokenInIdx, tokenOutIdx, amountIn]);
+  }, []);
 
   // ── Derived display values ───────────────────────────────────────────────
   const displayBalanceIn =
@@ -407,7 +502,9 @@ export default function SwapForm({
     : "";
 
   const minOutDisplay =
-    minAmountOut > BigInt(0) ? formatUnits(minAmountOut, tokenOut.decimals) : "";
+    minAmountOut > BigInt(0)
+      ? formatUnits(minAmountOut, tokenOut.decimals)
+      : "";
 
   // On testnet the on-chain quoter returns Hydration as best, which is misleading.
   // Prefer the selected route's pool label; fall back to quote source only on mainnet.
@@ -433,22 +530,28 @@ export default function SwapForm({
     if (selectedRoute?.status === "coming_soon") return "COMING SOON";
     if (highImpact && !impactConfirmed) return "CONFIRM HIGH IMPACT";
     switch (swapStep) {
-      case "approving": return "APPROVING…";
-      case "approve-confirming": return "CONFIRMING APPROVAL…";
-      case "swapping": return "SWAPPING…";
-      case "swap-confirming": return "CONFIRMING SWAP…";
-      case "done": return "SWAP AGAIN";
+      case "approving":
+        return "APPROVING…";
+      case "approve-confirming":
+        return "CONFIRMING APPROVAL…";
+      case "swapping":
+        return "SWAPPING…";
+      case "swap-confirming":
+        return "CONFIRMING SWAP…";
+      case "done":
+        return "SWAP AGAIN";
       default: {
         if (needsApproval) return `APPROVE ${tokenIn.symbol}`;
         if (isSplitMode) {
           if (!selectedSplitRoutes || selectedSplitRoutes.length !== 2) {
             return "SELECT 2 SPLIT ROUTES";
           }
-          const w0 = selectedSplitRoutes![0].weight / 100;
-          const w1 = selectedSplitRoutes![1].weight / 100;
+          const w0 = selectedSplitRoutes?.[0].weight / 100;
+          const w1 = selectedSplitRoutes?.[1].weight / 100;
           return `SPLIT SWAP ${w0}% / ${w1}%`;
         }
-        const isMultiHop = selectedRouteExecutable && selectedRoute.hops.length > 1;
+        const isMultiHop =
+          selectedRouteExecutable && selectedRoute.hops.length > 1;
         const suffix = isMultiHop ? ` (${selectedRoute.hops.length}-HOP)` : "";
         return `SWAP ${tokenIn.symbol} \u2192 ${tokenOut.symbol}${suffix}`;
       }
@@ -464,10 +567,12 @@ export default function SwapForm({
     routerReady;
 
   return (
-    <div className="p-5 space-y-4">
+    <div className="space-y-4 p-5">
       {/* ── Slippage selector ───────────────────────────────────────────── */}
-      <div className="flex items-center justify-between">
-        <span className="text-[14px] text-text-muted">Max Slippage</span>
+      <div className="flex items-center justify-between border-[3px] border-border bg-surface-alt px-3 py-3 shadow-[2px_2px_0_0_var(--border)]">
+        <span className="retro-label text-[0.9rem] text-text-muted">
+          Max Slippage
+        </span>
         <div className="flex gap-1">
           {SLIPPAGE_OPTIONS.map(({ label, bps }) => (
             <button
@@ -475,10 +580,10 @@ export default function SwapForm({
               type="button"
               onClick={() => setSlippageBps(bps)}
               className={cn(
-                "px-2.5 py-1 rounded-none text-[14px] font-mono transition-colors border",
+                "retro-label border-[2px] px-2.5 py-1 text-[0.85rem] transition-colors",
                 slippageBps === bps
-                  ? "bg-primary/15 text-primary border-primary/30"
-                  : "btn-ghost border-transparent",
+                  ? "border-border bg-primary text-primary-foreground shadow-[2px_2px_0_0_var(--border)]"
+                  : "border-transparent bg-surface text-text-secondary hover:border-border/40",
               )}
             >
               {label}
@@ -489,18 +594,19 @@ export default function SwapForm({
 
       {/* Not-deployed banner */}
       {showNotDeployed && (
-        <div className="flex items-start gap-2 rounded-none border border-warning/30 bg-warning/5 px-3 py-2.5">
+        <div className="flex items-start gap-2 border-[3px] border-warning bg-warning/10 px-3 py-2.5 shadow-[2px_2px_0_0_var(--border)]">
           <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-warning mt-0.5" />
           <p className="text-[14px] text-text-secondary">
-            SwapRouter is not yet deployed. Quotes are unavailable until deployment.
+            SwapRouter is not yet deployed. Quotes are unavailable until
+            deployment.
           </p>
         </div>
       )}
 
       {/* ── Token In ────────────────────────────────────────────────────── */}
-      <div className="rounded-none border border-border bg-background/60 p-5">
+      <div className="card p-5">
         <div className="flex items-center justify-between mb-4">
-          <p className="text-[14px] text-text-muted">You Pay</p>
+          <p className="retro-label text-[0.95rem] text-text-muted">You Pay</p>
           {displayBalanceIn && (
             <div className="flex items-center gap-1.5 text-[14px] text-text-muted font-mono">
               <Wallet className="h-3.5 w-3.5" />
@@ -518,35 +624,46 @@ export default function SwapForm({
               onChange={(e) => handleAmountChange(e.target.value)}
               placeholder="0.00"
               aria-label="Amount to swap"
-              className="input-trading text-left text-[28px] font-bold tracking-tight w-full bg-transparent border-0 focus:ring-0 p-0"
+              className="w-full border-0 bg-transparent p-0 text-left text-[28px] font-bold tracking-tight shadow-none"
             />
-            <p className="text-left text-[14px] text-text-muted mt-1 font-mono">
+            <p className="mt-1 text-left font-mono text-[14px] text-text-muted">
               {amountIn && Number(amountIn) > 0 ? "≈ market value" : ""}
             </p>
           </div>
-          <TokenPicker selectedIdx={tokenInIdx} onSelect={setTokenInIdx} disabledIdx={tokenOutIdx} />
+          <TokenPicker
+            selectedIdx={tokenInIdx}
+            onSelect={setTokenInIdx}
+            disabledIdx={tokenOutIdx}
+          />
         </div>
 
         <div className="flex gap-1.5 mt-4">
-          {[{ label: "25%", frac: 0.25 }, { label: "50%", frac: 0.5 }, { label: "75%", frac: 0.75 }, { label: "MAX", frac: 1.0 }].map(
-            ({ label, frac }) => (
-              <button key={label} type="button" onClick={() => handlePct(frac)} className="btn-ghost flex-1 py-1 text-[14px] font-mono">
-                {label}
-              </button>
-            ),
-          )}
+          {[
+            { label: "25%", frac: 0.25 },
+            { label: "50%", frac: 0.5 },
+            { label: "75%", frac: 0.75 },
+            { label: "MAX", frac: 1.0 },
+          ].map(({ label, frac }) => (
+            <button
+              key={label}
+              type="button"
+              onClick={() => handlePct(frac)}
+              className="btn-ghost flex-1 py-1 text-[14px] font-mono"
+            >
+              {label}
+            </button>
+          ))}
         </div>
       </div>
 
       {/* ── Flip button ─────────────────────────────────────────────────── */}
-      <div className="flex justify-center -my-1 relative z-10">
+      <div className="relative z-10 -my-1 flex justify-center">
         <button
           type="button"
           onClick={handleFlipTokens}
           className={cn(
-            "rounded-none border border-border bg-surface p-2",
-            "hover:border-primary hover:bg-primary/10 hover:text-primary",
-            "transition-colors duration-150",
+            "border-[3px] border-border bg-primary p-2 text-primary-foreground shadow-[3px_3px_0_0_var(--border)]",
+            "transition-transform duration-150 hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-[1px_1px_0_0_var(--border)]",
           )}
           aria-label="Flip tokens"
         >
@@ -555,9 +672,11 @@ export default function SwapForm({
       </div>
 
       {/* ── Token Out ───────────────────────────────────────────────────── */}
-      <div className="rounded-none border border-border bg-background/60 p-5">
+      <div className="card p-5">
         <div className="flex items-center justify-between mb-4">
-          <p className="text-[14px] text-text-muted">You Receive</p>
+          <p className="retro-label text-[0.95rem] text-text-muted">
+            You Receive
+          </p>
           <div className="flex items-center gap-3">
             {displayBalanceOut && (
               <div className="flex items-center gap-1.5 text-[14px] text-text-muted font-mono">
@@ -566,7 +685,9 @@ export default function SwapForm({
               </div>
             )}
             {sourceLabel && !displayBalanceOut && (
-              <span className="font-mono text-[14px] text-accent">via {sourceLabel}</span>
+              <span className="font-mono text-[14px] text-accent">
+                via {sourceLabel}
+              </span>
             )}
           </div>
         </div>
@@ -579,16 +700,24 @@ export default function SwapForm({
               value={quoteLoading ? "…" : amountOutDisplay}
               placeholder="0.00"
               aria-label="Amount to receive"
-              className="input-trading text-left text-[28px] font-bold tracking-tight w-full bg-transparent border-0 focus:ring-0 p-0 text-text-secondary"
+              className="w-full border-0 bg-transparent p-0 text-left text-[28px] font-bold tracking-tight text-text-secondary shadow-none"
             />
             <p className="text-left text-[14px] text-text-muted mt-1 font-mono">
-              {amountOutDisplay && Number(amountOutDisplay) > 0 ? "≈ market value" : ""}
+              {amountOutDisplay && Number(amountOutDisplay) > 0
+                ? "≈ market value"
+                : ""}
             </p>
           </div>
-          <TokenPicker selectedIdx={tokenOutIdx} onSelect={setTokenOutIdx} disabledIdx={tokenInIdx} />
+          <TokenPicker
+            selectedIdx={tokenOutIdx}
+            onSelect={setTokenOutIdx}
+            disabledIdx={tokenInIdx}
+          />
         </div>
         {sourceLabel && displayBalanceOut && (
-          <p className="text-[14px] text-text-muted mt-3 font-mono">via {sourceLabel}</p>
+          <p className="text-[14px] text-text-muted mt-3 font-mono">
+            via {sourceLabel}
+          </p>
         )}
       </div>
 
@@ -606,12 +735,16 @@ export default function SwapForm({
 
       {/* Split mode summary */}
       {isSplitMode && selectedSplitRoutes && (
-        <div className="rounded-none border border-primary/20 bg-primary/5 px-3 py-2.5 space-y-1.5">
-          <p className="text-[14px] text-primary font-semibold">Split Route</p>
+        <div className="space-y-1.5 border-[3px] border-border bg-primary/10 px-3 py-3 shadow-[2px_2px_0_0_var(--border)]">
+          <p className="retro-label text-[0.95rem] text-primary">Split Route</p>
           {selectedSplitRoutes.map((s) => (
             <div key={s.route.id} className="flex items-center justify-between">
-              <span className="text-[13px] text-text-secondary font-mono">{s.route.id}</span>
-              <span className="text-[13px] text-primary font-mono font-semibold">{(s.weight / 100).toFixed(0)}%</span>
+              <span className="text-[13px] text-text-secondary font-mono">
+                {s.route.id}
+              </span>
+              <span className="text-[13px] text-primary font-mono font-semibold">
+                {(s.weight / 100).toFixed(0)}%
+              </span>
             </div>
           ))}
         </div>
@@ -619,13 +752,16 @@ export default function SwapForm({
 
       {/* High price impact warning */}
       {highImpact && parsedAmountIn && quote && (
-        <div className="rounded-none border border-danger/40 bg-danger/5 px-3 py-2.5">
+        <div className="border-[3px] border-danger bg-danger/10 px-3 py-3 shadow-[2px_2px_0_0_var(--border)]">
           <div className="flex items-start gap-2 mb-2">
             <TriangleAlert className="h-4 w-4 text-danger mt-0.5 shrink-0" />
             <div>
-              <p className="text-[14px] text-danger font-semibold">High Price Impact</p>
+              <p className="text-[14px] text-danger font-semibold">
+                High Price Impact
+              </p>
               <p className="text-[13px] text-text-secondary mt-0.5">
-                This swap has {(activeImpactBps / 100).toFixed(2)}% price impact. You may receive significantly less than expected.
+                This swap has {(activeImpactBps / 100).toFixed(2)}% price
+                impact. You may receive significantly less than expected.
               </p>
             </div>
           </div>
@@ -633,14 +769,23 @@ export default function SwapForm({
             type="button"
             onClick={() => setImpactConfirmed((v) => !v)}
             className={cn(
-              "flex items-center gap-2 text-[13px] font-mono border px-2 py-1 transition-colors",
+              "flex items-center gap-2 border-[2px] px-2 py-1 text-[13px] font-mono transition-colors",
               impactConfirmed
                 ? "border-danger bg-danger/20 text-danger"
                 : "border-danger/40 text-text-muted hover:border-danger hover:text-danger",
             )}
           >
-            <span className={cn("w-3.5 h-3.5 border flex items-center justify-center", impactConfirmed ? "border-danger bg-danger/30" : "border-danger/40")}>
-              {impactConfirmed && <span className="text-danger text-[9px] font-bold">✓</span>}
+            <span
+              className={cn(
+                "w-3.5 h-3.5 border flex items-center justify-center",
+                impactConfirmed
+                  ? "border-danger bg-danger/30"
+                  : "border-danger/40",
+              )}
+            >
+              {impactConfirmed && (
+                <span className="text-danger text-[9px] font-bold">✓</span>
+              )}
             </span>
             I understand the risk
           </button>
@@ -650,13 +795,15 @@ export default function SwapForm({
       {/* Quote error */}
       {quoteError && parsedAmountIn && (
         <div className="text-center">
-          <p className="text-[14px] text-danger">Quote unavailable — {quoteError.message.slice(0, 80)}</p>
+          <p className="text-[14px] text-danger">
+            Quote unavailable — {quoteError.message.slice(0, 80)}
+          </p>
         </div>
       )}
 
       {/* Non-executable selected route hint */}
       {selectedRoute && !selectedRouteExecutable && !isSplitMode && (
-        <div className="rounded-none border border-warning/30 bg-warning/5 px-3 py-2.5">
+        <div className="border-[3px] border-warning bg-warning/10 px-3 py-2.5 shadow-[2px_2px_0_0_var(--border)]">
           <p className="text-[13px] leading-relaxed text-text-secondary">
             {selectedRoute.routeType !== "local"
               ? "Selected route is cross-chain. Use the Cross-chain tab to execute XCM/bridge routes."
@@ -671,8 +818,10 @@ export default function SwapForm({
 
       {/* Swap confirmed with block explorer link */}
       {swapStep === "done" && swapTxHash && (
-        <div className="rounded-none border border-primary/30 bg-primary/5 px-3 py-2.5">
-          <p className="text-[14px] text-primary font-semibold">Swap confirmed!</p>
+        <div className="border-[3px] border-border bg-accent/10 px-3 py-2.5 shadow-[2px_2px_0_0_var(--border)]">
+          <p className="text-[14px] text-primary font-semibold">
+            Swap confirmed!
+          </p>
           <a
             href={`${explorerBase}/tx/${swapTxHash}`}
             target="_blank"
@@ -686,24 +835,25 @@ export default function SwapForm({
       )}
 
       {/* Approval tx link */}
-      {(swapStep === "approve-confirming" || swapStep === "swapping") && approveTxHash && (
-        <div className="rounded-none border border-border px-3 py-2">
-          <p className="text-[13px] text-text-muted">Approval tx:</p>
-          <a
-            href={`${explorerBase}/tx/${approveTxHash}`}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex items-center gap-1 text-[13px] text-text-muted hover:text-primary font-mono break-all transition-colors"
-          >
-            <span className="truncate">{approveTxHash}</span>
-            <ExternalLink className="h-3 w-3 shrink-0" />
-          </a>
-        </div>
-      )}
+      {(swapStep === "approve-confirming" || swapStep === "swapping") &&
+        approveTxHash && (
+          <div className="border-[3px] border-border bg-surface px-3 py-2 shadow-[2px_2px_0_0_var(--border)]">
+            <p className="text-[13px] text-text-muted">Approval tx:</p>
+            <a
+              href={`${explorerBase}/tx/${approveTxHash}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-1 text-[13px] text-text-muted hover:text-primary font-mono break-all transition-colors"
+            >
+              <span className="truncate">{approveTxHash}</span>
+              <ExternalLink className="h-3 w-3 shrink-0" />
+            </a>
+          </div>
+        )}
 
       {/* Approval / swap errors */}
       {(approveError || swapError) && (
-        <div className="rounded-none border border-danger/30 bg-danger/5 px-3 py-2.5">
+        <div className="border-[3px] border-danger bg-danger/10 px-3 py-2.5 shadow-[2px_2px_0_0_var(--border)]">
           <p className="text-[14px] text-danger">
             {approveError
               ? `Approval failed — ${approveError.message.slice(0, 100)}`
@@ -714,7 +864,7 @@ export default function SwapForm({
 
       {/* Multi-hop route hint */}
       {selectedRoute && selectedRoute.hops.length > 1 && !isSplitMode && (
-        <div className="rounded-none border border-primary/20 bg-primary/5 px-3 py-2">
+        <div className="border-[3px] border-border bg-secondary/10 px-3 py-2 shadow-[2px_2px_0_0_var(--border)]">
           <p className="text-[14px] text-primary">
             {selectedRoute.hops.length}-hop route via{" "}
             {selectedRoute.hops.map((h) => h.poolLabel).join(" → ")}
@@ -726,10 +876,16 @@ export default function SwapForm({
       <button
         type="button"
         disabled={!canExecute}
-        onClick={highImpact && !impactConfirmed ? () => setImpactConfirmed(true) : handleSwap}
+        onClick={
+          highImpact && !impactConfirmed
+            ? () => setImpactConfirmed(true)
+            : handleSwap
+        }
         className={cn(
           "btn-primary",
-          highImpact && !impactConfirmed && "border-danger/40 bg-danger/10 text-danger hover:bg-danger/20",
+          highImpact &&
+            !impactConfirmed &&
+            "border-danger bg-danger text-white",
         )}
       >
         {isExecuting && <Loader2 className="h-4 w-4 animate-spin" />}
@@ -737,7 +893,9 @@ export default function SwapForm({
       </button>
 
       {!isConnected && (
-        <p className="text-center text-[13px] text-text-muted">Connect wallet to enable swaps</p>
+        <p className="text-center text-[13px] text-text-muted">
+          Connect wallet to enable swaps
+        </p>
       )}
     </div>
   );

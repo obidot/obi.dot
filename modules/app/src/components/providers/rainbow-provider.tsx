@@ -1,7 +1,7 @@
 "use client";
 import "@rainbow-me/rainbowkit/styles.css";
-import { type ReactNode } from "react";
-import { RainbowKitProvider, lightTheme } from "@rainbow-me/rainbowkit";
+import { lightTheme, RainbowKitProvider } from "@rainbow-me/rainbowkit";
+import type { ReactNode } from "react";
 
 export function RainbowKitClientProvider({
   children,

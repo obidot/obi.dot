@@ -1,22 +1,27 @@
 "use client";
 
-import { useCrossChainState } from "@/hooks/use-crosschain";
-import { SatelliteTable } from "@/components/crosschain/satellite-table";
-import { ChainTopology } from "@/components/crosschain/chain-topology";
+import { Loader2 } from "lucide-react";
 import { AllocationBreakdown } from "@/components/crosschain/allocation-breakdown";
+import { ChainTopology } from "@/components/crosschain/chain-topology";
 import { NetworkHealth } from "@/components/crosschain/network-health";
-import { Loader2, RefreshCw } from "lucide-react";
+import { SatelliteTable } from "@/components/crosschain/satellite-table";
+import { PageHero } from "@/components/ui/page-hero";
+import { useCrossChainState } from "@/hooks/use-crosschain";
 
 // ── Page ───────────────────────────────────────────────────────────────────
 
 export default function CrossChainPage() {
-  const { data, isLoading, error, refetch } =
-    useCrossChainState();
+  const { data, isLoading, error, refetch } = useCrossChainState();
 
   return (
     <div className="space-y-4">
+      <PageHero
+        eyebrow="Cross-Chain"
+        title="Satellite Network"
+        description="Topology, capital allocation, and chain health for Obidot's cross-chain operating surface."
+      />
       {isLoading ? (
-        <div className="panel flex min-h-[400px] items-center justify-center rounded-lg p-8">
+        <div className="panel flex min-h-[400px] items-center justify-center p-8">
           <div className="flex flex-col items-center gap-3">
             <Loader2 className="h-5 w-5 animate-spin text-text-muted" />
             <span className="font-mono text-xs text-text-muted">
@@ -25,7 +30,7 @@ export default function CrossChainPage() {
           </div>
         </div>
       ) : error ? (
-        <div className="panel rounded-lg p-10 text-center">
+        <div className="panel p-10 text-center">
           <p className="font-mono text-sm text-danger">
             Failed to load cross-chain state
           </p>

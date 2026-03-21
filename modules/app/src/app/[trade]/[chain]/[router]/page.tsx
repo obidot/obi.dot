@@ -1,4 +1,3 @@
-import React from "react";
 import { notFound } from "next/navigation";
 import TradePage from "@/components/trade/trade-page";
 import { resolveTradeRoute } from "@/shared/trade";

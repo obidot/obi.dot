@@ -1,20 +1,16 @@
 "use client";
 
-import { useVaultState } from "@/hooks/use-vault-state";
-import { cn } from "@/lib/format";
 import { AlertTriangle, ShieldOff } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useVaultState } from "@/hooks/use-vault-state";
+import { cn } from "@/lib/format";
 
 export function HealthIndicators() {
   const { data: vault, isLoading } = useVaultState();
 
   if (isLoading || !vault) {
     return (
-      <div
-        className="p-4 space-y-2"
-        aria-busy="true"
-        aria-label="Loading health indicators..."
-      >
+      <div className="p-4 space-y-2" aria-busy="true">
         <Skeleton className="h-3 w-16" />
         {[1, 2].map((i) => (
           <div key={i} className="flex items-center justify-between">
@@ -40,10 +36,10 @@ export function HealthIndicators() {
   ];
 
   return (
-    <div className="p-4">
+    <div className="bg-surface px-4 py-4">
       {/* Emergency / Paused banners */}
       {vault.emergencyMode && (
-        <div className="mb-3 flex items-center gap-2 rounded-md border border-danger/30 bg-danger/10 px-3 py-2">
+        <div className="mb-3 flex items-center gap-2 border-[3px] border-danger bg-danger/10 px-3 py-2 shadow-[2px_2px_0_0_var(--border)]">
           <ShieldOff className="h-3.5 w-3.5 shrink-0 text-danger" />
           <span className="font-mono text-[11px] font-semibold text-danger">
             Emergency mode active
@@ -51,7 +47,7 @@ export function HealthIndicators() {
         </div>
       )}
       {vault.paused && !vault.emergencyMode && (
-        <div className="mb-3 flex items-center gap-2 rounded-md border border-warning/30 bg-warning/10 px-3 py-2">
+        <div className="mb-3 flex items-center gap-2 border-[3px] border-warning bg-warning/10 px-3 py-2 shadow-[2px_2px_0_0_var(--border)]">
           <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-warning" />
           <span className="font-mono text-[11px] font-semibold text-warning">
             Vault is paused
@@ -59,7 +55,7 @@ export function HealthIndicators() {
         </div>
       )}
 
-      <h3 className="text-[11px] font-medium uppercase tracking-widest text-text-muted mb-3">
+      <h3 className="retro-label mb-3 text-[0.85rem] text-text-muted">
         Health
       </h3>
       <div className="space-y-2">

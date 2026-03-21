@@ -1,25 +1,29 @@
 "use client";
 
+import { useQuery } from "@tanstack/react-query";
+import { RefreshCw } from "lucide-react";
 import { useRef, useState } from "react";
-import { useYields, useBifrostYields, useUniswapV2Yields } from "@/hooks/use-yields";
-import type { LiquidityPairMeta } from "@/types";
+import { formatUnits } from "viem";
+import { HealthIndicators } from "@/components/dashboard/health-indicators";
+import { PnlChart } from "@/components/dashboard/pnl-chart";
+import { QuickStats } from "@/components/dashboard/quick-stats";
+import { UserPosition } from "@/components/dashboard/user-position";
+import { VaultActions } from "@/components/dashboard/vault-actions";
+import { VaultOverview } from "@/components/dashboard/vault-overview";
 import { LiquidityPanel } from "@/components/liquidity/liquidity-panel";
 import { YieldGrid } from "@/components/yields/yield-grid";
-import { VaultOverview } from "@/components/dashboard/vault-overview";
-import { QuickStats } from "@/components/dashboard/quick-stats";
-import { PnlChart } from "@/components/dashboard/pnl-chart";
-import { VaultActions } from "@/components/dashboard/vault-actions";
-import { UserPosition } from "@/components/dashboard/user-position";
-import { HealthIndicators } from "@/components/dashboard/health-indicators";
-import { RefreshCw } from "lucide-react";
-import { useQuery } from "@tanstack/react-query";
+import {
+  useBifrostYields,
+  useUniswapV2Yields,
+  useYields,
+} from "@/hooks/use-yields";
 import {
   getIndexedDeposits,
   getIndexedSwapExecutions,
   type IndexedDeposit,
   type IndexedSwapExecution,
 } from "@/lib/graphql";
-import { formatUnits } from "viem";
+import type { LiquidityPairMeta } from "@/types";
 
 /** Simple relative-time formatter — no external dependency needed */
 function timeAgo(isoTimestamp: string): string {
@@ -58,8 +62,8 @@ function RecentActivity() {
 
   if (isLoading) {
     return (
-      <div className="rounded-lg border border-border bg-surface p-4">
-        <h3 className="text-[11px] font-medium uppercase tracking-widest text-text-muted mb-3">
+      <div className="panel p-4">
+        <h3 className="retro-label mb-3 text-[0.85rem] text-text-muted">
           Recent Activity
         </h3>
         <div className="space-y-2">
@@ -93,8 +97,8 @@ function RecentActivity() {
   );
 
   return (
-    <div className="rounded-lg border border-border bg-surface p-4">
-      <h3 className="text-[11px] font-medium uppercase tracking-widest text-text-muted mb-3">
+    <div className="panel p-4">
+      <h3 className="retro-label mb-3 text-[0.85rem] text-text-muted">
         Recent Activity
       </h3>
       <div className="space-y-1">
@@ -108,7 +112,7 @@ function RecentActivity() {
             return (
               <div
                 key={`deposit-${d.id}`}
-                className="flex items-center justify-between py-1 text-[12px]"
+                className="flex items-center justify-between border-b border-dashed border-border-subtle py-2 text-[12px] last:border-b-0"
               >
                 <span className="font-mono text-primary">+ {amt} tDOT</span>
                 <span className="font-mono text-[10px] text-text-muted truncate max-w-[120px]">
@@ -129,7 +133,7 @@ function RecentActivity() {
             return (
               <div
                 key={`swap-${s.id}`}
-                className="flex items-center justify-between py-1 text-[12px]"
+                className="flex items-center justify-between border-b border-dashed border-border-subtle py-2 text-[12px] last:border-b-0"
               >
                 <span className="font-mono text-accent">
                   {amtIn} → {amtOut}
@@ -150,15 +154,24 @@ function RecentActivity() {
 // ── Yields Page ─────────────────────────────────────────────────────────────
 
 export default function YieldsPage() {
-  const { data: yields, isLoading: yLoading, error: yError, refetch: yRefetch } = useYields();
+  const {
+    data: yields,
+    isLoading: yLoading,
+    error: yError,
+    refetch: yRefetch,
+  } = useYields();
   const { data: bifrost, isLoading: bLoading } = useBifrostYields();
   const { data: uniswap, isLoading: uLoading } = useUniswapV2Yields();
 
   const isLoading = yLoading || bLoading || uLoading;
 
   const sidebarRef = useRef<HTMLDivElement>(null);
-  const [earnHint, setEarnHint] = useState<{ name: string; apy: number } | null>(null);
-  const [selectedLpPair, setSelectedLpPair] = useState<LiquidityPairMeta | null>(null);
+  const [earnHint, setEarnHint] = useState<{
+    name: string;
+    apy: number;
+  } | null>(null);
+  const [selectedLpPair, setSelectedLpPair] =
+    useState<LiquidityPairMeta | null>(null);
 
   function handleEarn(name: string, apy: number, pairMeta?: LiquidityPairMeta) {
     if (pairMeta) {
@@ -166,20 +179,23 @@ export default function YieldsPage() {
     } else {
       setSelectedLpPair(null);
       setEarnHint({ name, apy });
-      sidebarRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+      sidebarRef.current?.scrollIntoView({
+        behavior: "smooth",
+        block: "start",
+      });
     }
   }
 
   return (
-    <div className="space-y-4">
+    <div className="flex w-full flex-col gap-6">
       {/* Vault hero banner */}
       <VaultOverview />
 
       {/* Main grid: chart + yield table left, vault actions right */}
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_300px]">
+      <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1fr)_340px]">
         {/* Left column */}
-        <div className="space-y-4">
-          <div className="grid grid-cols-1 gap-[1px] overflow-hidden rounded-lg border border-border bg-border">
+        <div className="space-y-6">
+          <div className="panel overflow-hidden">
             <div className="flex flex-col bg-surface">
               <QuickStats />
               <PnlChart />
@@ -187,20 +203,25 @@ export default function YieldsPage() {
           </div>
 
           {isLoading ? (
-            <div className="rounded-lg border border-border bg-surface p-8">
+            <div className="panel p-8">
               <div className="space-y-3">
                 {[1, 2, 3, 4, 5, 6].map((i) => (
-                  <div key={i} className="h-10 rounded bg-surface-hover animate-pulse" />
+                  <div
+                    key={i}
+                    className="h-10 rounded bg-surface-hover animate-pulse"
+                  />
                 ))}
               </div>
             </div>
           ) : yError ? (
-            <div className="rounded-lg border border-border bg-surface p-8 text-center">
-              <p className="font-mono text-sm text-danger">Failed to load yields</p>
+            <div className="panel p-8 text-center">
+              <p className="font-mono text-sm text-danger">
+                Failed to load yields
+              </p>
               <button
                 type="button"
                 onClick={() => yRefetch()}
-                className="mt-4 inline-flex items-center gap-2 rounded border border-border px-3 py-1.5 text-sm text-text-secondary hover:bg-surface-hover"
+                className="btn-ghost mx-auto mt-4 inline-flex w-auto items-center gap-2 px-4 py-2"
               >
                 <RefreshCw className="h-3.5 w-3.5" />
                 Retry
@@ -217,16 +238,21 @@ export default function YieldsPage() {
         </div>
 
         {/* Right sidebar */}
-        <div ref={sidebarRef} className="flex flex-col gap-[1px] overflow-hidden rounded-lg border border-border bg-border">
+        <div
+          ref={sidebarRef}
+          className="panel flex flex-col overflow-hidden self-start"
+        >
           {earnHint && (
-            <div className="bg-primary/5 border-b border-primary/20 px-4 py-2.5 flex items-start justify-between gap-2">
+            <div className="flex items-start justify-between gap-2 border-b-[3px] border-border bg-primary/10 px-4 py-3">
               <div>
-                <p className="font-mono text-[10px] uppercase tracking-wider text-primary mb-0.5">
+                <p className="retro-label mb-0.5 text-[0.85rem] text-primary">
                   Earn with {earnHint.name}
                 </p>
                 <p className="text-[11px] text-text-secondary">
                   Deposit tDOT below — the agent allocates toward{" "}
-                  <span className="text-primary font-semibold">{earnHint.apy.toFixed(1)}% APY</span>{" "}
+                  <span className="text-primary font-semibold">
+                    {earnHint.apy.toFixed(1)}% APY
+                  </span>{" "}
                   protocols automatically.
                 </p>
               </div>
@@ -234,7 +260,7 @@ export default function YieldsPage() {
                 type="button"
                 onClick={() => setEarnHint(null)}
                 aria-label="Dismiss"
-                className="text-text-muted hover:text-text-primary mt-0.5 shrink-0"
+                className="mt-0.5 shrink-0 border-2 border-border bg-surface px-2 py-0.5 text-text-muted shadow-[2px_2px_0_0_var(--border)] hover:text-text-primary"
               >
                 ✕
               </button>
@@ -246,7 +272,7 @@ export default function YieldsPage() {
           <div className="bg-surface">
             <UserPosition />
           </div>
-          <div className="border-t border-border bg-surface">
+          <div className="border-t-[3px] border-border bg-surface">
             <HealthIndicators />
           </div>
         </div>

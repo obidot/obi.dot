@@ -17,10 +17,9 @@ export function Header() {
   return (
     <header className="sticky top-14 z-40 flex flex-col border-b border-border bg-surface/80 backdrop-blur-md">
       {/* Ticker bar */}
-      <div
+      <section
         className="h-7 overflow-hidden border-b border-border-subtle bg-background/50"
         aria-label="Live yield ticker"
-        role="region"
       >
         {tickerItems.length > 0 ? (
           <div className="ticker-track h-full items-center">
@@ -30,11 +29,15 @@ export function Header() {
                 key={`${i < tickerItems.length ? "a" : "b"}-${item.name}`}
                 className="flex items-center gap-2 px-4 h-full shrink-0"
               >
-                <span className="text-[11px] text-text-secondary">{item.name}</span>
-                <span className={cn(
-                  "font-mono text-[11px] font-semibold",
-                  item.apy >= 10 ? "text-primary" : "text-text-primary",
-                )}>
+                <span className="text-[11px] text-text-secondary">
+                  {item.name}
+                </span>
+                <span
+                  className={cn(
+                    "font-mono text-[11px] font-semibold",
+                    item.apy >= 10 ? "text-primary" : "text-text-primary",
+                  )}
+                >
                   {item.apy.toFixed(2)}%
                 </span>
                 <span className="text-[10px] text-text-muted">APY</span>
@@ -45,7 +48,7 @@ export function Header() {
         ) : (
           <div className="h-full" aria-hidden="true" />
         )}
-      </div>
+      </section>
 
       {/* Main header row */}
       <div className="flex h-11 items-center justify-between px-5">

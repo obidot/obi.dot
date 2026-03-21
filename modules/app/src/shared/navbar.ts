@@ -1,4 +1,4 @@
-import { TradeActionType } from "@/types";
+import type { TradeActionType } from "@/types";
 
 export type NavHrefContext = {
   tradeAction: TradeActionType;
@@ -17,9 +17,15 @@ export const NAV_ITEMS: NavItem[] = [
     label: "Trade",
     href: ({ tradeAction, currentChain }) => `/${tradeAction}/${currentChain}`,
     children: [
-      { label: "Swap", href: "/swap" },
-      { label: "Limit Orders", href: "/limit" },
-      { label: "Cross-Chain", href: "/cross-chain" },
+      { label: "Swap", href: ({ currentChain }) => `/swap/${currentChain}` },
+      {
+        label: "Limit Orders",
+        href: ({ currentChain }) => `/limit/${currentChain}`,
+      },
+      {
+        label: "Cross-Chain",
+        href: ({ currentChain }) => `/crosschain/${currentChain}`,
+      },
     ],
   },
   { label: "Yields", href: "/yields" },

@@ -1,9 +1,9 @@
 "use client";
 
-import { useState, useMemo } from "react";
-import type { ProtocolYield, BifrostYield } from "@/types";
-import { formatApy, formatUsdNumber, cn } from "@/lib/format";
-import { GitCompareArrows, Check, X } from "lucide-react";
+import { Check, GitCompareArrows } from "lucide-react";
+import { useId, useMemo, useState } from "react";
+import { cn, formatApy, formatUsdNumber } from "@/lib/format";
+import type { BifrostYield, ProtocolYield } from "@/types";
 
 interface YieldComparisonProps {
   yields: ProtocolYield[];
@@ -28,6 +28,8 @@ export function YieldComparison({
   yields,
   bifrostYields,
 }: YieldComparisonProps) {
+  const protocolAId = useId();
+  const protocolBId = useId();
   const allYields = useMemo(() => {
     const items: YieldItem[] = [];
     for (const y of yields) items.push({ yield_: y, isBifrost: false });
@@ -44,8 +46,10 @@ export function YieldComparison({
 
   if (!a || !b) {
     return (
-      <div className="panel flex min-h-[200px] items-center justify-center rounded-lg">
-        <p className="font-mono text-xs text-text-muted">Need at least 2 yield sources to compare</p>
+      <div className="panel retro-empty min-h-[200px]">
+        <p className="font-mono text-xs text-text-muted">
+          Need at least 2 yield sources to compare
+        </p>
       </div>
     );
   }
@@ -54,61 +58,93 @@ export function YieldComparison({
   const maxTvl = Math.max(a.yield_.tvlUsd, b.yield_.tvlUsd, 1);
 
   const dimensions: RadarDimension[] = [
-    { label: "APY", a: a.yield_.apyPercent, b: b.yield_.apyPercent, max: maxApy * 1.2 },
-    { label: "TVL", a: Math.log10(Math.max(a.yield_.tvlUsd, 1)), b: Math.log10(Math.max(b.yield_.tvlUsd, 1)), max: Math.log10(maxTvl * 2) },
+    {
+      label: "APY",
+      a: a.yield_.apyPercent,
+      b: b.yield_.apyPercent,
+      max: maxApy * 1.2,
+    },
+    {
+      label: "TVL",
+      a: Math.log10(Math.max(a.yield_.tvlUsd, 1)),
+      b: Math.log10(Math.max(b.yield_.tvlUsd, 1)),
+      max: Math.log10(maxTvl * 2),
+    },
     { label: "Safety", a: safetyScore(a), b: safetyScore(b), max: 100 },
-    { label: "Liquidity", a: liquidityScore(a.yield_.tvlUsd), b: liquidityScore(b.yield_.tvlUsd), max: 100 },
-    { label: "Stability", a: stabilityScore(a), b: stabilityScore(b), max: 100 },
+    {
+      label: "Liquidity",
+      a: liquidityScore(a.yield_.tvlUsd),
+      b: liquidityScore(b.yield_.tvlUsd),
+      max: 100,
+    },
+    {
+      label: "Stability",
+      a: stabilityScore(a),
+      b: stabilityScore(b),
+      max: 100,
+    },
   ];
 
   return (
-    <div className="panel overflow-hidden rounded-lg">
-      {/* Header */}
-      <div className="flex items-center justify-between border-b border-border px-4 py-3">
-        <div className="flex items-center gap-2.5">
-          <div className="flex h-7 w-7 items-center justify-center rounded-md bg-warning/10">
-            <GitCompareArrows className="h-3.5 w-3.5 text-warning" />
+    <div className="panel overflow-hidden">
+      <div className="panel-header">
+        <div className="panel-header-block">
+          <div className="panel-header-icon bg-warning">
+            <GitCompareArrows className="h-4 w-4 text-foreground" />
           </div>
-          <div>
-            <h3 className="text-base font-semibold text-text-primary">
-              Head-to-Head Comparison
-            </h3>
-            <p className="font-mono text-xs text-text-muted">
-              Side-by-side 5-dimension analysis
+          <div className="panel-heading">
+            <span className="panel-kicker">Bench Test</span>
+            <h3 className="panel-title">Head-to-Head Comparison</h3>
+            <p className="panel-subtitle">
+              Direct comparison across APY, liquidity, safety, and stability
+              dimensions.
             </p>
           </div>
         </div>
       </div>
 
-      {/* Selectors */}
-      <div className="grid grid-cols-2 gap-4 border-b border-border p-4">
+      <div className="grid grid-cols-2 gap-4 border-b-[3px] border-border p-4">
         <div>
-          <label className="mb-1 block text-xs uppercase tracking-wider text-primary font-bold">
+          <label
+            htmlFor={protocolAId}
+            className="mb-1 block text-xs uppercase tracking-wider text-primary font-bold"
+          >
             Protocol A
           </label>
           <select
+            id={protocolAId}
             value={idxA}
             onChange={(e) => setIdxA(Number(e.target.value))}
             className="input-trading w-full py-1.5 text-xs"
           >
             {allYields.map((item, idx) => (
-              <option key={`a-${item.yield_.protocol}-${item.yield_.name}`} value={idx}>
+              <option
+                key={`a-${item.yield_.protocol}-${item.yield_.name}`}
+                value={idx}
+              >
                 {item.yield_.name}
               </option>
             ))}
           </select>
         </div>
         <div>
-          <label className="mb-1 block text-xs uppercase tracking-wider text-secondary font-bold">
+          <label
+            htmlFor={protocolBId}
+            className="mb-1 block text-xs uppercase tracking-wider text-secondary font-bold"
+          >
             Protocol B
           </label>
           <select
+            id={protocolBId}
             value={idxB}
             onChange={(e) => setIdxB(Number(e.target.value))}
             className="input-trading w-full py-1.5 text-xs"
           >
             {allYields.map((item, idx) => (
-              <option key={`b-${item.yield_.protocol}-${item.yield_.name}`} value={idx}>
+              <option
+                key={`b-${item.yield_.protocol}-${item.yield_.name}`}
+                value={idx}
+              >
                 {item.yield_.name}
               </option>
             ))}
@@ -116,7 +152,6 @@ export function YieldComparison({
         </div>
       </div>
 
-      {/* Visual Radar (simplified bar comparison) */}
       <div className="p-4">
         <div className="space-y-3">
           {dimensions.map((dim) => {
@@ -128,13 +163,18 @@ export function YieldComparison({
             return (
               <div key={dim.label}>
                 <div className="flex items-center justify-between mb-1">
-                  <span className="font-mono text-xs text-text-muted w-16">{dim.label}</span>
+                  <span className="font-mono text-xs text-text-muted w-16">
+                    {dim.label}
+                  </span>
                   <div className="flex-1 mx-2 flex gap-1">
                     {/* A bar (grows left-to-right from center) */}
                     <div className="flex-1 flex justify-end">
                       <div className="h-3 overflow-hidden rounded-l-full bg-surface-hover w-full relative">
                         <div
-                          className={cn("absolute right-0 h-full rounded-l-full", aWins ? "bg-primary" : "bg-primary/40")}
+                          className={cn(
+                            "absolute right-0 h-full rounded-l-full",
+                            aWins ? "bg-primary" : "bg-primary/40",
+                          )}
                           style={{ width: `${Math.min(aPct, 100)}%` }}
                         />
                       </div>
@@ -143,7 +183,10 @@ export function YieldComparison({
                     <div className="flex-1">
                       <div className="h-3 overflow-hidden rounded-r-full bg-surface-hover w-full relative">
                         <div
-                          className={cn("absolute left-0 h-full rounded-r-full", bWins ? "bg-secondary" : "bg-secondary/40")}
+                          className={cn(
+                            "absolute left-0 h-full rounded-r-full",
+                            bWins ? "bg-secondary" : "bg-secondary/40",
+                          )}
                           style={{ width: `${Math.min(bPct, 100)}%` }}
                         />
                       </div>
@@ -155,21 +198,23 @@ export function YieldComparison({
           })}
         </div>
 
-        {/* Legend */}
         <div className="mt-3 flex items-center justify-center gap-6">
           <div className="flex items-center gap-1.5">
             <div className="h-2 w-6 rounded-full bg-primary" />
-            <span className="truncate font-mono text-xs text-text-muted">{a.yield_.name}</span>
+            <span className="truncate font-mono text-xs text-text-muted">
+              {a.yield_.name}
+            </span>
           </div>
           <div className="flex items-center gap-1.5">
             <div className="h-2 w-6 rounded-full bg-secondary" />
-            <span className="truncate font-mono text-xs text-text-muted">{b.yield_.name}</span>
+            <span className="truncate font-mono text-xs text-text-muted">
+              {b.yield_.name}
+            </span>
           </div>
         </div>
       </div>
 
-      {/* Comparison Table */}
-      <div className="border-t border-border">
+      <div className="border-t-[3px] border-border">
         <table className="table-pro w-full">
           <thead>
             <tr>
@@ -230,10 +275,22 @@ function CompRow({
       <td className="px-4 py-1.5 text-left font-mono text-xs text-text-muted">
         {label}
       </td>
-      <td className={cn("px-4 py-1.5 text-right font-mono text-xs", aWins && !neutral ? "text-primary font-bold" : "text-text-secondary")}>
+      <td
+        className={cn(
+          "px-4 py-1.5 text-right font-mono text-xs",
+          aWins && !neutral ? "text-primary font-bold" : "text-text-secondary",
+        )}
+      >
         {aVal}
       </td>
-      <td className={cn("px-4 py-1.5 text-right font-mono text-xs", !aWins && !neutral ? "text-secondary font-bold" : "text-text-secondary")}>
+      <td
+        className={cn(
+          "px-4 py-1.5 text-right font-mono text-xs",
+          !aWins && !neutral
+            ? "text-secondary font-bold"
+            : "text-text-secondary",
+        )}
+      >
         {bVal}
       </td>
       <td className="px-4 py-1.5 text-center">

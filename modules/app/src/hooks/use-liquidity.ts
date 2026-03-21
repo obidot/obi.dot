@@ -1,16 +1,20 @@
 "use client";
 
-import { useState, useCallback, useEffect } from "react";
+import { useCallback, useEffect, useState } from "react";
+import { type Address, formatUnits, parseUnits } from "viem";
 import {
   useAccount,
   useReadContract,
   useReadContracts,
-  useWriteContract,
   useWaitForTransactionReceipt,
+  useWriteContract,
 } from "wagmi";
-import { formatUnits, parseUnits, type Address } from "viem";
+import {
+  ERC20_APPROVE_ABI,
+  LIQUIDITY_ROUTER_ABI,
+  LP_PAIR_ABI,
+} from "@/lib/abi";
 import { CONTRACTS, GAS_LIMITS } from "@/lib/constants";
-import { ERC20_APPROVE_ABI, LP_PAIR_ABI, LIQUIDITY_ROUTER_ABI } from "@/lib/abi";
 import type { LiquidityPairMeta } from "@/types";
 
 const ROUTER_ADDRESS = CONTRACTS.LIQUIDITY_ROUTER as Address;
@@ -102,9 +106,21 @@ export function useAddLiquidity(pair: LiquidityPairMeta | null) {
     deadline: bigint;
   } | null>(null);
 
-  const { data: approveTx0, writeContract: writeApprove0 } = useWriteContract();
-  const { data: approveTx1, writeContract: writeApprove1 } = useWriteContract();
-  const { data: addTx, writeContract: writeAdd } = useWriteContract();
+  const {
+    data: approveTx0,
+    writeContract: writeApprove0,
+    error: approve0Error,
+  } = useWriteContract();
+  const {
+    data: approveTx1,
+    writeContract: writeApprove1,
+    error: approve1Error,
+  } = useWriteContract();
+  const {
+    data: addTx,
+    writeContract: writeAdd,
+    error: addError,
+  } = useWriteContract();
 
   const { isSuccess: approve0Done } = useWaitForTransactionReceipt({
     hash: approveTx0,
@@ -168,6 +184,13 @@ export function useAddLiquidity(pair: LiquidityPairMeta | null) {
       setStep("done");
     }
   }, [step, addDone, addTx]);
+
+  useEffect(() => {
+    const nextError = approve0Error ?? approve1Error ?? addError;
+    if (!nextError) return;
+    setError(nextError.message);
+    setStep("error");
+  }, [approve0Error, approve1Error, addError]);
 
   const execute = useCallback(
     (amount0: string, amount1: string, slippageBps: number) => {
@@ -233,8 +256,16 @@ export function useRemoveLiquidity(pair: LiquidityPairMeta | null) {
     deadline: bigint;
   } | null>(null);
 
-  const { data: approveTx, writeContract: writeApprove } = useWriteContract();
-  const { data: removeTx, writeContract: writeRemove } = useWriteContract();
+  const {
+    data: approveTx,
+    writeContract: writeApprove,
+    error: approveError,
+  } = useWriteContract();
+  const {
+    data: removeTx,
+    writeContract: writeRemove,
+    error: removeError,
+  } = useWriteContract();
 
   const { isSuccess: approveConfirmed } = useWaitForTransactionReceipt({
     hash: approveTx,
@@ -278,6 +309,13 @@ export function useRemoveLiquidity(pair: LiquidityPairMeta | null) {
     }
   }, [step, removeConfirmed, removeTx]);
 
+  useEffect(() => {
+    const nextError = approveError ?? removeError;
+    if (!nextError) return;
+    setError(nextError.message);
+    setStep("error");
+  }, [approveError, removeError]);
+
   const execute = useCallback(
     (
       lpAmount: bigint,
@@ -290,8 +328,10 @@ export function useRemoveLiquidity(pair: LiquidityPairMeta | null) {
       try {
         setError(null);
 
-        const out0 = totalSupply > 0n ? (lpAmount * reserve0) / totalSupply : 0n;
-        const out1 = totalSupply > 0n ? (lpAmount * reserve1) / totalSupply : 0n;
+        const out0 =
+          totalSupply > 0n ? (lpAmount * reserve0) / totalSupply : 0n;
+        const out1 =
+          totalSupply > 0n ? (lpAmount * reserve1) / totalSupply : 0n;
         const min0 = out0 - (out0 * BigInt(slippageBps)) / 10000n;
         const min1 = out1 - (out1 * BigInt(slippageBps)) / 10000n;
         const deadline = BigInt(Math.floor(Date.now() / 1000) + 600);

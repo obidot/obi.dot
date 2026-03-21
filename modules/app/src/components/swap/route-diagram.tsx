@@ -1,12 +1,12 @@
 "use client";
 
-import { useState, useEffect, useMemo, Fragment } from "react";
+import { Loader2, Network, SplitSquareHorizontal } from "lucide-react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import { useChainId } from "wagmi";
-import { cn, formatTokenAmount } from "@/lib/format";
 import { useRouteFinder } from "@/hooks/use-swap";
 import { polkadotHubTestnet } from "@/lib/chains";
-import type { SwapRouteResult, RouteHop, SplitRouteSelection } from "@/types";
-import { Loader2, Network, SplitSquareHorizontal } from "lucide-react";
+import { cn, formatTokenAmount } from "@/lib/format";
+import type { RouteHop, SplitRouteSelection, SwapRouteResult } from "@/types";
 
 // ── Token color map ────────────────────────────────────────────────────────
 
@@ -19,10 +19,10 @@ function tokenColor(_symbol: string) {
 
 function StatusBadge({ status }: { status: SwapRouteResult["status"] }) {
   const styles: Record<SwapRouteResult["status"], string> = {
-    live: "bg-primary/10 text-primary border-primary/20",
-    mainnet_only: "bg-warning/10 text-warning border-warning/20",
-    coming_soon: "bg-surface-hover text-text-muted border-border",
-    no_liquidity: "bg-danger/10 text-danger border-danger/20",
+    live: "bg-primary text-primary-foreground",
+    mainnet_only: "bg-warning/15 text-warning",
+    coming_soon: "bg-surface-hover text-text-muted",
+    no_liquidity: "bg-danger/10 text-danger",
   };
   const labels: Record<SwapRouteResult["status"], string> = {
     live: "LIVE",
@@ -31,21 +31,29 @@ function StatusBadge({ status }: { status: SwapRouteResult["status"] }) {
     no_liquidity: "NO LIQUIDITY",
   };
   return (
-    <span className={cn("font-mono text-[12px] border px-1.5 py-0.5 tracking-wide", styles[status])}>
+    <span className={cn("pill text-[0.82rem]", styles[status])}>
       {labels[status]}
     </span>
   );
 }
 
-function RouteTypeBadge({ routeType }: { routeType: SwapRouteResult["routeType"] }) {
+function RouteTypeBadge({
+  routeType,
+}: {
+  routeType: SwapRouteResult["routeType"];
+}) {
   const styles: Record<SwapRouteResult["routeType"], string> = {
     local: "bg-accent/10 text-accent border-accent/20",
     xcm: "bg-primary/10 text-primary border-primary/20",
     bridge: "bg-warning/10 text-warning border-warning/20",
   };
-  const labels: Record<SwapRouteResult["routeType"], string> = { local: "V2", xcm: "XCM", bridge: "BRIDGE" };
+  const labels: Record<SwapRouteResult["routeType"], string> = {
+    local: "V2",
+    xcm: "XCM",
+    bridge: "BRIDGE",
+  };
   return (
-    <span className={cn("font-mono text-[12px] border px-1.5 py-0.5 tracking-wide", styles[routeType])}>
+    <span className={cn("pill text-[0.82rem]", styles[routeType])}>
       {labels[routeType]}
     </span>
   );
@@ -53,16 +61,36 @@ function RouteTypeBadge({ routeType }: { routeType: SwapRouteResult["routeType"]
 
 // ── Token node ────────────────────────────────────────────────────────────
 
-function TokenNode({ symbol, amount, decimals = 18 }: { symbol: string; amount?: string; decimals?: number }) {
+function TokenNode({
+  symbol,
+  amount,
+  decimals = 18,
+}: {
+  symbol: string;
+  amount?: string;
+  decimals?: number;
+}) {
   const c = tokenColor(symbol);
   const displayAmount = amount ? formatTokenAmount(amount, decimals, 4) : null;
   return (
     <div className="flex flex-col items-center gap-1 shrink-0">
-      <span className={cn("flex h-9 w-9 items-center justify-center rounded-full border text-[13px] font-bold", c.circle, c.text)}>
+      <span
+        className={cn(
+          "flex h-9 w-9 items-center justify-center rounded-full border text-[13px] font-bold",
+          c.circle,
+          c.text,
+        )}
+      >
         {symbol.slice(0, 2)}
       </span>
-      <span className={cn("font-mono text-[13px] font-semibold", c.text)}>{symbol}</span>
-      {displayAmount && <span className="font-mono text-[12px] text-text-muted">{displayAmount}</span>}
+      <span className={cn("font-mono text-[13px] font-semibold", c.text)}>
+        {symbol}
+      </span>
+      {displayAmount && (
+        <span className="font-mono text-[12px] text-text-muted">
+          {displayAmount}
+        </span>
+      )}
     </div>
   );
 }
@@ -74,7 +102,13 @@ function TokenNode({ symbol, amount, decimals = 18 }: { symbol: string; amount?:
  * flex container so the layout can never push the final tokenOut off-screen.
  * Connectors are capped at max-w-[80px] to prevent empty stretching.
  */
-function HopFlow({ hops, animated = false }: { hops: RouteHop[]; animated?: boolean }) {
+function HopFlow({
+  hops,
+  animated = false,
+}: {
+  hops: RouteHop[];
+  animated?: boolean;
+}) {
   const connectorStyle = animated
     ? {
         backgroundImage:
@@ -108,7 +142,9 @@ function HopFlow({ hops, animated = false }: { hops: RouteHop[]; animated?: bool
               <div
                 className={cn(
                   "border px-2 py-1.5 text-center",
-                  animated ? "bg-primary/15 border-primary/40" : "bg-primary/8 border-primary/25",
+                  animated
+                    ? "bg-primary/15 border-primary/40"
+                    : "bg-primary/8 border-primary/25",
                 )}
               >
                 <p
@@ -119,7 +155,12 @@ function HopFlow({ hops, animated = false }: { hops: RouteHop[]; animated?: bool
                 >
                   {hop.poolLabel}
                 </p>
-                <p className={cn("font-mono text-[11px]", animated ? "text-primary/70" : "text-text-secondary")}>
+                <p
+                  className={cn(
+                    "font-mono text-[11px]",
+                    animated ? "text-primary/70" : "text-text-secondary",
+                  )}
+                >
                   {(Number(hop.feeBps) / 100).toFixed(2)}%
                 </p>
               </div>
@@ -153,7 +194,11 @@ interface AllQuotesTableProps {
   localRoutes: SwapRouteResult[];
 }
 
-function AllQuotesTable({ tokenOutDecimals = 18, tokenOutSymbol = "?", localRoutes }: AllQuotesTableProps) {
+function AllQuotesTable({
+  tokenOutDecimals = 18,
+  tokenOutSymbol = "?",
+  localRoutes,
+}: AllQuotesTableProps) {
   // Only show single-hop routes — each represents one adapter's quote
   const items = useMemo(() => {
     const singleHop = localRoutes.filter((r) => r.hops.length === 1);
@@ -169,32 +214,59 @@ function AllQuotesTable({ tokenOutDecimals = 18, tokenOutSymbol = "?", localRout
   }, 0n);
 
   return (
-    <div className="space-y-1">
-      <p className="text-[13px] text-text-secondary font-semibold uppercase tracking-wider">Adapter quotes</p>
-      <div className="border border-border/80 divide-y divide-border/60">
+    <div className="space-y-2">
+      <p className="retro-label text-[0.9rem] text-text-secondary">
+        Adapter quotes
+      </p>
+      <div className="divide-y divide-border/60 border-[3px] border-border bg-surface shadow-[3px_3px_0_0_var(--border)]">
         {items.map((r) => {
           const out = BigInt(r.amountOut);
           const isBest = out === bestOut;
-          const savingsBps = bestOut > 0n ? Number(((bestOut - out) * 10000n) / bestOut) : 0;
-          const displayOut = formatTokenAmount(r.amountOut, tokenOutDecimals, 6);
+          const savingsBps =
+            bestOut > 0n ? Number(((bestOut - out) * 10000n) / bestOut) : 0;
+          const displayOut = formatTokenAmount(
+            r.amountOut,
+            tokenOutDecimals,
+            6,
+          );
           const label = r.hops[0]?.poolLabel ?? r.id;
 
           return (
-            <div key={r.id} className={cn("flex items-center justify-between px-3 py-2", isBest ? "bg-primary/15" : "bg-surface")}>
+            <div
+              key={r.id}
+              className={cn(
+                "flex items-center justify-between px-3 py-2",
+                isBest ? "bg-primary/15" : "bg-surface",
+              )}
+            >
               <div className="flex items-center gap-2 min-w-0">
                 {isBest && (
-                  <span className="font-mono text-[11px] text-primary border border-primary/50 bg-primary/20 px-1 py-0.5 shrink-0 font-bold">
+                  <span className="pill bg-primary text-primary-foreground text-[0.8rem]">
                     BEST
                   </span>
                 )}
-                <span className={cn("text-[13px] font-medium truncate", isBest ? "text-text-primary" : "text-text-secondary")}>{label}</span>
+                <span
+                  className={cn(
+                    "text-[13px] font-medium truncate",
+                    isBest ? "text-text-primary" : "text-text-secondary",
+                  )}
+                >
+                  {label}
+                </span>
               </div>
               <div className="flex items-center gap-3 shrink-0">
-                <span className={cn("font-mono text-[13px] font-semibold tabular-nums", isBest ? "text-primary" : "text-text-primary")}>
+                <span
+                  className={cn(
+                    "font-mono text-[13px] font-semibold tabular-nums",
+                    isBest ? "text-primary" : "text-text-primary",
+                  )}
+                >
                   {displayOut} {tokenOutSymbol}
                 </span>
                 {!isBest && savingsBps > 0 && (
-                  <span className="font-mono text-[12px] text-danger font-medium">-{(savingsBps / 100).toFixed(2)}%</span>
+                  <span className="font-mono text-[12px] text-danger font-medium">
+                    -{(savingsBps / 100).toFixed(2)}%
+                  </span>
                 )}
               </div>
             </div>
@@ -248,11 +320,21 @@ interface LocalRouteCardProps {
 }
 
 function LocalRouteCard({
-  route, rank, tokenOutDecimals = 18, selected, splitSelected, splitWeight, splitMode,
-  onSelect, onSplitToggle, onWeightChange,
+  route,
+  rank,
+  tokenOutDecimals = 18,
+  selected,
+  splitSelected,
+  splitWeight,
+  splitMode,
+  onSelect,
+  onSplitToggle,
+  onWeightChange,
 }: LocalRouteCardProps) {
   const isNoLiquidity = route.status === "no_liquidity";
-  const amountOutDisplay = isNoLiquidity ? "—" : formatTokenAmount(route.amountOut, tokenOutDecimals, 6);
+  const amountOutDisplay = isNoLiquidity
+    ? "—"
+    : formatTokenAmount(route.amountOut, tokenOutDecimals, 6);
   const impactBps = Number(route.totalPriceImpactBps);
   const impactPct = (impactBps / 100).toFixed(2);
   const feePct = (Number(route.totalFeeBps) / 100).toFixed(2);
@@ -267,15 +349,18 @@ function LocalRouteCard({
       onClick={() => canSelect && onSelect?.(route)}
       onKeyDown={(e) => canSelect && e.key === "Enter" && onSelect?.(route)}
       className={cn(
-        "border p-3 transition-colors",
+        "border-[3px] p-3 shadow-[3px_3px_0_0_var(--border)] transition-colors",
         canSelect && "cursor-pointer",
         isNoLiquidity && "opacity-60",
         splitSelected || selected
-          ? "border-primary bg-primary/15 ring-1 ring-primary/40"
+          ? "border-border bg-primary/15"
           : isBest
-            ? "border-primary/50 bg-primary/10"
+            ? "border-border bg-primary/10"
             : "border-border/80 bg-surface",
-        canSelect && !selected && !splitSelected && "hover:border-primary/50 hover:bg-primary/5",
+        canSelect &&
+          !selected &&
+          !splitSelected &&
+          "hover:border-primary/50 hover:bg-primary/5",
       )}
     >
       {/* Header: left = status badges, right = fill probability + amount */}
@@ -285,28 +370,35 @@ function LocalRouteCard({
           {splitMode && (
             <button
               type="button"
-              onClick={(e) => { e.stopPropagation(); onSplitToggle?.(route); }}
+              onClick={(e) => {
+                e.stopPropagation();
+                onSplitToggle?.(route);
+              }}
               className={cn(
-                "w-4 h-4 border flex items-center justify-center shrink-0 transition-colors",
-                splitSelected ? "border-primary bg-primary/20" : "border-border hover:border-primary/50",
+                "flex h-4 w-4 items-center justify-center border-[2px] shrink-0 transition-colors",
+                splitSelected
+                  ? "border-border bg-primary/30"
+                  : "border-border hover:border-primary/50",
               )}
             >
-              {splitSelected && <span className="text-primary text-[11px] font-bold">✓</span>}
+              {splitSelected && (
+                <span className="text-primary text-[11px] font-bold">✓</span>
+              )}
             </button>
           )}
           <StatusBadge status={route.status} />
           {isBest && (
-            <span className="font-mono text-[11px] text-primary border border-primary/30 bg-primary/10 px-1.5 py-0.5 shrink-0">
+            <span className="pill bg-primary text-primary-foreground text-[0.8rem]">
               BEST
             </span>
           )}
           {(selected || splitSelected) && !splitMode && (
-            <span className="font-mono text-[11px] text-primary border border-primary bg-primary/20 px-1.5 py-0.5 shrink-0">
+            <span className="pill bg-accent text-accent-foreground text-[0.8rem]">
               ✓ SELECTED
             </span>
           )}
           {splitSelected && splitMode && (
-            <span className="font-mono text-[11px] text-primary border border-primary bg-primary/20 px-1.5 py-0.5 shrink-0">
+            <span className="pill bg-secondary text-secondary-foreground text-[0.8rem]">
               SPLIT
             </span>
           )}
@@ -329,7 +421,9 @@ function LocalRouteCard({
         <div className="mt-3 pt-2 border-t border-border/50">
           <div className="flex items-center justify-between mb-1">
             <span className="text-[13px] text-text-muted">Split weight</span>
-            <span className="font-mono text-[13px] text-primary font-semibold">{(splitWeight / 100).toFixed(0)}%</span>
+            <span className="font-mono text-[13px] text-primary font-semibold">
+              {(splitWeight / 100).toFixed(0)}%
+            </span>
           </div>
           <input
             type="range"
@@ -346,16 +440,30 @@ function LocalRouteCard({
       {/* Footer */}
       <div className="flex items-center gap-4 mt-2 pt-2 border-t border-border/60">
         <span className="text-[13px] text-text-secondary">
-          Fee <span className="font-mono text-text-primary font-semibold">{feePct}%</span>
+          Fee{" "}
+          <span className="font-mono text-text-primary font-semibold">
+            {feePct}%
+          </span>
         </span>
         <span className="text-[13px] text-text-secondary">
           Impact{" "}
-          <span className={cn("font-mono font-semibold", impactBps < 50 ? "text-bull" : impactBps < 200 ? "text-warning" : "text-danger")}>
+          <span
+            className={cn(
+              "font-mono font-semibold",
+              impactBps < 50
+                ? "text-bull"
+                : impactBps < 200
+                  ? "text-warning"
+                  : "text-danger",
+            )}
+          >
             {impactPct}%
           </span>
         </span>
         {route.hops.length > 1 && (
-          <span className="text-[13px] text-text-secondary font-mono">{route.hops.length}-hop</span>
+          <span className="text-[13px] text-text-secondary font-mono">
+            {route.hops.length}-hop
+          </span>
         )}
       </div>
     </div>
@@ -369,7 +477,7 @@ function CrossChainCard({ route }: { route: SwapRouteResult }) {
   return (
     <div
       className={cn(
-        "border px-3 py-2.5 flex items-center justify-between gap-2",
+        "flex items-center justify-between gap-2 border-[3px] px-3 py-2.5 shadow-[3px_3px_0_0_var(--border)]",
         route.status === "live"
           ? "border-primary/20 bg-primary/5"
           : route.status === "mainnet_only"
@@ -379,7 +487,9 @@ function CrossChainCard({ route }: { route: SwapRouteResult }) {
     >
       <div className="flex items-center gap-1.5 min-w-0">
         <RouteTypeBadge routeType={route.routeType} />
-        <span className="text-[13px] text-text-primary font-medium truncate">{label}</span>
+        <span className="text-[13px] text-text-primary font-medium truncate">
+          {label}
+        </span>
       </div>
       <StatusBadge status={route.status} />
     </div>
@@ -391,7 +501,12 @@ function CrossChainCard({ route }: { route: SwapRouteResult }) {
 function Skeleton() {
   return (
     <div className="space-y-2 animate-pulse">
-      {[0, 1, 2].map((i) => <div key={i} className="h-24 bg-surface-hover border border-border" />)}
+      {[0, 1, 2].map((i) => (
+        <div
+          key={i}
+          className="h-24 border-[3px] border-border bg-surface-hover shadow-[3px_3px_0_0_var(--border)]"
+        />
+      ))}
     </div>
   );
 }
@@ -419,31 +534,48 @@ export function RouteDiagram({
   onSelectRoute,
   onSelectSplitRoutes,
 }: RouteDiagramProps) {
-  const { routes, isLoading, error } = useRouteFinder({ tokenIn, tokenOut, amountIn });
+  const { routes, isLoading, error } = useRouteFinder({
+    tokenIn,
+    tokenOut,
+    amountIn,
+  });
   const chainId = useChainId();
   const isTestnet = chainId === polkadotHubTestnet.id;
   const [splitMode, setSplitMode] = useState(false);
-  const [splitSelections, setSplitSelections] = useState<SplitRouteSelection[]>([]);
+  const [splitSelections, setSplitSelections] = useState<SplitRouteSelection[]>(
+    [],
+  );
 
   // Routes with actual hops go into on-chain section; stubs (no hops) go into cross-chain section
   // Include "no_liquidity" dry paths in localRoutes so the hop diagram is visible
-  const localRoutes = routes.filter((r) => r.routeType === "local" && r.hops.length > 0);
+  const localRoutes = routes.filter(
+    (r) => r.routeType === "local" && r.hops.length > 0,
+  );
   const liveLocalRoutes = localRoutes.filter((r) => r.status === "live");
-  const localStubs = routes.filter((r) => r.routeType === "local" && r.hops.length === 0);
-  const crossChainRoutes = [...routes.filter((r) => r.routeType !== "local"), ...localStubs];
+  const localStubs = routes.filter(
+    (r) => r.routeType === "local" && r.hops.length === 0,
+  );
+  const crossChainRoutes = [
+    ...routes.filter((r) => r.routeType !== "local"),
+    ...localStubs,
+  ];
 
   // Auto-select the best live local route when routes load and none is selected.
   // On testnet, skip mainnet_only routes since they aren't functional.
   // Never auto-select a no_liquidity route.
   useEffect(() => {
     if (splitMode || !onSelectRoute) return;
-    const best = liveLocalRoutes.find(
-      (r) => (!isTestnet || r.status === "live"),
-    );
+    const best = liveLocalRoutes.find((r) => !isTestnet || r.status === "live");
     if (best && !selectedRouteId) {
       onSelectRoute(best);
     }
-  }, [routes, splitMode, selectedRouteId, onSelectRoute, isTestnet]);
+  }, [
+    splitMode,
+    selectedRouteId,
+    onSelectRoute,
+    isTestnet,
+    liveLocalRoutes.find,
+  ]);
 
   const handleSplitToggle = (route: SwapRouteResult) => {
     setSplitSelections((prev) => {
@@ -458,7 +590,10 @@ export function RouteDiagram({
       if (prev.length >= 2) return prev; // max 2 for split
       const defaultWeight = prev.length === 0 ? 6000 : 4000;
       // Rebalance existing
-      const updated: SplitRouteSelection[] = prev.map((s) => ({ ...s, weight: prev.length === 0 ? 10000 : 6000 }));
+      const updated: SplitRouteSelection[] = prev.map((s) => ({
+        ...s,
+        weight: prev.length === 0 ? 10000 : 6000,
+      }));
       const next = [...updated, { route, weight: defaultWeight }];
       if (next.length === 2) {
         next[0] = { ...next[0], weight: 6000 };
@@ -500,23 +635,27 @@ export function RouteDiagram({
   }
 
   return (
-    <div className="p-4 space-y-4 overflow-y-auto">
+    <div className="space-y-4 overflow-y-auto p-4">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between border-b-[3px] border-border pb-3">
         <div className="flex items-center gap-1.5">
           <Network className="h-3.5 w-3.5 text-text-muted" />
-          <h3 className="text-[15px] font-semibold text-text-primary">Your trade route</h3>
+          <h3 className="retro-label text-[1rem] text-text-primary">
+            Your trade route
+          </h3>
         </div>
         <div className="flex items-center gap-2">
-          {isLoading && <Loader2 className="h-3.5 w-3.5 animate-spin text-text-muted" />}
+          {isLoading && (
+            <Loader2 className="h-3.5 w-3.5 animate-spin text-text-muted" />
+          )}
           {liveLocalRoutes.length >= 2 && onSelectSplitRoutes && (
             <button
               type="button"
               onClick={handleSplitModeToggle}
               className={cn(
-                "flex items-center gap-1 px-2 py-1 text-[13px] font-mono border transition-colors",
+                "retro-label flex items-center gap-1 border-[2px] px-2 py-1 text-[0.85rem] transition-colors",
                 splitMode
-                  ? "border-primary bg-primary/15 text-primary"
+                  ? "border-border bg-primary text-primary-foreground shadow-[2px_2px_0_0_var(--border)]"
                   : "border-border text-text-muted hover:border-primary/50 hover:text-text-secondary",
               )}
             >
@@ -529,22 +668,27 @@ export function RouteDiagram({
 
       {/* Split mode hint */}
       {splitMode && (
-        <div className="border border-primary/20 bg-primary/5 px-3 py-2">
+        <div className="border-[3px] border-border bg-primary/10 px-3 py-2 shadow-[2px_2px_0_0_var(--border)]">
           <p className="text-[13px] text-primary">
-            Select up to 2 routes to split your swap. Adjust weights with the sliders.
+            Select up to 2 routes to split your swap. Adjust weights with the
+            sliders.
             {splitSelections.length === 2 && " Weights must sum to 100%."}
           </p>
         </div>
       )}
 
       {error && !isLoading && (
-        <p className="text-[13px] text-danger">Failed to load routes: {error}</p>
+        <p className="text-[13px] text-danger">
+          Failed to load routes: {error}
+        </p>
       )}
 
       {isLoading && <Skeleton />}
 
       {!isLoading && !error && routes.length === 0 && (
-        <p className="text-[13px] text-text-muted text-center py-4">No routes found for this pair</p>
+        <p className="text-[13px] text-text-muted text-center py-4">
+          No routes found for this pair
+        </p>
       )}
 
       {/* All-quotes comparison table — only live routes with actual amounts */}
@@ -559,7 +703,9 @@ export function RouteDiagram({
       {/* Local V2 routes */}
       {!isLoading && localRoutes.length > 0 && (
         <div className="space-y-2">
-          <p className="text-[13px] text-text-secondary font-semibold uppercase tracking-wider">On-chain routes</p>
+          <p className="retro-label text-[0.9rem] text-text-secondary">
+            On-chain routes
+          </p>
           {localRoutes.map((r, i) => (
             <LocalRouteCard
               key={r.id}
@@ -567,8 +713,14 @@ export function RouteDiagram({
               rank={i}
               tokenOutDecimals={tokenOutDecimals}
               selected={!splitMode && r.id === selectedRouteId}
-              splitSelected={splitMode && splitSelections.some((s) => s.route.id === r.id)}
-              splitWeight={splitMode ? splitSelections.find((s) => s.route.id === r.id)?.weight : undefined}
+              splitSelected={
+                splitMode && splitSelections.some((s) => s.route.id === r.id)
+              }
+              splitWeight={
+                splitMode
+                  ? splitSelections.find((s) => s.route.id === r.id)?.weight
+                  : undefined
+              }
               splitMode={splitMode}
               onSelect={!splitMode ? onSelectRoute : undefined}
               onSplitToggle={splitMode ? handleSplitToggle : undefined}
@@ -581,7 +733,9 @@ export function RouteDiagram({
       {/* Cross-chain routes */}
       {!isLoading && crossChainRoutes.length > 0 && (
         <div className="space-y-2">
-          <p className="text-[13px] text-text-secondary font-semibold uppercase tracking-wider">Cross-chain routes</p>
+          <p className="retro-label text-[0.9rem] text-text-secondary">
+            Cross-chain routes
+          </p>
           <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
             {crossChainRoutes.map((r) => (
               <CrossChainCard key={r.id} route={r} />

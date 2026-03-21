@@ -1,24 +1,41 @@
 "use client";
 
-import { useAgentLog } from "@/hooks/use-agent-log";
-import { DecisionFeed } from "@/components/agent/decision-feed";
-import { AgentStatus } from "@/components/agent/agent-status";
-import { LiveEvents } from "@/components/agent/live-events";
-import { PanelSkeleton } from "@/components/ui/skeleton";
 import { RefreshCw } from "lucide-react";
+import { AgentStatus } from "@/components/agent/agent-status";
+import { DecisionFeed } from "@/components/agent/decision-feed";
+import { LiveEvents } from "@/components/agent/live-events";
+import { PageHero } from "@/components/ui/page-hero";
+import { PanelSkeleton } from "@/components/ui/skeleton";
+import { useAgentLog } from "@/hooks/use-agent-log";
 
 export default function AgentPage() {
-  const { data: decisions, isLoading, error, refetch, isFetching } = useAgentLog();
+  const {
+    data: decisions,
+    isLoading,
+    error,
+    refetch,
+    isFetching,
+  } = useAgentLog();
 
   return (
     <div className="space-y-4">
-      <AgentStatus decisionCount={decisions?.length ?? 0} decisions={decisions ?? []} />
+      <PageHero
+        eyebrow="Agent"
+        title="Autonomous Console"
+        description="Live decisions, execution cycles, and operational events from the Obidot agent."
+      />
+      <AgentStatus
+        decisionCount={decisions?.length ?? 0}
+        decisions={decisions ?? []}
+      />
 
       {isLoading ? (
         <PanelSkeleton rows={5} />
       ) : error ? (
-        <div className="panel rounded-lg p-8 text-center">
-          <p className="font-mono text-sm text-danger">Failed to load agent log</p>
+        <div className="panel p-8 text-center">
+          <p className="font-mono text-sm text-danger">
+            Failed to load agent log
+          </p>
           <button
             type="button"
             onClick={() => refetch()}

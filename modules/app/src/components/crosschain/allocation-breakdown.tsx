@@ -1,8 +1,8 @@
 "use client";
 
-import type { CrossChainVaultState } from "@/types";
-import { formatUsd, cn } from "@/lib/format";
 import { BarChart3 } from "lucide-react";
+import { cn, formatUsd } from "@/lib/format";
+import type { CrossChainVaultState } from "@/types";
 
 // ── Color palette per segment ──────────────────────────────────────────────
 
@@ -23,7 +23,11 @@ interface Segment {
 
 // ── Component ──────────────────────────────────────────────────────────────
 
-export function AllocationBreakdown({ state }: { state: CrossChainVaultState }) {
+export function AllocationBreakdown({
+  state,
+}: {
+  state: CrossChainVaultState;
+}) {
   const globalTotal = BigInt(state.globalTotalAssets ?? "0");
   if (globalTotal === 0n) return null;
 
@@ -47,29 +51,31 @@ export function AllocationBreakdown({ state }: { state: CrossChainVaultState }) 
   ];
 
   return (
-    <div className="panel overflow-hidden rounded-lg">
-      {/* ── Header ──────────────────────────────────────────────── */}
-      <div className="flex items-center justify-between border-b border-border px-4 py-3">
-        <div className="flex items-center gap-2">
-          <BarChart3 className="h-3.5 w-3.5 text-text-muted" />
-          <h3 className="text-xs font-medium uppercase tracking-widest text-text-muted">
-            Capital Allocation
-          </h3>
+    <div className="panel overflow-hidden">
+      <div className="panel-header">
+        <div className="panel-header-block">
+          <div className="panel-header-icon bg-primary">
+            <BarChart3 className="h-4 w-4 text-foreground" />
+          </div>
+          <div className="panel-heading">
+            <span className="panel-kicker">Capital Map</span>
+            <h3 className="panel-title">Allocation Breakdown</h3>
+            <p className="panel-subtitle">
+              Distribution of global assets between the hub vault and live
+              satellites.
+            </p>
+          </div>
         </div>
-        <span className="stat-number text-sm text-text-primary">
-          {formatUsd(state.globalTotalAssets ?? "0")}
-          <span className="ml-1.5 font-sans text-[10px] font-normal text-text-muted">
-            Global TVL
-          </span>
+        <span className="pill bg-primary text-primary-foreground">
+          {formatUsd(state.globalTotalAssets ?? "0")} global TVL
         </span>
       </div>
 
       <div className="p-5">
-        {/* ── Stacked bar ─────────────────────────────────────────── */}
-        <div className="flex h-7 w-full overflow-hidden rounded-md border border-border/60">
+        <div className="flex h-9 w-full overflow-hidden border-[3px] border-border bg-surface-alt">
           {segments.map((seg, i) => (
             <div
-              key={i}
+              key={seg.label}
               title={`${seg.label}: ${formatUsd(seg.assets)} (${seg.pct.toFixed(1)}%)`}
               className={cn(
                 "relative h-full cursor-default transition-all duration-700 hover:brightness-110",
@@ -78,9 +84,8 @@ export function AllocationBreakdown({ state }: { state: CrossChainVaultState }) 
               )}
               style={{ width: `${seg.pct}%` }}
             >
-              {/* Label inside segment if wide enough */}
               {seg.pct >= 12 && (
-                <span className="absolute inset-0 flex items-center justify-center font-mono text-[9px] font-bold text-background/70 mix-blend-overlay">
+                <span className="absolute inset-0 flex items-center justify-center font-mono text-[10px] font-bold text-background/70 mix-blend-overlay">
                   {seg.pct.toFixed(0)}%
                 </span>
               )}
@@ -88,20 +93,36 @@ export function AllocationBreakdown({ state }: { state: CrossChainVaultState }) 
           ))}
         </div>
 
-        {/* ── Legend ──────────────────────────────────────────────── */}
-        <div className="mt-4 flex flex-wrap gap-x-5 gap-y-2">
-          {segments.map((seg, i) => (
-            <div key={i} className="flex items-center gap-1.5">
-              <span className={cn("h-2 w-2 shrink-0 rounded-sm", seg.color.dot)} />
-              <span className="font-mono text-[11px] text-text-secondary">
-                {seg.label}
-              </span>
-              <span className={cn("font-mono text-[11px] font-semibold", seg.color.text)}>
-                {seg.pct.toFixed(1)}%
-              </span>
-              <span className="font-mono text-[10px] text-text-muted">
+        <div className="mt-4 grid gap-2 md:grid-cols-2 xl:grid-cols-3">
+          {segments.map((seg) => (
+            <div
+              key={seg.label}
+              className="border-[3px] border-border bg-background px-3 py-2"
+            >
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <span
+                    className={cn(
+                      "h-2.5 w-2.5 shrink-0 rounded-sm",
+                      seg.color.dot,
+                    )}
+                  />
+                  <span className="retro-label text-sm text-text-primary">
+                    {seg.label}
+                  </span>
+                </div>
+                <span
+                  className={cn(
+                    "font-mono text-[11px] font-semibold",
+                    seg.color.text,
+                  )}
+                >
+                  {seg.pct.toFixed(1)}%
+                </span>
+              </div>
+              <p className="mt-1 font-mono text-[10px] text-text-muted">
                 {formatUsd(seg.assets)}
-              </span>
+              </p>
             </div>
           ))}
         </div>

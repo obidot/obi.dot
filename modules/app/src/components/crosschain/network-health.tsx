@@ -1,14 +1,14 @@
 "use client";
 
-import type { CrossChainVaultState } from "@/types";
-import { formatRelativeTime, cn } from "@/lib/format";
 import {
-  CheckCircle2,
-  ShieldAlert,
-  Landmark,
-  Globe,
   Activity,
+  CheckCircle2,
+  Globe,
+  Landmark,
+  ShieldAlert,
 } from "lucide-react";
+import { cn, formatRelativeTime } from "@/lib/format";
+import type { CrossChainVaultState } from "@/types";
 
 // ── Sync staleness helper ──────────────────────────────────────────────────
 
@@ -38,35 +38,41 @@ export function NetworkHealth({ state }: { state: CrossChainVaultState }) {
   const isFullyHealthy = emergencyCount === 0;
 
   return (
-    <div className="panel overflow-hidden rounded-lg">
-      {/* ── Header ──────────────────────────────────────────────── */}
-      <div className="flex items-center justify-between border-b border-border px-4 py-3">
+    <div className="panel overflow-hidden">
+      <div className="panel-header">
+        <div className="panel-header-block">
+          <div className="panel-header-icon bg-accent">
+            <Activity className="h-4 w-4 text-foreground" />
+          </div>
+          <div className="panel-heading">
+            <span className="panel-kicker">Ops Monitor</span>
+            <h3 className="panel-title">Network Health</h3>
+            <p className="panel-subtitle">
+              Freshness and emergency status across the hub and every configured
+              satellite node.
+            </p>
+          </div>
+        </div>
         <div className="flex items-center gap-2">
-          <Activity className="h-3.5 w-3.5 text-text-muted" />
-          <h3 className="text-xs font-medium uppercase tracking-widest text-text-muted">
-            Network Health
-          </h3>
           <span
             className={cn(
               "pill text-[9px]",
               isFullyHealthy
-                ? "bg-primary/10 text-primary"
-                : "bg-danger/10 text-danger",
+                ? "bg-accent text-accent-foreground"
+                : "bg-danger text-card",
             )}
           >
             {isFullyHealthy ? "All Operational" : `${emergencyCount} Alert`}
           </span>
+          <span className="pill bg-surface-alt text-text-secondary text-[9px]">
+            {healthyCount}
+            <span className="text-text-muted opacity-50">/</span>
+            {totalChains} nodes healthy
+          </span>
         </div>
-        <span className="font-mono text-[10px] text-text-muted">
-          {healthyCount}
-          <span className="text-text-muted opacity-50">/</span>
-          {totalChains} nodes healthy
-        </span>
       </div>
 
-      {/* ── Chain grid ──────────────────────────────────────────── */}
       <div className="grid grid-cols-2 gap-px bg-border sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">
-        {/* Hub cell */}
         <div className="flex flex-col gap-2.5 bg-surface p-3.5 transition-colors hover:bg-surface-hover">
           <div className="flex items-center justify-between">
             <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary/10">
@@ -90,7 +96,6 @@ export function NetworkHealth({ state }: { state: CrossChainVaultState }) {
           </div>
         </div>
 
-        {/* Satellite cells */}
         {state.satellites.map((sat) => {
           const sync = getSyncStatus(sat.lastSyncTimestamp);
           return (
@@ -127,14 +132,9 @@ export function NetworkHealth({ state }: { state: CrossChainVaultState }) {
                 </p>
                 <div className="mt-1 flex items-center gap-1">
                   <span
-                    className={cn(
-                      "h-1.5 w-1.5 rounded-full",
-                      sync.dotClass,
-                    )}
+                    className={cn("h-1.5 w-1.5 rounded-full", sync.dotClass)}
                   />
-                  <span
-                    className={cn("font-mono text-[9px]", sync.textClass)}
-                  >
+                  <span className={cn("font-mono text-[9px]", sync.textClass)}>
                     {formatRelativeTime(sat.lastSyncTimestamp)}
                   </span>
                 </div>

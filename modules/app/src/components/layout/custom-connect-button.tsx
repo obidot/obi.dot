@@ -42,8 +42,8 @@ export default function CustomConnectButton() {
                 type="button"
                 onClick={openChainModal}
                 className={cn(
-                  "h-9 rounded-none px-4 text-[14px] font-semibold transition-colors",
-                  "border border-secondary bg-secondary/20 text-secondary hover:bg-secondary/30",
+                  "retro-label h-11 rounded-none px-4 transition-colors",
+                  "border-[3px] border-border bg-destructive text-primary-foreground shadow-[3px_3px_0_0_var(--border)] hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-[1px_1px_0_0_var(--border)]",
                 )}
               >
                 Wrong network
@@ -56,9 +56,8 @@ export default function CustomConnectButton() {
                     type="button"
                     onClick={openChainModal}
                     className={cn(
-                      "inline-flex h-9 items-center gap-2 rounded-none px-3",
-                      "border border-border bg-background/80 text-[14px] font-medium text-text-primary",
-                      "hover:bg-surface-hover transition-colors",
+                      "inline-flex h-11 max-w-[240px] items-center gap-2 rounded-none px-3",
+                      "border-[3px] border-border bg-surface text-[14px] text-text-primary shadow-[3px_3px_0_0_var(--border)] transition-transform hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-[1px_1px_0_0_var(--border)]",
                     )}
                   >
                     {chain.hasIcon && (
@@ -81,8 +80,8 @@ export default function CustomConnectButton() {
                   /* Not connected: dimmed default chain chip */
                   <div
                     className={cn(
-                      "inline-flex h-9 items-center gap-2 rounded-none px-3",
-                      "border border-border/50 bg-background/50 text-[14px] font-medium text-text-muted",
+                      "inline-flex h-11 items-center gap-2 rounded-none px-3",
+                      "border-[3px] border-border bg-surface-alt text-[14px] text-text-muted shadow-[3px_3px_0_0_var(--border)]",
                       "select-none",
                     )}
                     aria-hidden="true"
@@ -107,9 +106,8 @@ export default function CustomConnectButton() {
                     type="button"
                     onClick={openAccountModal}
                     className={cn(
-                      "inline-flex h-9 items-center rounded-none px-3",
-                      "border border-border bg-background/80 text-[14px] font-mono text-text-primary",
-                      "hover:bg-surface-hover transition-colors",
+                      "retro-label inline-flex h-11 items-center rounded-none px-3 text-[1rem]",
+                      "border-[3px] border-border bg-secondary text-secondary-foreground shadow-[3px_3px_0_0_var(--border)] transition-transform hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-[1px_1px_0_0_var(--border)]",
                     )}
                   >
                     {account.displayName}
@@ -119,8 +117,8 @@ export default function CustomConnectButton() {
                     type="button"
                     onClick={openConnectModal}
                     className={cn(
-                      "h-9 rounded-none px-4 text-[14px] font-semibold transition-colors cursor-pointer",
-                      "border border-text-primary bg-text-primary text-white hover:bg-text-primary/90",
+                      "retro-label h-11 rounded-none px-4 text-[1rem] transition-transform cursor-pointer",
+                      "border-[3px] border-border bg-primary text-primary-foreground shadow-[3px_3px_0_0_var(--border)] hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-[1px_1px_0_0_var(--border)]",
                     )}
                   >
                     Connect

@@ -1,17 +1,18 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { Loader2 } from "lucide-react";
+import { useEffect, useState } from "react";
+import { type Address, parseUnits } from "viem";
 import {
   useAccount,
   useBalance,
-  useWriteContract,
   useWaitForTransactionReceipt,
+  useWriteContract,
 } from "wagmi";
-import { parseUnits, type Address } from "viem";
-import { cn, formatTokenAmount } from "@/lib/format";
-import { Loader2 } from "lucide-react";
+import { useUserVaultPosition } from "@/hooks/use-user-vault-position";
+import { ERC20_APPROVE_ABI, VAULT_ABI } from "@/lib/abi";
 import { CONTRACTS } from "@/lib/constants";
-import { VAULT_ABI, ERC20_APPROVE_ABI } from "@/lib/abi";
+import { cn, formatTokenAmount } from "@/lib/format";
 
 type Action = "deposit" | "withdraw";
 
@@ -47,6 +48,7 @@ export function VaultActions() {
   const [withdrawStep, setWithdrawStep] = useState<WithdrawStep>("idle");
 
   const { address, isConnected } = useAccount();
+  const { data: position } = useUserVaultPosition();
   const { data: balanceData } = useBalance({
     address,
     token: TEST_DOT_ADDRESS,
@@ -61,8 +63,9 @@ export function VaultActions() {
     error: approveError,
   } = useWriteContract();
 
-  const { isLoading: approveConfirming, isSuccess: approveConfirmed } =
-    useWaitForTransactionReceipt({ hash: approveTxHash });
+  const { isSuccess: approveConfirmed } = useWaitForTransactionReceipt({
+    hash: approveTxHash,
+  });
 
   // ── Deposit ─────────────────────────────────────────────────────────────
   const {
@@ -72,8 +75,9 @@ export function VaultActions() {
     error: depositError,
   } = useWriteContract();
 
-  const { isLoading: depositConfirming, isSuccess: depositConfirmed } =
-    useWaitForTransactionReceipt({ hash: depositTxHash });
+  const { isSuccess: depositConfirmed } = useWaitForTransactionReceipt({
+    hash: depositTxHash,
+  });
 
   // ── Withdraw ────────────────────────────────────────────────────────────
   const {
@@ -83,8 +87,9 @@ export function VaultActions() {
     error: withdrawError,
   } = useWriteContract();
 
-  const { isLoading: withdrawConfirming, isSuccess: withdrawConfirmed } =
-    useWaitForTransactionReceipt({ hash: withdrawTxHash });
+  const { isSuccess: withdrawConfirmed } = useWaitForTransactionReceipt({
+    hash: withdrawTxHash,
+  });
 
   // ── Deposit step machine ────────────────────────────────────────────────
   // approving → wallet opens → approve-confirming → wait on-chain → depositing → ...
@@ -148,7 +153,7 @@ export function VaultActions() {
     setDepositStep("idle");
     setWithdrawStep("idle");
     setAmount("");
-  }, [action]);
+  }, []);
 
   // ── Handlers ────────────────────────────────────────────────────────────
   const handleAmountChange = (raw: string) => {
@@ -164,15 +169,37 @@ export function VaultActions() {
         ),
       )
     : 0;
+  const withdrawableFormatted = position
+    ? Number(
+        formatTokenAmount(position.assetsValue.toString(), TOKEN_DECIMALS, 6),
+      )
+    : 0;
+  const availableFormatted =
+    action === "deposit" ? balanceFormatted : withdrawableFormatted;
+  const availableRaw =
+    action === "deposit"
+      ? (balanceData?.value ?? 0n)
+      : (position?.assetsValue ?? 0n);
 
   const handlePct = (fraction: number) => {
-    if (!isConnected || balanceFormatted <= 0) return;
-    const val = (balanceFormatted * fraction).toFixed(6).replace(/\.?0+$/, "");
+    if (!isConnected || availableFormatted <= 0) return;
+    const val = (availableFormatted * fraction)
+      .toFixed(6)
+      .replace(/\.?0+$/, "");
     setAmount(val);
   };
 
+  const exceedsAvailable = (() => {
+    if (!amount) return false;
+    try {
+      return parseUnits(amount, TOKEN_DECIMALS) > availableRaw;
+    } catch {
+      return true;
+    }
+  })();
+
   const handleSubmit = () => {
-    if (!amount || !address || !isConnected) return;
+    if (!amount || !address || !isConnected || exceedsAvailable) return;
 
     if (action === "deposit") {
       if (depositStep !== "idle" && depositStep !== "done") return;
@@ -244,28 +271,27 @@ export function VaultActions() {
     }
   };
 
-  const displayBalance =
-    isConnected && balanceData
-      ? `${formatTokenAmount(balanceData.value.toString(), balanceData.decimals, 4)} tDOT`
-      : "—";
+  const displayBalance = isConnected
+    ? `${formatTokenAmount(availableRaw.toString(), TOKEN_DECIMALS, 4)} tDOT`
+    : "—";
 
   return (
-    <div className="p-4">
+    <div className="bg-surface px-4 py-4">
       {/* Header */}
-      <h3 className="text-[13px] font-semibold text-text-primary mb-3">
+      <h3 className="retro-label mb-3 text-[1rem] text-text-primary">
         Vault Actions
       </h3>
 
       {/* Buy/Sell style tabs */}
-      <div className="flex gap-[1px] rounded-md overflow-hidden mb-4">
+      <div className="mb-4 flex gap-1">
         <button
           type="button"
           onClick={() => setAction("deposit")}
           className={cn(
-            "flex-1 py-2 text-[13px] font-bold font-mono transition-colors",
+            "retro-label flex-1 border-[3px] border-border py-2 text-[1rem] shadow-[3px_3px_0_0_var(--border)] transition-transform",
             action === "deposit"
               ? "bg-primary text-background"
-              : "bg-surface-hover text-text-muted hover:text-text-secondary",
+              : "bg-surface-alt text-text-muted hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-[1px_1px_0_0_var(--border)] hover:text-text-secondary",
           )}
         >
           DEPOSIT
@@ -274,10 +300,10 @@ export function VaultActions() {
           type="button"
           onClick={() => setAction("withdraw")}
           className={cn(
-            "flex-1 py-2 text-[13px] font-bold font-mono transition-colors",
+            "retro-label flex-1 border-[3px] border-border py-2 text-[1rem] shadow-[3px_3px_0_0_var(--border)] transition-transform",
             action === "withdraw"
               ? "bg-danger text-white"
-              : "bg-surface-hover text-text-muted hover:text-text-secondary",
+              : "bg-surface-alt text-text-muted hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-[1px_1px_0_0_var(--border)] hover:text-text-secondary",
           )}
         >
           WITHDRAW
@@ -286,7 +312,9 @@ export function VaultActions() {
 
       {/* Available balance */}
       <div className="flex items-center justify-between mb-2">
-        <span className="text-[11px] text-text-muted">Available Balance</span>
+        <span className="retro-label text-[0.8rem] text-text-muted">
+          {action === "deposit" ? "Wallet Balance" : "Withdrawable"}
+        </span>
         <span className="font-mono text-[12px] text-text-secondary">
           {displayBalance}
         </span>
@@ -321,6 +349,15 @@ export function VaultActions() {
           </button>
         ))}
       </div>
+
+      {exceedsAvailable && (
+        <div className="mb-3 border-[3px] border-danger bg-danger/10 px-3 py-2 shadow-[2px_2px_0_0_var(--border)]">
+          <p className="text-[11px] text-danger">
+            Amount exceeds the available{" "}
+            {action === "deposit" ? "wallet" : "withdrawable"} balance.
+          </p>
+        </div>
+      )}
 
       {/* Cost summary */}
       <div className="space-y-1.5 mb-4 pb-4 border-b border-border">
@@ -364,7 +401,7 @@ export function VaultActions() {
       {/* Submit button */}
       <button
         type="button"
-        disabled={!isConnected || !amount || loading}
+        disabled={!isConnected || !amount || loading || exceedsAvailable}
         onClick={handleSubmit}
         className={cn(action === "deposit" ? "btn-primary" : "btn-danger")}
       >

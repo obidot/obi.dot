@@ -1,20 +1,20 @@
 "use client";
 
-import { useState, useCallback, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
-import {
-  getIndexedVaultStats,
-  getIndexedSwapExecutions,
-  getIndexedDeposits,
-  type IndexedVaultStats,
-  type IndexedSwapExecution,
-  type IndexedDeposit,
-} from "@/lib/graphql";
-import {
-  useSwapSubscription,
-  type SwapEvent,
-} from "@/hooks/use-graphql-subscription";
+import { useCallback, useEffect, useState } from "react";
 import { formatUnits } from "viem";
+import {
+  type SwapEvent,
+  useSwapSubscription,
+} from "@/hooks/use-graphql-subscription";
+import {
+  getIndexedDeposits,
+  getIndexedSwapExecutions,
+  getIndexedVaultStats,
+  type IndexedDeposit,
+  type IndexedSwapExecution,
+  type IndexedVaultStats,
+} from "@/lib/graphql";
 
 export interface ProtocolActivityData {
   stats: IndexedVaultStats;
@@ -81,12 +81,11 @@ export function useProtocolActivity() {
   // Reset live counter each time the server data refreshes (prevents double-counting)
   useEffect(() => {
     setLiveSwapCount(0);
-  }, [stats]);
+  }, []);
 
-  const allSwaps = [
-    ...liveSwaps,
-    ...(recentSwaps ?? []),
-  ].filter((s, i, arr) => arr.findIndex((x) => x.id === s.id) === i);
+  const allSwaps = [...liveSwaps, ...(recentSwaps ?? [])].filter(
+    (s, i, arr) => arr.findIndex((x) => x.id === s.id) === i,
+  );
 
   const data: ProtocolActivityData | null =
     stats && recentSwaps

@@ -1,4 +1,4 @@
-import { http, createConfig } from "wagmi";
+import { createConfig, http } from "wagmi";
 import { polkadotHub, polkadotHubTestnet } from "./chains";
 
 export const wagmiConfig = createConfig({

@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useRef, useCallback, useState } from "react";
-import { createClient, type Client } from "graphql-ws";
+import { type Client, createClient } from "graphql-ws";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 // GraphQL WebSocket URL for obi.index subscriptions
 const GRAPHQL_WS_URL =
@@ -161,7 +161,9 @@ export type OracleUpdateEvent = {
   blockNumber: number;
 };
 
-export function useOracleSubscription(onUpdate: (o: OracleUpdateEvent) => void) {
+export function useOracleSubscription(
+  onUpdate: (o: OracleUpdateEvent) => void,
+) {
   return useGraphQLSubscription<OracleUpdateEvent>(
     `subscription { oracleUpdated { id feed price timestamp blockNumber } }`,
     onUpdate,
