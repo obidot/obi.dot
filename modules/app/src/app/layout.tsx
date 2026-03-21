@@ -32,6 +32,8 @@ export default function RootLayout({
   return (
     <html
       lang="en"
+      // Restore the previous palette by switching this to data-theme="retro-classic".
+      data-theme="obidot-polkadot"
       className={cn(
         "antialiased",
         atlasFont.className,
