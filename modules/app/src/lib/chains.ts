@@ -1,5 +1,4 @@
-import type { Chain } from "@rainbow-me/rainbowkit";
-import { defineChain } from "viem";
+import { type Chain, defineChain } from "viem";
 
 /** Polkadot Hub TestNet chain definition for wagmi/viem */
 export const polkadotHubTestnet: Chain = defineChain({

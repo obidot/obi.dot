@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { VT323 } from "next/font/google";
 import localFont from "next/font/local";
 import { ChatWidget } from "@/components/chat/chat-widget";
-import Navbar from "@/components/layout/navbar";
+import { AppFrame } from "@/components/layout/app-frame";
 import "./globals.css";
 import { cn } from "@/lib/utils";
 import Providers from "./providers";
@@ -23,6 +23,8 @@ export const metadata: Metadata = {
   description: "",
   icons: { icon: "/images/logo.png" },
 };
+
+export const dynamic = "force-dynamic";
 
 export default function RootLayout({
   children,
@@ -46,15 +48,7 @@ export default function RootLayout({
           Skip to content
         </a>
         <Providers>
-          <div className="flex min-h-screen flex-col">
-            <Navbar />
-            <main
-              id="main-content"
-              className="mx-auto flex w-full max-w-[1600px] flex-1 px-4 py-5 lg:px-6 lg:py-6"
-            >
-              {children}
-            </main>
-          </div>
+          <AppFrame>{children}</AppFrame>
           <ChatWidget />
         </Providers>
       </body>

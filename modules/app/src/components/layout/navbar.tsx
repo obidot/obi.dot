@@ -1,23 +1,20 @@
 "use client";
 
+import { ChevronDownIcon } from "lucide-react";
+import dynamic from "next/dynamic";
 import Image from "next/image";
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname } from "next/navigation";
 import { useAccount, useChainId } from "wagmi";
-import {
-  NavigationMenu,
-  NavigationMenuContent,
-  NavigationMenuItem,
-  NavigationMenuLink,
-  NavigationMenuList,
-  NavigationMenuTrigger,
-} from "@/components/ui/navigation-menu";
 import { useYields } from "@/hooks/use-yields";
 import { cn } from "@/lib/format";
 import { NAV_ITEMS, type NavItem } from "@/shared/navbar";
 import { isTradeActionType } from "@/shared/trade";
 import type { TradeActionType } from "@/types";
-import CustomConnectButton from "./custom-connect-button";
+
+const CustomConnectButton = dynamic(() => import("./custom-connect-button"), {
+  ssr: false,
+});
 
 function toChainSlug(value: string): string {
   return value.trim().toLowerCase().replace(/\s+/g, "-");
@@ -25,7 +22,6 @@ function toChainSlug(value: string): string {
 
 export default function Navbar() {
   const pathname = usePathname();
-  const router = useRouter();
   const { chain } = useAccount();
   const { data: yields } = useYields();
   const chainId = useChainId();
@@ -55,11 +51,11 @@ export default function Navbar() {
       : item.href;
 
   return (
-    <header className="sticky top-0 z-50 border-b-[3px] border-border bg-background/95 backdrop-blur-sm">
+    <header className="sticky top-0 z-50 border-b-[3px] border-border bg-background shadow-[0_3px_0_0_var(--border)]">
       <div className="mx-auto flex w-full max-w-[1600px] flex-col gap-3 px-4 py-3 lg:px-6">
         <nav
           aria-label="Main navigation"
-          className="flex min-h-14 items-center gap-3"
+          className="relative z-30 flex min-h-14 items-center gap-3"
         >
           <Link
             href="/swap/polkadot-hub-testnet"
@@ -89,69 +85,85 @@ export default function Navbar() {
 
           <div className="hidden h-10 w-px shrink-0 bg-border/30 lg:block" />
 
-          <NavigationMenu className="hidden self-stretch items-stretch lg:flex">
-            <NavigationMenuList className="h-full gap-0">
-              {NAV_ITEMS.filter(
-                (item) =>
-                  item.visibleOnChainId === undefined ||
-                  item.visibleOnChainId === chainId,
-              ).map((item) => {
-                const href = resolveHref(item);
-                const isTradeItem = item.label === "Trade";
-                const isActive = isTradeItem
-                  ? isTradeRoute
-                  : pathname === href ||
-                    (href !== "/" && pathname.startsWith(href));
+          <ul className="relative z-40 hidden min-h-10 items-center gap-1 lg:flex">
+            {NAV_ITEMS.filter(
+              (item) =>
+                item.visibleOnChainId === undefined ||
+                item.visibleOnChainId === chainId,
+            ).map((item) => {
+              const href = resolveHref(item);
+              const isTradeItem = item.label === "Trade";
+              const isActive = isTradeItem
+                ? isTradeRoute
+                : pathname === href ||
+                  (href !== "/" && pathname.startsWith(href));
 
-                const linkClass = cn(
-                  "retro-label flex min-h-10 items-center px-3 py-1.5 text-[1rem] transition-colors duration-150 select-none rounded-none",
-                  isActive
-                    ? "border-[3px] border-border bg-primary text-text-primary shadow-[2px_2px_0_0_var(--border)]"
-                    : "border-[3px] border-transparent bg-transparent text-text-secondary hover:border-border/35 hover:bg-surface hover:text-text-primary",
-                );
+              const linkClass = cn(
+                "retro-label flex min-h-10 items-center px-3 py-1.5 text-[1rem] transition-colors duration-150 select-none rounded-none",
+                isActive
+                  ? "border-[3px] border-border bg-primary text-text-primary shadow-[2px_2px_0_0_var(--border)]"
+                  : "border-[3px] border-transparent bg-transparent text-text-secondary hover:border-border/35 hover:bg-surface hover:text-text-primary",
+              );
 
-                if (item.children?.length) {
-                  return (
-                    <NavigationMenuItem key={item.label}>
-                      <NavigationMenuTrigger
-                        onClick={() => router.push(href)}
-                        className={cn(linkClass)}
+              if (item.children?.length) {
+                return (
+                  <li key={item.label} className="group/trade relative">
+                    <Link
+                      href={href}
+                      aria-current={isActive ? "page" : undefined}
+                      className={cn(linkClass, "gap-1.5 pr-2")}
+                    >
+                      <span>{item.label}</span>
+                      <ChevronDownIcon
+                        className="size-3 transition-transform duration-150 group-hover/trade:rotate-180 group-focus-within/trade:rotate-180"
+                        aria-hidden="true"
+                      />
+                    </Link>
+
+                    <div
+                      className={cn(
+                        "pointer-events-none invisible absolute left-0 top-full z-[120] mt-2 w-[230px] opacity-0 transition-all duration-150",
+                        "group-hover/trade:pointer-events-auto group-hover/trade:visible group-hover/trade:opacity-100",
+                        "group-focus-within/trade:pointer-events-auto group-focus-within/trade:visible group-focus-within/trade:opacity-100",
+                      )}
+                    >
+                      <div
+                        className="isolate border-[3px] border-border p-2 shadow-[4px_4px_0_0_var(--border)]"
+                        style={{ backgroundColor: "var(--popover)" }}
                       >
-                        {item.label}
-                      </NavigationMenuTrigger>
-                      <NavigationMenuContent>
-                        <ul className="w-56 space-y-1 border-[3px] border-border bg-popover p-2 shadow-[4px_4px_0_0_var(--border)]">
+                        <ul className="space-y-1">
                           {item.children.map((child) => (
-                            <ListItem
-                              key={child.label}
-                              href={resolveHref(child)}
-                              title={child.label}
-                            />
+                            <li key={child.label}>
+                              <Link
+                                href={resolveHref(child)}
+                                className="retro-label block border-[2px] border-transparent px-3 py-2 text-[0.95rem] text-text-secondary rounded-none transition-colors hover:border-border/35 hover:bg-surface-hover hover:text-text-primary"
+                              >
+                                {child.label}
+                              </Link>
+                            </li>
                           ))}
                         </ul>
-                      </NavigationMenuContent>
-                    </NavigationMenuItem>
-                  );
-                }
-
-                return (
-                  <NavigationMenuItem key={item.label}>
-                    <NavigationMenuLink asChild>
-                      <Link
-                        href={href}
-                        aria-current={isActive ? "page" : undefined}
-                        className={linkClass}
-                      >
-                        {item.label}
-                      </Link>
-                    </NavigationMenuLink>
-                  </NavigationMenuItem>
+                      </div>
+                    </div>
+                  </li>
                 );
-              })}
-            </NavigationMenuList>
-          </NavigationMenu>
+              }
 
-          <div className="ml-auto flex items-center gap-2 shrink-0">
+              return (
+                <li key={item.label}>
+                  <Link
+                    href={href}
+                    aria-current={isActive ? "page" : undefined}
+                    className={linkClass}
+                  >
+                    {item.label}
+                  </Link>
+                </li>
+              );
+            })}
+          </ul>
+
+          <div className="ml-auto flex shrink-0 items-center gap-2">
             <div className="hidden items-center gap-2 md:flex">
               <span className="pill bg-accent text-accent-foreground">
                 Live
@@ -165,7 +177,7 @@ export default function Navbar() {
         </nav>
 
         <section
-          className="panel flex h-10 items-center overflow-hidden border-[3px] border-border bg-surface/90 px-0"
+          className="panel relative z-10 flex h-10 items-center overflow-hidden border-[3px] border-border bg-surface px-0"
           aria-label="Live yield ticker"
         >
           {tickerItems.length > 0 ? (
@@ -207,24 +219,5 @@ export default function Navbar() {
         </section>
       </div>
     </header>
-  );
-}
-
-function ListItem({
-  title,
-  href,
-  ...props
-}: React.ComponentPropsWithoutRef<"li"> & { href: string; title: string }) {
-  return (
-    <li {...props}>
-      <NavigationMenuLink asChild>
-        <Link
-          href={href}
-          className="retro-label block border-[2px] border-transparent px-3 py-2 text-[0.95rem] text-text-secondary rounded-none transition-colors hover:border-border/35 hover:bg-surface-hover hover:text-text-primary"
-        >
-          {title}
-        </Link>
-      </NavigationMenuLink>
-    </li>
   );
 }

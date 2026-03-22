@@ -2,15 +2,13 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { RefreshCw } from "lucide-react";
+import dynamic from "next/dynamic";
 import { useRef, useState } from "react";
 import { formatUnits } from "viem";
 import { HealthIndicators } from "@/components/dashboard/health-indicators";
 import { PnlChart } from "@/components/dashboard/pnl-chart";
 import { QuickStats } from "@/components/dashboard/quick-stats";
-import { UserPosition } from "@/components/dashboard/user-position";
-import { VaultActions } from "@/components/dashboard/vault-actions";
 import { VaultOverview } from "@/components/dashboard/vault-overview";
-import { LiquidityPanel } from "@/components/liquidity/liquidity-panel";
 import { YieldGrid } from "@/components/yields/yield-grid";
 import {
   useBifrostYields,
@@ -24,6 +22,30 @@ import {
   type IndexedSwapExecution,
 } from "@/lib/graphql";
 import type { LiquidityPairMeta } from "@/types";
+
+const VaultActions = dynamic(
+  () =>
+    import("@/components/dashboard/vault-actions").then(
+      (mod) => mod.VaultActions,
+    ),
+  { ssr: false },
+);
+
+const UserPosition = dynamic(
+  () =>
+    import("@/components/dashboard/user-position").then(
+      (mod) => mod.UserPosition,
+    ),
+  { ssr: false },
+);
+
+const LiquidityPanel = dynamic(
+  () =>
+    import("@/components/liquidity/liquidity-panel").then(
+      (mod) => mod.LiquidityPanel,
+    ),
+  { ssr: false },
+);
 
 /** Simple relative-time formatter — no external dependency needed */
 function timeAgo(isoTimestamp: string): string {
