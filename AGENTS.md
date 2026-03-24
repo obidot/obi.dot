@@ -25,6 +25,7 @@ Monorepo: pnpm workspaces + Turborepo. See sub-package AGENTS.md files for detai
 # Root-level (delegates via turbo)
 pnpm build                        # Build all packages
 pnpm test                         # Run all tests
+pnpm typecheck                    # Type-check all workspace packages, including docs
 
 # Agent module
 pnpm --filter @obidot/agent run typecheck
@@ -34,6 +35,10 @@ pnpm --filter @obidot/agent run dev       # Dev mode (tsx watch)
 # App module
 pnpm --filter @obidot/app run dev         # Dev mode (Next.js + Turbopack, port 3010)
 pnpm --filter @obidot/app run build       # Production build
+
+# Docs module
+pnpm --filter docs run dev                # Dev mode (Next.js docs, port 4010)
+pnpm --filter docs run typecheck          # Generate MDX types + TypeScript check
 
 # Contracts (run from obi.router repo)
 # See https://github.com/obidot/obi.router

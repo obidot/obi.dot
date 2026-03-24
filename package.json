@@ -29,7 +29,13 @@
     "app:start": "pnpm --filter @obidot/app run start",
     "app:typecheck": "pnpm --filter @obidot/app run typecheck",
     "app:lint": "pnpm --filter @obidot/app run lint",
-    "app:format": "pnpm --filter @obidot/app run format"
+    "app:format": "pnpm --filter @obidot/app run format",
+
+    "docs:dev": "pnpm --filter docs run dev",
+    "docs:build": "pnpm --filter docs run build",
+    "docs:typecheck": "pnpm --filter docs run typecheck",
+    "docs:lint": "pnpm --filter docs run lint",
+    "docs:format": "pnpm --filter docs run format"
   },
   "devDependencies": {
     "turbo": "^2.5.0"
