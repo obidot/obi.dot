@@ -22,7 +22,8 @@ pnpm dev
 pnpm build
 
 # Type checking (generates MDX types and runs TypeScript compiler)
-pnpm types:check
+pnpm typecheck
+pnpm types:check   # legacy alias
 
 # Linting
 pnpm lint
@@ -100,7 +101,7 @@ Each directory:
 When adding new pages:
 1. Create `.mdx` file in appropriate content directory
 2. Update corresponding `meta.json` if changing navigation
-3. Run `pnpm types:check` to regenerate types
+3. Run `pnpm typecheck` to regenerate types
 4. The page will automatically be available at the route matching the file path
 
 ## Linting and Formatting

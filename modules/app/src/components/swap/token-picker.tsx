@@ -1,11 +1,47 @@
 "use client";
 
-import { Check, ChevronDown } from "lucide-react";
-import type { CSSProperties } from "react";
-import { useCallback, useEffect, useId, useRef, useState } from "react";
-import { createPortal } from "react-dom";
+import { Check, ChevronDown, Search } from "lucide-react";
+import { useState } from "react";
+import { AssetIcon } from "@/components/ui/asset-icon";
+import { ResponsiveModal } from "@/components/ui/responsive-modal";
+import { resolveTokenAssetId } from "@/lib/asset-registry";
 import { cn } from "@/lib/format";
 import { TOKENS, tokenColor } from "@/shared/trade/swap";
+
+function TokenVisual({
+  symbol,
+  size = "default",
+}: {
+  symbol: string;
+  size?: "default" | "compact";
+}) {
+  const assetId = resolveTokenAssetId(symbol);
+  const colors = tokenColor(symbol);
+
+  if (assetId) {
+    return (
+      <AssetIcon
+        assetId={assetId}
+        size={size === "compact" ? "sm" : "md"}
+        variant="tile"
+        className="h-8 w-8 rounded-full bg-surface border-[2px] shadow-[2px_2px_0_0_var(--border)]"
+        imageClassName="p-1"
+      />
+    );
+  }
+
+  return (
+    <span
+      className={cn(
+        "flex h-8 w-8 shrink-0 items-center justify-center rounded-full border-2 border-border text-[13px] font-bold",
+        colors.circle,
+        colors.text,
+      )}
+    >
+      {symbol.slice(0, 2)}
+    </span>
+  );
+}
 
 interface TokenPickerProps {
   selectedIdx: number;
@@ -14,9 +50,6 @@ interface TokenPickerProps {
   label?: string;
 }
 
-const MENU_GUTTER = 12;
-const MENU_MIN_WIDTH = 220;
-
 export default function TokenPicker({
   selectedIdx,
   onSelect,
@@ -24,186 +57,119 @@ export default function TokenPicker({
   label = "Select token",
 }: TokenPickerProps) {
   const [open, setOpen] = useState(false);
-  const [dropdownStyle, setDropdownStyle] = useState<CSSProperties>({});
-  const buttonRef = useRef<HTMLButtonElement>(null);
-  const dropdownRef = useRef<HTMLDivElement>(null);
-  const listboxId = useId();
+  const [search, setSearch] = useState("");
   const token = TOKENS[selectedIdx];
-  const colors = tokenColor(token.symbol);
 
-  const updateDropdownPosition = useCallback(() => {
-    if (!buttonRef.current) return;
+  const filtered = search.trim()
+    ? TOKENS.filter(
+        (t) =>
+          t.symbol.toLowerCase().includes(search.toLowerCase()) ||
+          t.name.toLowerCase().includes(search.toLowerCase()),
+      )
+    : TOKENS;
 
-    const rect = buttonRef.current.getBoundingClientRect();
-    const viewportHeight = window.innerHeight;
-    const viewportWidth = window.innerWidth;
-    const width = Math.max(rect.width, MENU_MIN_WIDTH);
-    const estimatedDropdownHeight = TOKENS.length * 58;
-    const spaceBelow = viewportHeight - rect.bottom;
-    const openAbove =
-      spaceBelow < estimatedDropdownHeight &&
-      rect.top > estimatedDropdownHeight;
-    const left = Math.min(
-      Math.max(MENU_GUTTER, rect.left),
-      viewportWidth - width - MENU_GUTTER,
-    );
-
-    setDropdownStyle({
-      position: "fixed",
-      left,
-      width,
-      zIndex: 9999,
-      ...(openAbove
-        ? { bottom: viewportHeight - rect.top + 6 }
-        : { top: rect.bottom + 6 }),
-    });
-  }, []);
-
-  useEffect(() => {
-    if (!open) return;
-
-    updateDropdownPosition();
-
-    function handleOutside(e: MouseEvent) {
-      if (
-        buttonRef.current?.contains(e.target as Node) ||
-        dropdownRef.current?.contains(e.target as Node)
-      ) {
-        return;
-      }
-      setOpen(false);
-    }
-
-    function handleEscape(e: KeyboardEvent) {
-      if (e.key === "Escape") {
-        setOpen(false);
-        buttonRef.current?.focus();
-      }
-    }
-
-    function handleReposition() {
-      updateDropdownPosition();
-    }
-
-    document.addEventListener("mousedown", handleOutside);
-    document.addEventListener("keydown", handleEscape);
-    window.addEventListener("resize", handleReposition, { passive: true });
-    window.addEventListener("scroll", handleReposition, {
-      passive: true,
-      capture: true,
-    });
-
-    return () => {
-      document.removeEventListener("mousedown", handleOutside);
-      document.removeEventListener("keydown", handleEscape);
-      window.removeEventListener("resize", handleReposition);
-      window.removeEventListener("scroll", handleReposition, {
-        capture: true,
-      });
-    };
-  }, [open, updateDropdownPosition]);
-
-  const dropdown =
-    open &&
-    typeof document !== "undefined" &&
-    createPortal(
-      <div
-        ref={dropdownRef}
-        id={listboxId}
-        role="listbox"
-        aria-label={label}
-        style={dropdownStyle}
-        className="max-h-[320px] overflow-y-auto border-[3px] border-border bg-popover shadow-[6px_6px_0_0_var(--border)]"
-      >
-        {TOKENS.map((item, idx) => {
-          const optionColors = tokenColor(item.symbol);
-          const isSelected = idx === selectedIdx;
-          const isDisabled = idx === disabledIdx;
-
-          return (
-            <button
-              key={item.address}
-              type="button"
-              role="option"
-              aria-selected={isSelected}
-              disabled={isDisabled}
-              onClick={() => {
-                if (isDisabled) return;
-                onSelect(idx);
-                setOpen(false);
-                buttonRef.current?.focus();
-              }}
-              className={cn(
-                "flex w-full items-center gap-3 border-b border-border-subtle px-3 py-3 text-left transition-colors last:border-b-0",
-                isSelected
-                  ? "bg-primary/14"
-                  : "bg-popover hover:bg-surface-hover",
-                isDisabled && "cursor-not-allowed opacity-45",
-              )}
-            >
-              <span
-                className={cn(
-                  "flex h-8 w-8 shrink-0 items-center justify-center rounded-full border-2 border-border text-[13px] font-bold",
-                  optionColors.circle,
-                  optionColors.text,
-                )}
-              >
-                {item.symbol.slice(0, 2)}
-              </span>
-              <div className="min-w-0 flex-1">
-                <p className="font-mono text-[14px] font-semibold text-text-primary">
-                  {item.symbol}
-                </p>
-                <p className="text-[12px] text-text-muted truncate">
-                  {item.name}
-                </p>
-              </div>
-              {isSelected && (
-                <Check className="h-4 w-4 shrink-0 text-primary" />
-              )}
-            </button>
-          );
-        })}
-      </div>,
-      document.body,
-    );
+  function handleClose() {
+    setOpen(false);
+    setSearch("");
+  }
 
   return (
-    <div className="relative">
+    <div>
       <button
-        ref={buttonRef}
         type="button"
         aria-label={label}
-        aria-haspopup="listbox"
-        aria-expanded={open}
-        aria-controls={listboxId}
-        onClick={() => setOpen((v) => !v)}
+        aria-haspopup="dialog"
+        onClick={() => {
+          setSearch("");
+          setOpen(true);
+        }}
         className={cn(
           "inline-flex min-w-[128px] items-center gap-2 border-[3px] border-border bg-surface px-3 py-2 shadow-[3px_3px_0_0_var(--border)] transition",
           "hover:bg-surface-hover hover:translate-x-[1px] hover:translate-y-[1px] hover:shadow-[2px_2px_0_0_var(--border)]",
         )}
       >
-        <span
-          className={cn(
-            "flex h-8 w-8 shrink-0 items-center justify-center rounded-full border-2 border-border text-[13px] font-bold",
-            colors.circle,
-            colors.text,
-          )}
-        >
-          {token.symbol.slice(0, 2)}
-        </span>
+        <TokenVisual symbol={token.symbol} />
         <span className="flex-1 text-left font-mono text-[15px] font-semibold text-text-primary">
           {token.symbol}
         </span>
-        <ChevronDown
-          className={cn(
-            "h-4 w-4 shrink-0 text-text-muted transition-transform duration-150",
-            open && "rotate-180",
-          )}
-        />
+        <ChevronDown className="h-4 w-4 shrink-0 text-text-muted" />
       </button>
 
-      {dropdown}
+      <ResponsiveModal
+        open={open}
+        onOpenChange={(v) => {
+          if (!v) handleClose();
+          else setOpen(true);
+        }}
+        title={label}
+      >
+        {/* Search */}
+        <div className="border-b-[3px] border-border p-3">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-text-muted" />
+            <input
+              // biome-ignore lint/a11y/noAutofocus: intentional focus for modal search
+              autoFocus
+              type="text"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search tokens..."
+              aria-label="Search tokens"
+              className="input-trading py-2 pl-9 pr-3 text-sm"
+            />
+          </div>
+        </div>
+
+        {/* Token list */}
+        <div role="listbox" aria-label={label}>
+          {filtered.map((item) => {
+            const idx = TOKENS.indexOf(item);
+            const isSelected = idx === selectedIdx;
+            const isDisabled = idx === disabledIdx;
+
+            return (
+              <button
+                key={item.address}
+                type="button"
+                role="option"
+                aria-selected={isSelected}
+                disabled={isDisabled}
+                onClick={() => {
+                  if (isDisabled) return;
+                  onSelect(idx);
+                  handleClose();
+                }}
+                className={cn(
+                  "flex w-full items-center gap-3 border-b border-border-subtle px-3 py-3 text-left transition-colors last:border-b-0",
+                  isSelected
+                    ? "bg-primary/14"
+                    : "bg-popover hover:bg-surface-hover",
+                  isDisabled && "cursor-not-allowed opacity-45",
+                )}
+              >
+                <TokenVisual symbol={item.symbol} size="compact" />
+                <div className="min-w-0 flex-1">
+                  <p className="font-mono text-[14px] font-semibold text-text-primary">
+                    {item.symbol}
+                  </p>
+                  <p className="truncate text-[12px] text-text-muted">
+                    {item.name}
+                  </p>
+                </div>
+                {isSelected && (
+                  <Check className="h-4 w-4 shrink-0 text-primary" />
+                )}
+              </button>
+            );
+          })}
+
+          {filtered.length === 0 && (
+            <p className="px-4 py-6 text-center text-[13px] text-text-muted">
+              No tokens match "{search}"
+            </p>
+          )}
+        </div>
+      </ResponsiveModal>
     </div>
   );
 }

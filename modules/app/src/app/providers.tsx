@@ -7,10 +7,10 @@ import { wagmiConfig } from "@/lib/wagmi";
 
 export default function Providers({ children }: { children: ReactNode }) {
   return (
-    <WagmiProvider config={wagmiConfig}>
-      <QueryProvider>
+    <QueryProvider>
+      <WagmiProvider config={wagmiConfig}>
         <RainbowKitClientProvider>{children}</RainbowKitClientProvider>
-      </QueryProvider>
-    </WagmiProvider>
+      </WagmiProvider>
+    </QueryProvider>
   );
 }
