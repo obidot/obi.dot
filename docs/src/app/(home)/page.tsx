@@ -63,7 +63,7 @@ export default function HomePage() {
             />
             <FeatureCard
               title="AI Agent (Sub-Feature)"
-              description="An off-chain LangChain/GPT-4o agent signs EIP-712 strategy intents for automated multi-hop execution. Anyone can relay valid signed intents on-chain — no special permissions needed."
+              description="An off-chain LangChain agent signs EIP-712 strategy intents for automated multi-hop execution. Interactive surfaces use the configured LLM provider, and the browser-exposed HTTP chat remains read-only."
             />
           </div>
         </div>

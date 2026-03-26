@@ -475,7 +475,7 @@ The `executeStrategy()` function encodes the destination from the intent's `targ
 
 ## AssetHub Teleport (Testnet Proof)
 
-The `E2EAssetHubXcm.s.sol` script (`script/E2EAssetHubXcm.s.sol`) demonstrates a **V5 XCM InitiateTeleport** from Polkadot Hub to AssetHub (parachain 1000) dispatched directly from an admin EOA via the XCM precompile. AssetHub is the only Paseo testnet parachain with a confirmed open HRMP channel and live relay-native PAS token.
+The `E2EAssetHubXcm.s.sol` script (`script/E2EAssetHubXcm.s.sol`) demonstrates a **V5 XCM InitiateTeleport** from Polkadot Hub to AssetHub (parachain 1000) dispatched directly from an admin EOA via the XCM precompile. AssetHub is the only currently documented Polkadot Hub TestNet parachain in this repo with a confirmed open HRMP channel and live relay-native test asset flow.
 
 ### AssetHubTeleportEncoder Library
 
@@ -525,5 +525,5 @@ The script runs in three phases:
 
 - Teleport amount: `1e8` planck = 0.01 PAS (10-decimal native token)
 - Beneficiary: admin EOA address zero-padded to 32 bytes (acceptable for testnet proof)
-- `weighMessage()` may fail for teleport messages on Paseo — `skipWeightCheck` is enabled for testnet
-- Hydration/Bifrost XCM adapters are correct for mainnet but cannot be tested on Paseo (no Omnipool liquidity on Hydration Paseo testnet)
+- `weighMessage()` may fail for teleport messages on Polkadot Hub TestNet — `skipWeightCheck` is enabled for testnet
+- Hydration/Bifrost XCM adapters are correct for mainnet but cannot be fully tested on the current Polkadot Hub TestNet setup
