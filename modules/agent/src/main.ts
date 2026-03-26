@@ -1,4 +1,5 @@
 import { AutonomousLoop } from "./agent/loop.js";
+import { createReadOnlyObidotTools } from "./agent/tools.js";
 import { startApiServer } from "./api/server.js";
 import { env } from "./config/env.js";
 import { startTelegramBot } from "./telegram/bot.js";
@@ -19,6 +20,12 @@ async function main(): Promise<void> {
   const loop = new AutonomousLoop();
   const tools = loop.getTools();
   const services = loop.getServices();
+  const chatTools = createReadOnlyObidotTools(
+    services.signerService,
+    services.yieldService,
+    services.crossChainService,
+    services.swapRouterService,
+  );
 
   // ── API Server ─────────────────────────────────────────────────────────
   try {
@@ -27,7 +34,7 @@ async function main(): Promise<void> {
       yieldService: services.yieldService,
       crossChainService: services.crossChainService,
       swapRouterService: services.swapRouterService,
-      tools,
+      chatTools,
     });
   } catch (error) {
     logger.error(

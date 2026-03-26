@@ -71,8 +71,20 @@ const envSchema = z.object({
     .enum(["fatal", "error", "warn", "info", "debug", "trace"])
     .default("info"),
 
-  /** API host binding. Use 0.0.0.0 to expose on LAN/local docker. */
-  API_HOST: z.string().min(1).default("0.0.0.0"),
+  /** API host binding. Override to 0.0.0.0 only when remote access is intentional. */
+  API_HOST: z.string().min(1).default("127.0.0.1"),
+
+  /** Comma-separated browser origins allowed to call the API from local surfaces. */
+  API_ALLOWED_ORIGINS: z
+    .string()
+    .default(
+      [
+        "http://localhost:3010",
+        "http://127.0.0.1:3010",
+        "http://localhost:4010",
+        "http://127.0.0.1:4010",
+      ].join(","),
+    ),
 
   /** Preferred API listening port. */
   API_PORT: z
