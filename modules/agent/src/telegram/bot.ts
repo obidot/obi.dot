@@ -5,8 +5,8 @@ import {
   ToolMessage,
 } from "@langchain/core/messages";
 import type { StructuredToolInterface } from "@langchain/core/tools";
-import { ChatOpenAI } from "@langchain/openai";
 import { Bot } from "grammy";
+import { createLlm } from "../agent/llm.js";
 import { VAULT_ADDRESS } from "../config/constants.js";
 import { env } from "../config/env.js";
 import { logger } from "../utils/logger.js";
@@ -73,14 +73,16 @@ interface AgentRunner {
  * (e.g. a deposit amount/address the user confirmed earlier in the session).
  * Each user gets an independent history capped at MAX_HISTORY_TURNS pairs.
  */
-function createAgentRunner(tools: StructuredToolInterface[]): AgentRunner {
-  const model = new ChatOpenAI({
-    model: "gpt-5-mini",
-    apiKey: env.OPENAI_API_KEY,
-    temperature: 1,
-  });
-
-  const boundModel = tools.length > 0 ? model.bindTools(tools) : model;
+async function createAgentRunner(
+  tools: StructuredToolInterface[],
+): Promise<AgentRunner> {
+  const model = await createLlm();
+  const boundModel =
+    tools.length > 0 &&
+    "bindTools" in model &&
+    typeof model.bindTools === "function"
+      ? model.bindTools(tools)
+      : model;
 
   const toolMap = new Map<string, StructuredToolInterface>();
   for (const tool of tools) {
@@ -236,7 +238,9 @@ function splitMessage(text: string): string[] {
  *   autonomous agent so users can invoke the same capabilities via chat).
  * @returns The Grammy Bot instance (for lifecycle management).
  */
-export function createTelegramBot(tools: StructuredToolInterface[]): Bot {
+export async function createTelegramBot(
+  tools: StructuredToolInterface[],
+): Promise<Bot> {
   const token = env.TELEGRAM_BOT_TOKEN;
   if (!token) {
     throw new Error("TELEGRAM_BOT_TOKEN is required to start the Telegram bot");
@@ -246,7 +250,7 @@ export function createTelegramBot(tools: StructuredToolInterface[]): Bot {
   // exclude execute_local_swap — it's the vault-path tool (requires SOLVER_ROLE +
   // signed StrategyIntent). Telegram users should use execute_direct_swap instead.
   const botTools = tools.filter((t) => t.name !== "execute_local_swap");
-  const agent = createAgentRunner(botTools);
+  const agent = await createAgentRunner(botTools);
 
   // ── /start Command ─────────────────────────────────────────────────
 
@@ -350,7 +354,7 @@ export function createTelegramBot(tools: StructuredToolInterface[]): Bot {
 export async function startTelegramBot(
   tools: StructuredToolInterface[],
 ): Promise<Bot> {
-  const bot = createTelegramBot(tools);
+  const bot = await createTelegramBot(tools);
 
   await bot.start({
     onStart: () => {

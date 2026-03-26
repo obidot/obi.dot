@@ -1,7 +1,7 @@
 import cors from "@fastify/cors";
 import websocket from "@fastify/websocket";
 import type { StructuredToolInterface } from "@langchain/core/tools";
-import Fastify from "fastify";
+import Fastify, { type FastifyInstance } from "fastify";
 import { env } from "../config/env.js";
 import type { CrossChainService } from "../services/crosschain.service.js";
 import { eventBus } from "../services/event-bus.service.js";
@@ -9,7 +9,7 @@ import type { SignerService } from "../services/signer.service.js";
 import type { SwapRouterService } from "../services/swap-router.service.js";
 import type { YieldService } from "../services/yield.service.js";
 import { logger } from "../utils/logger.js";
-import { registerAgentRoutes } from "./routes/agent.js";
+import { type ChatModelFactory, registerAgentRoutes } from "./routes/agent.js";
 import { registerCrossChainRoutes } from "./routes/crosschain.js";
 import { registerStrategyRoutes } from "./routes/strategies.js";
 import { registerSwapRoutes } from "./routes/swap.js";
@@ -21,6 +21,9 @@ const apiLog = logger.child({ module: "api" });
 const API_PORT = env.API_PORT;
 const API_HOST = env.API_HOST;
 const API_PORT_MAX_TRIES = env.API_PORT_MAX_TRIES;
+const API_ALLOWED_ORIGINS = env.API_ALLOWED_ORIGINS.split(",")
+  .map((origin) => origin.trim())
+  .filter(Boolean);
 
 interface ListenError extends Error {
   code?: string;
@@ -41,18 +44,31 @@ export interface ApiDependencies {
   yieldService: YieldService;
   crossChainService: CrossChainService;
   swapRouterService: SwapRouterService;
-  tools: StructuredToolInterface[];
+  chatTools: StructuredToolInterface[];
+  createChatModel?: ChatModelFactory;
+}
+
+function isAllowedOrigin(origin: string | undefined): boolean {
+  if (!origin) {
+    return true;
+  }
+
+  return API_ALLOWED_ORIGINS.includes(origin);
 }
 
 /**
- * Creates and starts the Fastify API server with HTTP routes and WebSocket.
+ * Builds the Fastify API server with HTTP routes and WebSocket support.
  */
-export async function startApiServer(deps: ApiDependencies): Promise<void> {
+export async function createApiServer(
+  deps: ApiDependencies,
+): Promise<FastifyInstance> {
   const app = Fastify({ logger: false });
 
   // ── Plugins ────────────────────────────────────────────────────────
   await app.register(cors, {
-    origin: true,
+    origin(origin, callback) {
+      callback(null, isAllowedOrigin(origin));
+    },
     methods: ["GET", "POST", "OPTIONS"],
     credentials: true,
   });
@@ -71,7 +87,7 @@ export async function startApiServer(deps: ApiDependencies): Promise<void> {
   registerYieldRoutes(app, deps.yieldService);
   registerStrategyRoutes(app);
   registerCrossChainRoutes(app, deps.crossChainService, deps.signerService);
-  registerAgentRoutes(app, deps.tools);
+  registerAgentRoutes(app, deps.chatTools, deps.createChatModel);
   registerSwapRoutes(app, deps.swapRouterService);
 
   // ── WebSocket ──────────────────────────────────────────────────────
@@ -99,6 +115,15 @@ export async function startApiServer(deps: ApiDependencies): Promise<void> {
       });
     });
   });
+
+  return app;
+}
+
+/**
+ * Creates and starts the Fastify API server with HTTP routes and WebSocket.
+ */
+export async function startApiServer(deps: ApiDependencies): Promise<void> {
+  const app = await createApiServer(deps);
 
   // ── Start ──────────────────────────────────────────────────────────
   try {
