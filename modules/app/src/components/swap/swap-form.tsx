@@ -25,7 +25,6 @@ import {
   CHAIN,
   CONTRACTS,
   GAS_LIMITS,
-  SLIPPAGE_OPTIONS,
   ZERO_ADDRESS,
   ZERO_BYTES32,
 } from "@/lib/constants";
@@ -48,6 +47,8 @@ interface SwapFormProps {
   selectedSplitRoutes?: SplitRouteSelection[];
   initialTokenInIdx?: number;
   initialTokenOutIdx?: number;
+  slippageBps: number;
+  onSlippageChange: (bps: number) => void;
 }
 
 export default function SwapForm({
@@ -56,11 +57,12 @@ export default function SwapForm({
   selectedSplitRoutes,
   initialTokenInIdx = 0,
   initialTokenOutIdx = 1,
+  slippageBps,
+  onSlippageChange: _onSlippageChange,
 }: SwapFormProps) {
   const [tokenInIdx, setTokenInIdx] = useState(initialTokenInIdx);
   const [tokenOutIdx, setTokenOutIdx] = useState(initialTokenOutIdx);
   const [amountIn, setAmountIn] = useState("");
-  const [slippageBps, setSlippageBps] = useState(200);
   const [swapStep, setSwapStep] = useState<SwapStep>("idle");
   const [impactConfirmed, setImpactConfirmed] = useState(false);
 
@@ -568,30 +570,6 @@ export default function SwapForm({
 
   return (
     <div className="space-y-4 p-5">
-      {/* ── Slippage selector ───────────────────────────────────────────── */}
-      <div className="flex items-center justify-between border-[3px] border-border bg-surface-alt px-3 py-3 shadow-[2px_2px_0_0_var(--border)]">
-        <span className="retro-label text-[0.9rem] text-text-muted">
-          Max Slippage
-        </span>
-        <div className="flex gap-1">
-          {SLIPPAGE_OPTIONS.map(({ label, bps }) => (
-            <button
-              key={bps}
-              type="button"
-              onClick={() => setSlippageBps(bps)}
-              className={cn(
-                "retro-label border-[2px] px-2.5 py-1 text-[0.85rem] transition-colors",
-                slippageBps === bps
-                  ? "border-border bg-primary text-primary-foreground shadow-[2px_2px_0_0_var(--border)]"
-                  : "border-transparent bg-surface text-text-secondary hover:border-border/40",
-              )}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
-      </div>
-
       {/* Not-deployed banner */}
       {showNotDeployed && (
         <div className="flex items-start gap-2 border-[3px] border-warning bg-warning/10 px-3 py-2.5 shadow-[2px_2px_0_0_var(--border)]">

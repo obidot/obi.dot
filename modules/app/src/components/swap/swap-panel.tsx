@@ -1,7 +1,9 @@
 "use client";
 
 import { ArrowLeftRight, Clock3, Info, Link2, Settings2 } from "lucide-react";
-import { useCallback, useRef } from "react";
+import { useCallback, useRef, useState } from "react";
+import { ResponsiveModal } from "@/components/ui/responsive-modal";
+import { SLIPPAGE_OPTIONS } from "@/lib/constants";
 import { cn } from "@/lib/format";
 import { TRADE_ACTIONS } from "@/shared/trade";
 import type {
@@ -52,6 +54,9 @@ export default function SwapPanel({
   onRouteSelect,
   onSplitRoutesSelect: _onSplitRoutesSelect,
 }: SwapPanelProps) {
+  const [slippageBps, setSlippageBps] = useState(200);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+
   // Track the previous token pair so we only clear the selected route when
   // tokens actually change — not on every amount keystroke.
   const prevTokenPairRef = useRef<{ tokenIn: string; tokenOut: string } | null>(
@@ -110,6 +115,7 @@ export default function SwapPanel({
             </button>
             <button
               type="button"
+              onClick={() => setSettingsOpen(true)}
               className="btn-ghost min-h-0 px-2 py-2 text-text-muted hover:text-text-secondary"
               aria-label="Settings"
             >
@@ -132,11 +138,48 @@ export default function SwapPanel({
             onInputChange={handleInputChange}
             selectedRoute={selectedRoute}
             selectedSplitRoutes={selectedSplitRoutes}
+            slippageBps={slippageBps}
+            onSlippageChange={setSlippageBps}
           />
         )}
         {activeTab === "limit" && <LimitOrderPanel />}
         {activeTab === "crosschain" && <CrossChainSwapPanel />}
       </div>
+
+      <ResponsiveModal
+        open={settingsOpen}
+        onOpenChange={setSettingsOpen}
+        title="Transaction Settings"
+      >
+        <div className="space-y-4 p-4">
+          <div className="flex items-center justify-between">
+            <span className="retro-label text-[0.9rem] text-text-muted">
+              Max Slippage
+            </span>
+            <div className="flex gap-1">
+              {SLIPPAGE_OPTIONS.map(({ label, bps }) => (
+                <button
+                  key={bps}
+                  type="button"
+                  onClick={() => setSlippageBps(bps)}
+                  className={cn(
+                    "retro-label border-[2px] px-2.5 py-1 text-[0.85rem] transition-colors",
+                    slippageBps === bps
+                      ? "border-border bg-primary text-primary-foreground shadow-[2px_2px_0_0_var(--border)]"
+                      : "border-transparent bg-surface text-text-secondary hover:border-border/40",
+                  )}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+          <p className="text-[12px] text-text-muted">
+            Your transaction will revert if the price moves more than this
+            percentage unfavorably.
+          </p>
+        </div>
+      </ResponsiveModal>
     </div>
   );
 }
