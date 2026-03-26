@@ -267,8 +267,9 @@ body::before {
   background:
     radial-gradient(circle at 18% 14%, var(--orb-a), transparent 24%),
     radial-gradient(circle at 82% 18%, var(--orb-b), transparent 22%),
-    radial-gradient(circle at 74% 72%, var(--orb-c), transparent 26%);
-  opacity: 0.75;
+    radial-gradient(circle at 74% 72%, var(--orb-c), transparent 26%),
+    radial-gradient(circle at 50% 50%, color-mix(in srgb, var(--primary) 4%, transparent), transparent 60%);
+  opacity: 0.9;
   z-index: 0;
 }
 
@@ -418,34 +419,31 @@ img {
   position: relative;
   overflow: hidden;
   background:
-    linear-gradient(
-      180deg,
-      rgba(255, 251, 229, 0.92),
-      rgba(255, 248, 214, 0.94)
-    ),
+    linear-gradient(180deg, var(--surface) 0%, var(--surface-alt) 100%),
     repeating-linear-gradient(
       90deg,
-      rgba(23, 18, 15, 0.05) 0,
-      rgba(23, 18, 15, 0.05) 1px,
+      var(--grid-line) 0,
+      var(--grid-line) 1px,
       transparent 1px,
       transparent 28px
     ),
     repeating-linear-gradient(
       180deg,
-      rgba(23, 18, 15, 0.05) 0,
-      rgba(23, 18, 15, 0.05) 1px,
+      var(--grid-line) 0,
+      var(--grid-line) 1px,
       transparent 1px,
       transparent 28px
     );
   border: 4px solid var(--border);
-  box-shadow: 9px 9px 0 0 var(--border);
+  border-top: 5px solid var(--primary);
+  box-shadow: 12px 12px 0 0 var(--border);
 }
 
 .hero-banner::before {
   content: "";
   position: absolute;
   inset: 12px;
-  border: 1px dashed rgba(23, 18, 15, 0.2);
+  border: 1px dashed var(--border-subtle);
   pointer-events: none;
 }
 
@@ -454,11 +452,11 @@ img {
   position: absolute;
   right: -50px;
   top: -30px;
-  width: 180px;
-  height: 180px;
+  width: 220px;
+  height: 220px;
   background: radial-gradient(
     circle,
-    rgba(97, 168, 255, 0.18),
+    var(--orb-b),
     transparent 70%
   );
   pointer-events: none;
@@ -473,15 +471,11 @@ img {
   padding: 16px 18px;
   border-bottom: 3px solid var(--border);
   background:
-    linear-gradient(
-      180deg,
-      rgba(255, 251, 229, 0.98),
-      rgba(246, 239, 208, 0.98)
-    ),
+    linear-gradient(180deg, var(--surface) 0%, var(--surface-alt) 100%),
     repeating-linear-gradient(
       90deg,
-      rgba(23, 18, 15, 0.04) 0,
-      rgba(23, 18, 15, 0.04) 1px,
+      var(--grid-line) 0,
+      var(--grid-line) 1px,
       transparent 1px,
       transparent 22px
     );
@@ -557,8 +551,8 @@ img {
 
 .metric-value {
   font-family: var(--font-display);
-  font-size: 1.55rem;
-  line-height: 0.95;
+  font-size: 1.9rem;
+  line-height: 0.92;
   letter-spacing: 0.05em;
   text-transform: uppercase;
   color: var(--text-primary);
@@ -572,7 +566,7 @@ img {
 .section-strip {
   border-top: 3px solid var(--border);
   padding: 14px 16px;
-  background: rgba(246, 239, 208, 0.85);
+  background: var(--surface-alt);
 }
 
 .retro-empty {
@@ -582,15 +576,11 @@ img {
   justify-content: center;
   padding: 32px;
   background:
-    linear-gradient(
-      180deg,
-      rgba(255, 253, 242, 0.98),
-      rgba(255, 248, 214, 0.96)
-    ),
+    linear-gradient(180deg, var(--surface) 0%, var(--surface-alt) 100%),
     repeating-linear-gradient(
       90deg,
-      rgba(23, 18, 15, 0.04) 0,
-      rgba(23, 18, 15, 0.04) 1px,
+      var(--grid-line) 0,
+      var(--grid-line) 1px,
       transparent 1px,
       transparent 22px
     );
@@ -631,7 +621,7 @@ img {
   text-transform: uppercase;
   color: var(--text-secondary);
   border-bottom: 3px solid var(--border);
-  background: rgba(246, 239, 208, 0.92);
+  background: var(--surface-alt);
   white-space: nowrap;
   user-select: none;
 }
@@ -650,7 +640,7 @@ img {
 }
 
 .table-pro tbody tr:hover {
-  background: rgba(244, 205, 50, 0.14);
+  background: color-mix(in srgb, var(--primary) 10%, transparent);
 }
 
 .sparkline-container {
@@ -714,7 +704,7 @@ img {
 
 .input-trading {
   width: 100%;
-  background: rgba(255, 253, 242, 0.96);
+  background: var(--surface);
   border: 3px solid var(--border);
   padding: 11px 12px;
   color: var(--text-primary);
@@ -726,7 +716,7 @@ img {
 }
 
 .input-trading:focus {
-  background: #fffef7;
+  background: var(--card);
   box-shadow:
     inset 2px 2px 0 rgba(23, 18, 15, 0.08),
     var(--shadow-block-xs);
@@ -789,7 +779,7 @@ img {
 }
 
 .btn-ghost {
-  background: rgba(255, 253, 242, 0.9);
+  background: var(--surface);
   color: var(--text-secondary);
 }
 
@@ -810,7 +800,7 @@ img {
   gap: 4px;
   padding: 4px;
   border: 3px solid var(--border);
-  background: rgba(246, 239, 208, 0.85);
+  background: var(--surface-alt);
   box-shadow: var(--shadow-block-xs);
 }
 
@@ -876,9 +866,9 @@ img {
 .skeleton {
   background: linear-gradient(
     90deg,
-    rgba(255, 255, 255, 0.7) 25%,
-    rgba(246, 239, 208, 0.95) 50%,
-    rgba(255, 255, 255, 0.7) 75%
+    color-mix(in srgb, var(--background) 70%, transparent) 25%,
+    color-mix(in srgb, var(--surface-alt) 95%, transparent) 50%,
+    color-mix(in srgb, var(--background) 70%, transparent) 75%
   );
   background-size: 200% 100%;
   animation: skeleton-shimmer 1.5s ease-in-out infinite;
@@ -950,13 +940,103 @@ img {
   text-transform: uppercase !important;
 }
 
+/* ── Progress bar ──────────────────────────────────────────────────────── */
+
+.progress-track {
+  height: 7px;
+  background: var(--surface-alt);
+  border: 2px solid var(--border);
+  overflow: hidden;
+}
+
+.progress-fill {
+  height: 100%;
+  background: var(--primary);
+  transition: width 700ms cubic-bezier(0.16, 1, 0.3, 1);
+  position: relative;
+}
+
+.progress-fill::after {
+  content: "";
+  position: absolute;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  width: 4px;
+  background: rgba(255, 255, 255, 0.5);
+}
+
+/* ── Entry animation ───────────────────────────────────────────────────── */
+
+@keyframes fadeUp {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.fade-up {
+  animation: fadeUp 0.35s ease-out both;
+}
+
+.fade-up-1 { animation-delay: 0.06s; }
+.fade-up-2 { animation-delay: 0.12s; }
+.fade-up-3 { animation-delay: 0.18s; }
+.fade-up-4 { animation-delay: 0.24s; }
+
+/* ── Accent left border for stat cells ─────────────────────────────────── */
+
+.stat-accent-primary  { box-shadow: inset 4px 0 0 var(--primary); }
+.stat-accent-secondary { box-shadow: inset 4px 0 0 var(--secondary); }
+.stat-accent-accent   { box-shadow: inset 4px 0 0 var(--accent); }
+
+/* ── Enhanced btn-primary glow on hover ────────────────────────────────── */
+
+.btn-primary:hover:not(:disabled) {
+  transform: translate(2px, 2px);
+  box-shadow: var(--shadow-block-xs), 0 0 18px var(--primary-glow);
+}
+
+/* ── Ticker fade-out edges ─────────────────────────────────────────────── */
+
+.ticker-fade {
+  -webkit-mask-image: linear-gradient(
+    to right,
+    transparent 0%,
+    black 5%,
+    black 95%,
+    transparent 100%
+  );
+  mask-image: linear-gradient(
+    to right,
+    transparent 0%,
+    black 5%,
+    black 95%,
+    transparent 100%
+  );
+}
+
+/* ── Active tab glow ───────────────────────────────────────────────────── */
+
+.tab-item.active {
+  background: var(--primary);
+  color: var(--foreground);
+  border-color: var(--border);
+  box-shadow: var(--shadow-block-xs), 0 0 10px var(--primary-glow);
+}
+
 @media (prefers-reduced-motion: reduce) {
   .ticker-track,
   .skeleton,
   .pulse-dot::before,
   .xcm-dot,
   .terminal-cursor::after,
-  .animate-ping {
+  .animate-ping,
+  .fade-up {
     animation: none !important;
   }
 
@@ -967,7 +1047,8 @@ img {
   .btn-ghost,
   .tab-item,
   .input-trading,
-  .table-pro tbody tr {
+  .table-pro tbody tr,
+  .progress-fill {
     transition: none !important;
   }
 }

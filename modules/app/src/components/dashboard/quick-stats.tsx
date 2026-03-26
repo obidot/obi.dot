@@ -31,16 +31,19 @@ export function QuickStats() {
       label: "Cumulative P&L",
       value: perf ? formatTokenAmount(perf.cumulativePnL ?? "0") : "--",
       positive: perf ? BigInt(perf.cumulativePnL ?? "0") >= 0n : true,
+      accentClass: "stat-accent-primary",
     },
     {
       label: "High Water Mark",
       value: perf ? formatTokenAmount(perf.highWaterMark ?? "0") : "--",
       positive: undefined,
+      accentClass: "stat-accent-secondary",
     },
     {
       label: "Fees Accrued",
       value: perf ? formatTokenAmount(perf.feeAccrued ?? "0") : "--",
       positive: undefined,
+      accentClass: "stat-accent-accent",
     },
   ];
 
@@ -49,13 +52,13 @@ export function QuickStats() {
       {items.map((item) => (
         <div
           key={item.label}
-          className="border-b border-border-subtle px-4 py-3 last:border-b-0 md:border-b-0 md:border-r md:last:border-r-0"
+          className={`border-b border-border-subtle px-4 py-3 last:border-b-0 md:border-b-0 md:border-r md:last:border-r-0 ${item.accentClass}`}
         >
           <dt className="retro-label text-[0.82rem] text-text-muted">
             {item.label}
           </dt>
           <dd
-            className={`mt-2 text-[13px] font-semibold ${
+            className={`mt-2 retro-label text-[1.1rem] leading-none ${
               item.positive === false ? "text-danger" : "text-text-primary"
             }`}
           >
