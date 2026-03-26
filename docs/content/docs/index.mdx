@@ -58,7 +58,7 @@ SwapRouter  XCMExecutor  HyperExecutor
 - **Bifrost DeFi Strategies** — Liquid staking (SLP/vDOT), DEX swaps, yield farming, and SALP via on-chain Bifrost adapter with SCALE-encoded XCM calls
 - **Oracle-Based Slippage Protection** — `KeeperOracle` (Chainlink-compatible) with multi-asset registry and 2% max-slippage guard
 - **On-Chain Policy Engine** — Parachain and protocol whitelists, per-protocol exposure caps, daily loss circuit breaker
-- **AI Agent Sub-Feature** — LangChain/GPT-4o agent signs EIP-712 intents for multi-hop strategies; anyone can relay valid intents (permissionless)
+- **AI Agent Sub-Feature** — LangChain agent signs EIP-712 intents for multi-hop strategies; interactive surfaces use the configured LLM provider and the browser-exposed HTTP chat stays read-only
 - **Real-Time Dashboard** — Next.js 15 app with vault overview, yield grid, strategy feed, cross-chain topology, agent status, and Financial Intelligence Hub
 - **Emergency Mode** — Admin can pause the vault and enable proportional withdrawals that bypass remote asset accounting
 
@@ -66,7 +66,7 @@ SwapRouter  XCMExecutor  HyperExecutor
 
 | Parameter      | Value                                        |
 | -------------- | -------------------------------------------- |
-| Network        | Polkadot Hub Testnet (Paseo)                 |
+| Network        | Polkadot Hub TestNet                         |
 | Chain ID       | `420420417`                                  |
 | RPC            | `https://eth-rpc-testnet.polkadot.io/`       |
 | Block Explorer | `https://blockscout-testnet.polkadot.io/`    |
@@ -84,9 +84,9 @@ SwapRouter  XCMExecutor  HyperExecutor
 ### Off-Chain Agent
 
 - **Node.js / TypeScript** — strict ES2022, pino logging
-- **LangChain** (`@langchain/core`, `@langchain/openai`) — GPT-4o agent loop
+- **LangChain** (`@langchain/core`, provider adapters) — configurable agent loop
 - **viem** v2 — on-chain reads and EIP-712 signing
-- **Fastify** — REST API server on port 3001
+- **Fastify** — REST API server on port 3011
 - **Telegram Bot API** — optional operator notifications
 
 ### Dashboard App
@@ -98,7 +98,7 @@ SwapRouter  XCMExecutor  HyperExecutor
 
 ## Contract Addresses
 
-All contracts are deployed on **Polkadot Hub Testnet (Paseo)**, chain ID `420420417`.
+All contracts are deployed on **Polkadot Hub TestNet**, chain ID `420420417`.
 The canonical source of truth is [`deployments.json`](https://github.com/obidot/obi.router/blob/main/deployments.json).
 
 ### Phase 1 — Core Vault (2026-02-27)

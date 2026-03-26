@@ -1,45 +1,40 @@
-# docs — Obidot Documentation Site
+# docs
 
-Next.js 15 documentation site built with [Fumadocs](https://fumadocs.dev). Covers the Obidot protocol — smart contracts, SDK, indexer, and agent.
+Fumadocs-based documentation site for the Obidot app, agent, and protocol surfaces.
 
 ## Quick Start
 
 ```bash
 pnpm install
-pnpm dev    # http://localhost:3001
+pnpm dev
+```
+
+The docs site runs on `http://localhost:4010`.
+
+## Commands
+
+```bash
+pnpm dev
+pnpm build
+pnpm typecheck
+pnpm lint
+pnpm format
 ```
 
 ## Structure
 
-```
+```text
 docs/
-├── app/
-│   ├── (home)/          # Landing page
-│   └── docs/            # Documentation layout + pages
-├── content/docs/        # MDX documentation files
-├── lib/
-│   ├── source.ts        # Fumadocs content source adapter
-│   └── layout.shared.tsx
-└── source.config.ts     # Fumadocs MDX config (frontmatter schema)
+├── content/docs/          # MDX content
+├── src/app/               # Next.js routes and layouts
+├── src/lib/source.ts      # Fumadocs source wiring
+├── source.config.ts       # MDX/frontmatter collection config
+├── next.config.mjs        # Next.js + Turbopack config
+└── next-sitemap.config.js # Sitemap/robots generation
 ```
 
-## Writing Docs
+## Notes
 
-Add `.mdx` files to `content/docs/`. Frontmatter:
-
-```mdx
----
-title: My Page
-description: A short description
----
-
-Content here.
-```
-
-Fumadocs automatically generates navigation and search from the file structure.
-
-## Related
-
-- Smart contracts: [obi.router](https://github.com/obidot/obi.router)
-- Agent SDK: [obi-kit](https://github.com/obidot/obi-kit)
-- Indexer: [obi.index](https://github.com/obidot/obi.index)
+- `SITE_URL` controls `metadataBase` and sitemap generation. See `.env.example`.
+- This package uses Biome, not ESLint/Prettier.
+- `pnpm build` generates the Next.js build and sitemap output.
