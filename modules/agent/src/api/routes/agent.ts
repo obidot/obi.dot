@@ -5,10 +5,9 @@ import {
   ToolMessage,
 } from "@langchain/core/messages";
 import type { StructuredToolInterface } from "@langchain/core/tools";
-import { ChatOpenAI } from "@langchain/openai";
 import type { FastifyInstance } from "fastify";
 
-import { env } from "../../config/env.js";
+import { createLlm } from "../../agent/llm.js";
 import { strategyStore } from "../../services/strategy-store.service.js";
 import { logger } from "../../utils/logger.js";
 
@@ -20,28 +19,39 @@ const chatLog = logger.child({ module: "api-chat" });
 
 const MAX_CHAT_ITERATIONS = 5;
 
-const CHAT_SYSTEM_PROMPT = `You are the Obidot Vault Assistant — an AI DeFi assistant for the Obidot cross-chain vault on Polkadot Hub EVM.
+const CHAT_SYSTEM_PROMPT = `You are the Obidot Vault Assistant — a read-only DeFi assistant for the Obidot cross-chain vault on Polkadot Hub.
 
-Your capabilities:
-- Deposit assets into the ERC-4626 vault (use execute_deposit tool)
-- Check vault state (idle balance, remote assets, paused, emergency mode)
-- Fetch live yield data from Polkadot DeFi protocols (Hydration, Bifrost)
-- View cross-chain satellite vault state
-- Execute strategies and Bifrost operations
-- Show vault performance and oracle status
-- Find UV2 swap routes (use find_swap_routes tool — returns live routes with amountOut estimates)
-- Execute direct UV2 swaps (use execute_direct_swap tool — tDOT↔TKB, tDOT↔tUSDC, tDOT↔tETH, tUSDC↔tETH, TKB↔TKA)
+You may:
+- Check vault state, yield data, cross-chain state, and recent decision logs
+- Find swap routes and quote outputs
+- Answer questions using only the read-only tools provided to you
 
 Rules:
-1. Confirm amounts and addresses with the user ONCE before executing write operations. After the user confirms, IMMEDIATELY call the relevant tool — do not ask again.
-2. Format responses concisely. Use bullet points.
-3. For amounts, show human-readable values (e.g., "1,000 DOT") not raw wei.
-4. Never expose private keys or internal state.
-5. Once the user says "confirm", "yes", "proceed", or "PROCEED", treat that as authorization and execute immediately.`;
+1. This HTTP chat surface is strictly read-only. Never claim that you deposited, swapped, signed, or executed anything.
+2. If the user asks to perform a write action, explain that HTTP chat cannot execute transactions and direct them to an operator-controlled workflow instead.
+3. Use tools only for inspection, quoting, and status checks.
+4. If a requested tool is unavailable, say so plainly rather than improvising.
+5. Format responses concisely. Use bullet points.
+6. For amounts, show human-readable values when possible (for example "1,000 DOT") rather than raw wei.
+7. Never expose private keys or sensitive internal state.`;
+
+type ConversationMessage =
+  | SystemMessage
+  | HumanMessage
+  | AIMessage
+  | ToolMessage;
+
+type ChatModelLike = {
+  invoke: (messages: ConversationMessage[]) => Promise<AIMessage>;
+  bindTools?: (tools: StructuredToolInterface[]) => ChatModelLike;
+};
+
+export type ChatModelFactory = () => Promise<ChatModelLike>;
 
 export function registerAgentRoutes(
   app: FastifyInstance,
   tools: StructuredToolInterface[],
+  createChatModel: ChatModelFactory = createLlm,
 ): void {
   /** GET /api/agent/log — Recent agent decisions. */
   app.get("/api/agent/log", async (request) => {
@@ -78,7 +88,12 @@ export function registerAgentRoutes(
     );
 
     try {
-      const response = await runChat(tools, userMessage, history);
+      const response = await runChat(
+        tools,
+        userMessage,
+        history,
+        createChatModel,
+      );
       return { success: true, data: { response }, timestamp: Date.now() };
     } catch (error) {
       const msg = error instanceof Error ? error.message : String(error);
@@ -96,14 +111,13 @@ async function runChat(
   tools: StructuredToolInterface[],
   userMessage: string,
   history: Array<{ role: string; content: string }> = [],
+  createChatModel: ChatModelFactory = createLlm,
 ): Promise<string> {
-  const model = new ChatOpenAI({
-    model: "gpt-5-mini",
-    apiKey: env.OPENAI_API_KEY,
-    temperature: 1,
-  });
-
-  const boundModel = tools.length > 0 ? model.bindTools(tools) : model;
+  const model = await createChatModel();
+  const boundModel =
+    tools.length > 0 && typeof model.bindTools === "function"
+      ? model.bindTools(tools)
+      : model;
 
   const toolMap = new Map<string, StructuredToolInterface>();
   for (const tool of tools) {
@@ -115,7 +129,7 @@ async function runChat(
     m.role === "user" ? new HumanMessage(m.content) : new AIMessage(m.content),
   );
 
-  const messages: (SystemMessage | HumanMessage | AIMessage | ToolMessage)[] = [
+  const messages: ConversationMessage[] = [
     new SystemMessage(CHAT_SYSTEM_PROMPT),
     ...priorMessages,
     new HumanMessage(userMessage),

@@ -1384,24 +1384,23 @@ export function createObidotTools(
   swapRouterService?: SwapRouterService,
   intentService?: IntentService,
 ): Tool[] {
-  const tools: Tool[] = [
-    // ── Perception tools ───────────────────────────────────────────────
-    new FetchYieldsTool(yieldService),
-    new FetchBifrostYieldsTool(yieldService),
-    new FetchVaultStateTool(signerService),
-    new FetchCrossChainStateTool(signerService, crossChainService),
+  const tools = createReadOnlyObidotTools(
+    signerService,
+    yieldService,
+    crossChainService,
+    swapRouterService,
+  );
+
+  tools.push(
     // ── ERC-4626 deposit ───────────────────────────────────────────────
     new DepositTool(signerService),
     // ── Execution tools (legacy) ───────────────────────────────────────
     new ExecuteStrategyTool(signerService),
     new ExecuteBifrostStrategyTool(signerService),
-  ];
+  );
 
-  // ── DEX aggregator tools (conditional on service availability) ─────
   if (swapRouterService) {
-    tools.push(new FindRoutesTool(swapRouterService));
     tools.push(new DirectSwapTool(signerService, swapRouterService));
-    tools.push(new SwapQuoteTool(swapRouterService));
 
     if (intentService) {
       tools.push(new ExecuteLocalSwapTool(swapRouterService, intentService));
@@ -1411,6 +1410,32 @@ export function createObidotTools(
   // ── Universal intent tool (conditional on service availability) ─────
   if (intentService) {
     tools.push(new ExecuteIntentTool(intentService));
+  }
+
+  return tools;
+}
+
+/**
+ * Create the read-only tool surface safe for browser-exposed assistants.
+ * This intentionally excludes all signing and transaction execution tools.
+ */
+export function createReadOnlyObidotTools(
+  signerService: SignerService,
+  yieldService: YieldService,
+  crossChainService: CrossChainService,
+  swapRouterService?: SwapRouterService,
+): Tool[] {
+  const tools: Tool[] = [
+    // ── Perception tools ───────────────────────────────────────────────
+    new FetchYieldsTool(yieldService),
+    new FetchBifrostYieldsTool(yieldService),
+    new FetchVaultStateTool(signerService),
+    new FetchCrossChainStateTool(signerService, crossChainService),
+  ];
+
+  if (swapRouterService) {
+    tools.push(new FindRoutesTool(swapRouterService));
+    tools.push(new SwapQuoteTool(swapRouterService));
   }
 
   return tools;

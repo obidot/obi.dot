@@ -3,7 +3,7 @@
   "version": "0.0.0",
   "private": true,
   "scripts": {
-    "build": "next build && next-sitemap",
+    "build": "next build && next-sitemap --config next-sitemap.config.js",
     "dev": "next dev --port=4010",
     "start": "next start",
     "typecheck": "fumadocs-mdx && next typegen && tsc --noEmit",
@@ -23,14 +23,15 @@
     "tailwind-merge": "^3.4.0"
   },
   "devDependencies": {
+    "@biomejs/biome": "^2.3.14",
     "@tailwindcss/postcss": "^4.1.18",
     "@types/mdx": "^2.0.13",
     "@types/node": "^25.2.1",
     "@types/react": "^19.2.13",
     "@types/react-dom": "^19.2.3",
+    "next-sitemap": "^4.2.3",
     "postcss": "^8.5.6",
     "tailwindcss": "^4.1.18",
-    "typescript": "^5.9.3",
-    "@biomejs/biome": "^2.3.14"
+    "typescript": "^5.9.3"
   }
 }

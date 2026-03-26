@@ -8,6 +8,11 @@ import {
   ShieldAlert,
   Zap,
 } from "lucide-react";
+import { AssetIcon } from "@/components/ui/asset-icon";
+import {
+  resolveChainAssetId,
+  resolveProtocolAssetId,
+} from "@/lib/asset-registry";
 import { cn, formatUsd } from "@/lib/format";
 import type { CrossChainVaultState, SatelliteChainState } from "@/types";
 
@@ -59,6 +64,7 @@ function SatelliteRow({
   const assets = BigInt(sat.totalAssets);
   const pct =
     globalTotal > 0n ? Number((assets * 10000n) / globalTotal) / 100 : 0;
+  const chainAssetId = resolveChainAssetId(sat.chainName);
 
   return (
     <div
@@ -76,7 +82,16 @@ function SatelliteRow({
           color.border,
         )}
       >
-        <Globe className={cn("h-4 w-4", color.text)} />
+        {chainAssetId ? (
+          <AssetIcon
+            assetId={chainAssetId}
+            size="sm"
+            variant="bare"
+            className="rounded-none"
+          />
+        ) : (
+          <Globe className={cn("h-4 w-4", color.text)} />
+        )}
       </div>
 
       {/* Chain identity */}
@@ -143,6 +158,8 @@ export function ChainTopology({ state }: { state: CrossChainVaultState }) {
   const hubAssets = globalTotal - satTotal;
   const hubPct =
     globalTotal > 0n ? Number((hubAssets * 10000n) / globalTotal) / 100 : 100;
+  const hubAssetId = resolveChainAssetId(state.hub?.chain ?? "polkadot hub");
+  const xcmAssetId = resolveProtocolAssetId("xcm");
 
   return (
     <div className="panel overflow-hidden">
@@ -174,7 +191,11 @@ export function ChainTopology({ state }: { state: CrossChainVaultState }) {
         <div className="flex w-full shrink-0 flex-col justify-center border-b-[3px] border-border bg-surface p-5 lg:w-52 lg:border-b-0 lg:border-r-[3px]">
           <div className="mb-4 flex items-center gap-2.5">
             <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary/10">
-              <Landmark className="h-4 w-4 text-primary" />
+              {hubAssetId ? (
+                <AssetIcon assetId={hubAssetId} size="sm" variant="bare" />
+              ) : (
+                <Landmark className="h-4 w-4 text-primary" />
+              )}
             </div>
             <div>
               <p className="font-mono text-[9px] uppercase tracking-widest text-text-muted">
@@ -236,7 +257,11 @@ export function ChainTopology({ state }: { state: CrossChainVaultState }) {
 
           <div className="flex flex-col items-center gap-1">
             <div className="flex h-7 w-7 items-center justify-center rounded-full border border-accent/25 bg-accent/8">
-              <Zap className="h-3 w-3 text-accent" />
+              {xcmAssetId ? (
+                <AssetIcon assetId={xcmAssetId} size="xs" variant="bare" />
+              ) : (
+                <Zap className="h-3 w-3 text-accent" />
+              )}
             </div>
             <span className="font-mono text-[8px] uppercase tracking-widest text-accent/70">
               XCM

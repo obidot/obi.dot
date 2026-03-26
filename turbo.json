@@ -10,13 +10,6 @@
       "cache": false,
       "persistent": true
     },
-    "test": {
-      "dependsOn": ["build"],
-      "cache": false
-    },
-    "test:forge": {
-      "cache": false
-    },
     "lint": {
       "dependsOn": ["^build"],
       "inputs": ["src/**", "biome.json", ".eslintrc*"]
