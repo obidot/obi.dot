@@ -2,11 +2,12 @@
 
 import { ChevronDownIcon } from "lucide-react";
 import dynamic from "next/dynamic";
-import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useAccount, useChainId } from "wagmi";
+import { AssetIcon } from "@/components/ui/asset-icon";
 import { useYields } from "@/hooks/use-yields";
+import { resolveChainAssetId } from "@/lib/asset-registry";
 import { cn } from "@/lib/format";
 import { NAV_ITEMS, type NavItem } from "@/shared/navbar";
 import { isTradeActionType } from "@/shared/trade";
@@ -36,6 +37,7 @@ export default function Navbar() {
     : isTradeRoute && pathSegments[1]
       ? pathSegments[1]
       : "polkadot-hub-testnet";
+  const activeChainAssetId = resolveChainAssetId(chain?.name ?? currentChain);
 
   const tickerItems = (yields ?? []).slice(0, 12).map((y) => ({
     name: y.name,
@@ -52,6 +54,8 @@ export default function Navbar() {
 
   return (
     <header className="sticky top-0 z-50 border-b-[3px] border-border bg-background shadow-[0_3px_0_0_var(--border)]">
+      {/* Primary accent stripe */}
+      <div className="h-[3px] bg-primary w-full" aria-hidden="true" />
       <div className="mx-auto flex w-full max-w-[1600px] flex-col gap-3 px-4 py-3 lg:px-6">
         <nav
           aria-label="Main navigation"
@@ -65,12 +69,15 @@ export default function Navbar() {
             )}
           >
             <span className="flex h-11 w-11 items-center justify-center border-[3px] border-border bg-primary shadow-[3px_3px_0_0_var(--border)]">
-              <Image
-                src="/images/logo.png"
-                width={28}
-                height={28}
+              <AssetIcon
+                assetId="brand.obidot.light"
+                size="lg"
+                variant="bare"
+                decorative={false}
                 alt="Obidot Logo"
-                className="h-7 w-7 object-contain"
+                className="rounded-none"
+                imageClassName="scale-[1.14]"
+                priority
               />
             </span>
             <span className="flex flex-col">
@@ -165,10 +172,16 @@ export default function Navbar() {
 
           <div className="ml-auto flex shrink-0 items-center gap-2">
             <div className="hidden items-center gap-2 md:flex">
-              <span className="pill bg-accent text-accent-foreground">
+              <span className="pill bg-primary text-primary-foreground">
                 Live
               </span>
-              <span className="pill bg-surface text-text-secondary">
+              <span className="pill gap-2 bg-surface-alt text-text-secondary">
+                <AssetIcon
+                  assetId={activeChainAssetId}
+                  size="xs"
+                  variant="bare"
+                  className="rounded-full"
+                />
                 {chain?.name ?? "Polkadot Hub TestNet"}
               </span>
             </div>
@@ -183,10 +196,10 @@ export default function Navbar() {
           {tickerItems.length > 0 ? (
             <div className="flex h-full items-center px-4">
               <div className="retro-label mr-3 flex shrink-0 items-center gap-2 border-r-2 border-border pr-3 text-[0.95rem] text-text-secondary">
-                <span className="pulse-dot h-2 w-2 rounded-full bg-accent" />
+                <AssetIcon assetId="protocol.xcm" size="xs" variant="bare" />
                 <span>Yield Tape</span>
               </div>
-              <div className="flex h-full min-w-0 flex-1 overflow-hidden">
+              <div className="ticker-fade flex h-full min-w-0 flex-1 overflow-hidden">
                 <div className="ticker-track h-full items-center">
                   {[...tickerItems, ...tickerItems].map((item, i) => (
                     <div

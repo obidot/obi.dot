@@ -9,7 +9,14 @@ import OrdersPanel from "@/components/swap/orders-panel";
 import { RouteDiagram } from "@/components/swap/route-diagram";
 import SwapPanel from "@/components/swap/swap-panel";
 import { TradeHistory } from "@/components/swap/trade-history";
+import { AssetIcon } from "@/components/ui/asset-icon";
+import { HeroIllustration } from "@/components/ui/hero-illustration";
 import { useSwapRoutes } from "@/hooks/use-swap";
+import {
+  type AssetId,
+  resolveChainAssetId,
+  resolveTokenAssetIds,
+} from "@/lib/asset-registry";
 import { cn } from "@/lib/format";
 import {
   chainToSlug,
@@ -26,8 +33,10 @@ import type {
 
 function RightPanelIdle({
   routes,
+  badgeAssetIds,
 }: {
   routes: SwapRoutesResponse | undefined;
+  badgeAssetIds: AssetId[];
 }) {
   return (
     <div className="flex flex-1 flex-col items-center justify-center gap-6 p-10 text-center">
@@ -66,6 +75,20 @@ function RightPanelIdle({
                 </span>
               ))}
           </div>
+        </div>
+      )}
+
+      {badgeAssetIds.length > 0 && (
+        <div className="flex flex-wrap items-center justify-center gap-2">
+          {badgeAssetIds.slice(0, 4).map((assetId) => (
+            <AssetIcon
+              key={assetId}
+              assetId={assetId}
+              size="md"
+              variant="tile"
+              className="bg-surface/92"
+            />
+          ))}
         </div>
       )}
 
@@ -151,20 +174,40 @@ export default function TradePage() {
 
   const activeDescription =
     TRADE_ACTIONS.find((t) => t.id === activeTab)?.description ?? "";
+  const pairAssetIds = resolveTokenAssetIds(routerParam, 3);
+  const surfaceProtocolAssetId: AssetId =
+    activeTab === "crosschain" ? "protocol.xcm" : "protocol.uniswap";
+  const heroAssetIds = [
+    ...pairAssetIds,
+    resolveChainAssetId(chainParam),
+    surfaceProtocolAssetId,
+  ].filter((value): value is AssetId => Boolean(value));
 
   return (
     <div className="flex w-full flex-col gap-5">
       <div className="hero-banner px-5 py-5 md:px-7 md:py-6">
-        <div className="relative z-10 flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
+        <div className="relative z-10 grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(320px,430px)] xl:items-end">
           <div className="space-y-2">
             <div className="flex flex-wrap gap-2">
               <span className="pill bg-primary text-primary-foreground">
                 Trade Surface
               </span>
-              <span className="pill bg-surface text-text-secondary">
+              <span className="pill gap-2 bg-surface text-text-secondary">
+                <AssetIcon
+                  assetId={resolveChainAssetId(chainParam)}
+                  size="xs"
+                  variant="bare"
+                />
                 {chainParam}
               </span>
-              <span className="pill bg-secondary text-secondary-foreground">
+              <span className="pill gap-2 bg-secondary text-secondary-foreground">
+                {pairAssetIds[0] && (
+                  <AssetIcon
+                    assetId={pairAssetIds[0]}
+                    size="xs"
+                    variant="bare"
+                  />
+                )}
                 {routerParam.replace(/-/g, " ")}
               </span>
             </div>
@@ -180,28 +223,40 @@ export default function TradePage() {
               </p>
             </div>
           </div>
-          <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
-            <div className="border-[3px] border-border bg-surface px-3 py-2 shadow-[3px_3px_0_0_var(--border)]">
-              <p className="retro-label text-[0.8rem] text-text-muted">Chain</p>
-              <p className="mt-2 text-[13px] font-semibold text-text-primary">
-                {chainParam}
-              </p>
-            </div>
-            <div className="border-[3px] border-border bg-surface px-3 py-2 shadow-[3px_3px_0_0_var(--border)]">
-              <p className="retro-label text-[0.8rem] text-text-muted">Pair</p>
-              <p className="mt-2 text-[13px] font-semibold text-text-primary">
-                {routerParam}
-              </p>
-            </div>
-            <div className="border-[3px] border-border bg-surface px-3 py-2 shadow-[3px_3px_0_0_var(--border)]">
-              <p className="retro-label text-[0.8rem] text-text-muted">
-                Routes
-              </p>
-              <p className="mt-2 text-[13px] font-semibold text-text-primary">
-                {routes?.adapters.filter((adapter) => adapter.deployed)
-                  .length ?? 0}{" "}
-                active
-              </p>
+          <div className="space-y-3">
+            <HeroIllustration
+              title="Multi-route execution across Polkadot-native and EVM-linked liquidity paths."
+              badgeAssetIds={heroAssetIds}
+              className="min-h-[210px] sm:min-h-[220px]"
+            />
+
+            <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
+              <div className="border-[3px] border-border bg-surface px-3 py-2 shadow-[3px_3px_0_0_var(--border)]">
+                <p className="retro-label text-[0.8rem] text-text-muted">
+                  Chain
+                </p>
+                <p className="mt-2 text-[13px] font-semibold text-text-primary">
+                  {chainParam}
+                </p>
+              </div>
+              <div className="border-[3px] border-border bg-surface px-3 py-2 shadow-[3px_3px_0_0_var(--border)]">
+                <p className="retro-label text-[0.8rem] text-text-muted">
+                  Pair
+                </p>
+                <p className="mt-2 text-[13px] font-semibold text-text-primary">
+                  {routerParam}
+                </p>
+              </div>
+              <div className="border-[3px] border-border bg-surface px-3 py-2 shadow-[3px_3px_0_0_var(--border)]">
+                <p className="retro-label text-[0.8rem] text-text-muted">
+                  Routes
+                </p>
+                <p className="mt-2 text-[13px] font-semibold text-text-primary">
+                  {routes?.adapters.filter((adapter) => adapter.deployed)
+                    .length ?? 0}{" "}
+                  active
+                </p>
+              </div>
             </div>
           </div>
         </div>
@@ -245,7 +300,7 @@ export default function TradePage() {
                 onSelectSplitRoutes={setSelectedSplitRoutes}
               />
             ) : (
-              <RightPanelIdle routes={routes} />
+              <RightPanelIdle routes={routes} badgeAssetIds={heroAssetIds} />
             ))}
 
           {/* Limit tab: orders panel + history tab switcher */}
@@ -292,7 +347,9 @@ export default function TradePage() {
           )}
 
           {/* Cross-chain tab: idle */}
-          {activeTab === "crosschain" && <RightPanelIdle routes={routes} />}
+          {activeTab === "crosschain" && (
+            <RightPanelIdle routes={routes} badgeAssetIds={heroAssetIds} />
+          )}
         </div>
       </div>
 

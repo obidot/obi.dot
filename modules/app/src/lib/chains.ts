@@ -7,8 +7,8 @@ export const polkadotHubTestnet: Chain = defineChain({
   iconUrl: "/images/polkadot.png",
   iconBackground: "transparent",
   nativeCurrency: {
-    name: "PAS",
-    symbol: "PAS",
+    name: "DOT",
+    symbol: "DOT",
     decimals: 18,
   },
   rpcUrls: {
@@ -46,7 +46,7 @@ export const polkadotHub: Chain = defineChain({
       url: "https://blockscout.polkadot.io/",
     },
   },
-  testnet: true,
+  testnet: false,
 });
 
 export const supportedChains: Chain[] = [polkadotHubTestnet, polkadotHub];

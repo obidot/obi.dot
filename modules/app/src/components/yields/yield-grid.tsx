@@ -2,6 +2,11 @@
 
 import { ChevronDown, ChevronUp, Search } from "lucide-react";
 import { useMemo, useState } from "react";
+import { AssetIcon } from "@/components/ui/asset-icon";
+import {
+  resolveProtocolAssetId,
+  resolveTokenAssetIds,
+} from "@/lib/asset-registry";
 import { LP_PAIRS } from "@/lib/constants";
 import { cn, formatApy, formatUsdNumber } from "@/lib/format";
 import type {
@@ -320,20 +325,32 @@ export function YieldGrid({
               const initials = displayLabel.slice(0, 2).toUpperCase();
               const colors = protocolColor(displayLabel);
               const isHighApr = y.apyPercent >= 10;
+              const protocolAssetId =
+                resolveProtocolAssetId(displayLabel) ??
+                resolveProtocolAssetId(y.protocol);
+              const assetIds = resolveTokenAssetIds(y.name, 2);
 
               return (
                 <tr key={`${y.protocol}-${y.name}-${item.isBifrost}`}>
                   {/* Protocol cell */}
                   <td>
                     <div className="flex items-center gap-2">
-                      <span
-                        className={cn(
-                          "retro-label flex h-7 w-7 shrink-0 items-center justify-center border-2 border-border text-[0.8rem] font-bold",
-                          colors,
-                        )}
-                      >
-                        {initials}
-                      </span>
+                      {protocolAssetId ? (
+                        <AssetIcon
+                          assetId={protocolAssetId}
+                          size="sm"
+                          variant="soft"
+                        />
+                      ) : (
+                        <span
+                          className={cn(
+                            "retro-label flex h-7 w-7 shrink-0 items-center justify-center border-2 border-border text-[0.8rem] font-bold",
+                            colors,
+                          )}
+                        >
+                          {initials}
+                        </span>
+                      )}
                       <span className="text-text-secondary font-sans text-[12px] truncate max-w-[120px]">
                         {displayLabel}
                       </span>
@@ -342,9 +359,27 @@ export function YieldGrid({
 
                   {/* Asset cell */}
                   <td>
-                    <span className="text-text-primary font-medium text-[12px]">
-                      {y.name}
-                    </span>
+                    <div className="flex items-center gap-2">
+                      {assetIds.length > 0 && (
+                        <div className="flex -space-x-2">
+                          {assetIds.map((assetId, index) => (
+                            <AssetIcon
+                              key={`${y.name}-${assetId}`}
+                              assetId={assetId}
+                              size="sm"
+                              variant="tile"
+                              className={cn(
+                                "bg-surface",
+                                index > 0 && "ring-2 ring-background",
+                              )}
+                            />
+                          ))}
+                        </div>
+                      )}
+                      <span className="text-text-primary font-medium text-[12px]">
+                        {y.name}
+                      </span>
+                    </div>
                   </td>
 
                   {/* APR cell */}
