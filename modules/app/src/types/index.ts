@@ -118,16 +118,67 @@ export interface AgentDecision {
 }
 
 /** Chat message */
+export interface ChatProposalRouteHop {
+  pool?: string;
+  poolLabel?: string;
+  poolType?: string | number;
+  tokenIn?: string;
+  tokenInSymbol?: string;
+  tokenOut?: string;
+  tokenOutSymbol?: string;
+  amountIn?: string;
+  amountOut?: string;
+  feeBps?: string | number;
+  priceImpactBps?: string | number;
+}
+
+export interface ChatTradeProposal {
+  id: string;
+  action?: string;
+  title?: string;
+  summary?: string;
+  reasoning?: string;
+  tokenIn?: string;
+  tokenInSymbol?: string;
+  tokenOut?: string;
+  tokenOutSymbol?: string;
+  amountIn?: string;
+  expectedAmountOut?: string;
+  minAmountOut?: string;
+  maxSlippageBps?: string;
+  deadline?: string;
+  targetParachain?: string;
+  targetProtocol?: string;
+  route?: ChatProposalRouteHop[];
+  status?: string;
+  raw?: Record<string, unknown>;
+}
+
 export interface ChatMessage {
   id: string;
   role: "user" | "assistant";
   content: string;
   timestamp: string;
+  state?: "streaming" | "complete" | "error";
+  tradeProposal?: ChatTradeProposal;
 }
 
-/** Limit order stored in localStorage under key "obidot_limit_orders" */
+export type ChatStreamEvent =
+  | { type: "token"; content: string }
+  | { type: "tool_call"; tool?: string; args?: Record<string, unknown> }
+  | {
+      type: "tool_result";
+      tool?: string;
+      success?: boolean;
+      result?: unknown;
+    }
+  | { type: "proposal"; proposal: ChatTradeProposal }
+  | { type: "done" };
+
+/** Limit order — created and owned by the agent's LimitOrderMonitorService. */
 export interface PendingOrder {
   id: string;
+  ownerAddress: string;
   tokenInSymbol: string;
   tokenOutSymbol: string;
   /** ERC-20 address of tokenIn — used for fill detection */
@@ -140,8 +191,10 @@ export interface PendingOrder {
   expiry: number;
   marketPriceAtOrder: string;
   createdAt: number;
-  /** Set to "filled" by fill-detection logic when a matching SwapExecuted event arrives */
-  status?: "pending" | "filled";
+  status?: "pending" | "triggered" | "filled" | "expired" | "cancelled";
+  triggeredAt?: number;
+  currentPrice?: string;
+  proposedRoute?: SwapRouteResult;
 }
 
 // ── DEX Aggregator Types ──────────────────────────────────────────────────
@@ -157,6 +210,7 @@ export enum PoolType {
   Karura = 6,
   Moonbeam = 7,
   Interlay = 8,
+  Chainflip = 9,
 }
 
 /** Human-readable pool type labels */
@@ -170,6 +224,7 @@ export const POOL_TYPE_LABELS: Record<PoolType, string> = {
   [PoolType.Karura]: "Karura DEX",
   [PoolType.Moonbeam]: "Moonbeam EVM",
   [PoolType.Interlay]: "Interlay Loans",
+  [PoolType.Chainflip]: "Chainflip Bridge",
 };
 
 /**
@@ -189,13 +244,24 @@ export function resolvePoolType(value: string | number): PoolType | undefined {
   return undefined;
 }
 
+/** Normalize either a pool enum or an already-humanized source label for display. */
+export function getPoolTypeLabel(value: PoolType | string): string {
+  const resolved = resolvePoolType(value);
+  if (resolved !== undefined) return POOL_TYPE_LABELS[resolved];
+  if (typeof value === "string" && value.length > 0) return value;
+  return "Unknown";
+}
+
 /** Swap quote result from agent API */
 export interface SwapQuoteResult {
-  source: PoolType;
+  source: PoolType | string;
   pool: string;
   feeBps: number;
   amountIn: string;
   amountOut: string;
+  status?: "live" | "simulated";
+  previewOnly?: boolean;
+  note?: string;
 }
 
 /** Available pool adapter info from agent API */
@@ -251,7 +317,17 @@ export interface SwapRouteResult {
   totalPriceImpactBps: string;
   routeType: "local" | "xcm" | "bridge";
   /** "no_liquidity" — path exists in UV2 but pool reserves are 0 (not yet seeded). */
-  status: "live" | "mainnet_only" | "coming_soon" | "no_liquidity";
+  /** "simulated" — oracle-backed quote, not executable on testnet (XCM/cross-chain). */
+  status:
+    | "live"
+    | "mainnet_only"
+    | "simulated"
+    | "coming_soon"
+    | "no_liquidity";
+  /** True when the route is informational only and should not be executed. */
+  previewOnly?: boolean;
+  /** Optional user-facing note explaining route availability or limitations. */
+  note?: string;
 }
 
 // ── Split Route Types ─────────────────────────────────────────────────────
@@ -277,6 +353,19 @@ export type WsEvent =
         amountIn: string;
         amountOut: string;
         source: PoolType;
+      };
+    }
+  | {
+      type: "limit_order:triggered";
+      data: {
+        orderId: string;
+        ownerAddress: string;
+        tokenInSymbol: string;
+        tokenOutSymbol: string;
+        targetPrice: string;
+        currentPrice: string;
+        proposedRoute: SwapRouteResult;
+        timestamp: number;
       };
     }
   | { type: "heartbeat"; data: { timestamp: string } };

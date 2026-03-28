@@ -53,6 +53,7 @@ export function useGraphQLSubscription<T = unknown>(
   query: string,
   onData: (data: T) => void,
   variables?: Record<string, unknown>,
+  options?: { enabled?: boolean },
 ): { connected: boolean } {
   // Initialise from the current singleton state so the indicator is correct
   // even before the first data frame arrives.
@@ -73,6 +74,10 @@ export function useGraphQLSubscription<T = unknown>(
   }, []);
 
   const subscribe = useCallback(() => {
+    if (options?.enabled === false) {
+      return () => {};
+    }
+
     const client = getClient();
 
     const unsubscribe = client.subscribe<{ [key: string]: T }>(
@@ -96,7 +101,7 @@ export function useGraphQLSubscription<T = unknown>(
     );
 
     return unsubscribe;
-  }, [query, variables]);
+  }, [options?.enabled, query, variables]);
 
   useEffect(() => {
     const unsubscribe = subscribe();
@@ -167,5 +172,72 @@ export function useOracleSubscription(
   return useGraphQLSubscription<OracleUpdateEvent>(
     `subscription { oracleUpdated { id feed price timestamp blockNumber } }`,
     onUpdate,
+  );
+}
+
+export type CrossChainDispatchEvent = {
+  id: string;
+  txHash: string;
+  logIndex: number;
+  blockNumber: number;
+  timestamp: string;
+  messageType: string;
+  sourceChain: string;
+  destChain: string;
+  sender: string;
+  data: string;
+  commitment: string | null;
+  status: string;
+};
+
+export type CrossChainPipelineEvent = {
+  intentId: string;
+  txHash: string;
+  commitment: string | null;
+  sender: string;
+  sourceChain: string;
+  destChain: string;
+  latestStatus: string;
+  latestMessageType: string;
+  lastUpdatedAt: string;
+  steps: CrossChainDispatchEvent[];
+};
+
+export function useCrossChainStatusSubscription(
+  txHash: string | null | undefined,
+  onUpdate: (pipeline: CrossChainPipelineEvent) => void,
+) {
+  const enabledTxHash = txHash?.trim();
+  return useGraphQLSubscription<CrossChainPipelineEvent>(
+    `subscription CrossChainStatus($txHash: String!) {
+      crossChainStatus(txHash: $txHash) {
+        intentId
+        txHash
+        commitment
+        sender
+        sourceChain
+        destChain
+        latestStatus
+        latestMessageType
+        lastUpdatedAt
+        steps {
+          id
+          txHash
+          logIndex
+          blockNumber
+          timestamp
+          messageType
+          sourceChain
+          destChain
+          sender
+          data
+          commitment
+          status
+        }
+      }
+    }`,
+    onUpdate,
+    enabledTxHash ? { txHash: enabledTxHash } : undefined,
+    { enabled: !!enabledTxHash },
   );
 }

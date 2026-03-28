@@ -15,8 +15,9 @@ export default function HomePage() {
           Aggregate liquidity across Polkadot parachains and EVM chains from a
           single entry point on Polkadot Hub. Route swaps via XCM to Hydration,
           Bifrost, and Acala — or via Hyperbridge ISMP to Ethereum, Arbitrum,
-          and Base. An ERC-4626 vault holds deposited DOT/USDC; an AI agent
-          operates as a sub-feature for automated strategy execution.
+          and Base. An ERC-4626 vault holds deposited DOT/USDC; the shipped app
+          layers on streamed agent proposals, agent-backed limit orders, indexed
+          analytics, and cross-chain lifecycle tracking.
         </p>
         <div className="flex flex-row gap-3 mt-2">
           <Link
@@ -63,7 +64,7 @@ export default function HomePage() {
             />
             <FeatureCard
               title="AI Agent (Sub-Feature)"
-              description="An off-chain LangChain agent signs EIP-712 strategy intents for automated multi-hop execution. Interactive surfaces use the configured LLM provider, and the browser-exposed HTTP chat remains read-only."
+              description="An off-chain LangChain agent signs EIP-712 strategy intents for automated multi-hop execution. Interactive browser surfaces now stream route proposals, show execution traces, and require explicit wallet approval before any swap is sent."
             />
           </div>
         </div>
@@ -149,7 +150,8 @@ export default function HomePage() {
         <h2 className="text-xl font-semibold mb-3">Get Started</h2>
         <p className="text-fd-muted-foreground mb-6 max-w-xl mx-auto">
           Explore the documentation to learn about the DEX aggregator router,
-          cross-chain execution, vault architecture, and deployment guides.
+          cross-chain execution, vault architecture, streamed agent surfaces,
+          indexed analytics, and developer-facing Agent Kit packages.
         </p>
         <Link
           href="/docs"

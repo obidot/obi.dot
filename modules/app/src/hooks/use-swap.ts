@@ -1,12 +1,13 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useReadContract, useReadContracts } from "wagmi";
-import { POOL_ADAPTER_ABI, SWAP_QUOTER_ABI, SWAP_ROUTER_ABI } from "@/lib/abi";
+import { useQuery } from "@tanstack/react-query";
+import { useCallback, useEffect, useState } from "react";
+import { useReadContracts } from "wagmi";
+import { POOL_ADAPTER_ABI, SWAP_ROUTER_ABI } from "@/lib/abi";
+import { getSwapQuote } from "@/lib/api";
 import { CONTRACTS, ZERO_ADDRESS } from "@/lib/constants";
 import type {
   PoolAdapterInfo,
-  SwapQuoteResult,
   SwapRouteResult,
   SwapRoutesResponse,
 } from "@/types";
@@ -25,37 +26,23 @@ export function useSwapQuote(params: {
     !!params.amountIn &&
     params.amountIn !== "0";
 
-  const result = useReadContract({
-    address: CONTRACTS.SWAP_QUOTER as `0x${string}`,
-    abi: SWAP_QUOTER_ABI,
-    functionName: "getBestQuote",
-    args: enabled
-      ? [
-          params.pool as `0x${string}`,
-          params.tokenIn as `0x${string}`,
-          params.tokenOut as `0x${string}`,
-          BigInt(params.amountIn),
-        ]
-      : undefined,
-    query: {
-      enabled,
-      staleTime: 10_000, // quotes are fresh for 10s
-      retry: 1,
+  return useQuery({
+    queryKey: [
+      "swap",
+      "quote",
+      params.pool,
+      params.tokenIn,
+      params.tokenOut,
+      params.amountIn,
+    ],
+    queryFn: async () => {
+      const data = await getSwapQuote(params);
+      return data.bestQuote;
     },
+    enabled,
+    staleTime: 3_000,
+    retry: 1,
   });
-
-  // Map on-chain tuple (bigint fields) to the serialized SwapQuoteResult shape
-  const data: SwapQuoteResult | undefined = result.data
-    ? {
-        source: result.data.source as PoolType,
-        pool: result.data.pool,
-        feeBps: Number(result.data.feeBps),
-        amountIn: result.data.amountIn.toString(),
-        amountOut: result.data.amountOut.toString(),
-      }
-    : undefined;
-
-  return { ...result, data };
 }
 
 const ADAPTER_REGISTRY: Array<{
@@ -148,44 +135,27 @@ export function useAllQuotes(params: {
     !!params.amountIn &&
     params.amountIn !== "0";
 
-  const result = useReadContract({
-    address: CONTRACTS.SWAP_QUOTER as `0x${string}`,
-    abi: SWAP_QUOTER_ABI,
-    functionName: "getAllQuotes",
-    args: enabled
-      ? [
-          ZERO_ADDRESS as `0x${string}`,
-          params.tokenIn as `0x${string}`,
-          params.tokenOut as `0x${string}`,
-          BigInt(params.amountIn),
-        ]
-      : undefined,
-    query: {
-      enabled,
-      staleTime: 12_000,
-      retry: 1,
+  return useQuery({
+    queryKey: [
+      "swap",
+      "quotes",
+      params.tokenIn,
+      params.tokenOut,
+      params.amountIn,
+    ],
+    queryFn: async () => {
+      const data = await getSwapQuote({
+        pool: ZERO_ADDRESS,
+        tokenIn: params.tokenIn,
+        tokenOut: params.tokenOut,
+        amountIn: params.amountIn,
+      });
+      return data.allQuotes;
     },
+    enabled,
+    staleTime: 12_000,
+    retry: 1,
   });
-
-  const data: SwapQuoteResult[] | undefined = result.data
-    ? (
-        result.data as Array<{
-          source: number;
-          pool: string;
-          feeBps: bigint;
-          amountIn: bigint;
-          amountOut: bigint;
-        }>
-      ).map((q) => ({
-        source: q.source as PoolType,
-        pool: q.pool,
-        feeBps: Number(q.feeBps),
-        amountIn: q.amountIn.toString(),
-        amountOut: q.amountOut.toString(),
-      }))
-    : undefined;
-
-  return { ...result, data };
 }
 
 export function useRouteFinder(params: {
@@ -195,51 +165,90 @@ export function useRouteFinder(params: {
 }) {
   const [routes, setRoutes] = useState<SwapRouteResult[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [lastFetchedAt, setLastFetchedAt] = useState<number | null>(null);
 
+  const hasInput =
+    !!params.tokenIn &&
+    !!params.tokenOut &&
+    !!params.amountIn &&
+    params.amountIn !== "0";
+
+  // Derive staleness: stale if last fetch was > 30s ago
+  const [now, setNow] = useState(Date.now());
   useEffect(() => {
-    if (
-      !params.tokenIn ||
-      !params.tokenOut ||
-      !params.amountIn ||
-      params.amountIn === "0"
-    ) {
-      setRoutes([]);
-      setIsLoading(false);
+    const tick = setInterval(() => setNow(Date.now()), 5_000);
+    return () => clearInterval(tick);
+  }, []);
+  const isStale = lastFetchedAt !== null && now - lastFetchedAt > 30_000;
+
+  const fetchRoutes = useCallback(
+    async (isBackground: boolean, signal: AbortSignal) => {
+      if (!hasInput) return;
+      if (isBackground) {
+        setIsRefreshing(true);
+      } else {
+        setIsLoading(true);
+      }
       setError(null);
-      return;
-    }
-
-    setIsLoading(true);
-    setError(null);
-
-    const controller = new AbortController();
-
-    const timer = setTimeout(async () => {
       try {
         const url = `/api/routes?tokenIn=${encodeURIComponent(params.tokenIn)}&tokenOut=${encodeURIComponent(params.tokenOut)}&amountIn=${encodeURIComponent(params.amountIn)}`;
-        const res = await fetch(url, { signal: controller.signal });
+        const res = await fetch(url, { signal });
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const json = (await res.json()) as {
           success: boolean;
           data?: { routes: SwapRouteResult[]; timestamp: string };
         };
         setRoutes(json.data?.routes ?? []);
+        setLastFetchedAt(Date.now());
         setError(null);
       } catch (err) {
         if ((err as { name?: string }).name === "AbortError") return;
         setError(err instanceof Error ? err.message : "Failed to fetch routes");
-        setRoutes([]);
+        if (!isBackground) setRoutes([]);
       } finally {
         setIsLoading(false);
+        setIsRefreshing(false);
       }
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [params.tokenIn, params.tokenOut, params.amountIn, hasInput],
+  );
+
+  // Initial fetch (debounced 600ms)
+  useEffect(() => {
+    if (!hasInput) {
+      setRoutes([]);
+      setIsLoading(false);
+      setError(null);
+      setLastFetchedAt(null);
+      return;
+    }
+
+    const controller = new AbortController();
+    const timer = setTimeout(() => {
+      void fetchRoutes(false, controller.signal);
     }, 600);
 
     return () => {
       clearTimeout(timer);
       controller.abort();
     };
-  }, [params.tokenIn, params.tokenOut, params.amountIn]);
+  }, [hasInput, fetchRoutes]);
 
-  return { routes, isLoading, error };
+  // Auto-refresh every 5s when input is valid
+  useEffect(() => {
+    if (!hasInput) return;
+    const controller = new AbortController();
+    const interval = setInterval(() => {
+      void fetchRoutes(true, controller.signal);
+    }, 5_000);
+    return () => {
+      clearInterval(interval);
+      controller.abort();
+    };
+  }, [hasInput, fetchRoutes]);
+
+  return { routes, isLoading, isRefreshing, isStale, lastFetchedAt, error };
 }

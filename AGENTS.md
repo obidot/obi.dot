@@ -2,8 +2,11 @@
 
 Obidot — the first cross-chain DEX aggregator on Polkadot Hub. An ERC-4626 vault
 on Polkadot Hub (PolkaVM) with cross-chain liquidity aggregation across Polkadot
-parachains (XCM) and EVM chains (Hyperbridge ISMP). An AI-driven autonomous agent
-operates as a sub-feature for intent-based strategy execution.
+parachains (XCM) and EVM chains (Hyperbridge ISMP). The shipped app now includes
+streamed agent chat proposals with short per-address memory, server-backed limit
+orders, indexed analytics panels, and a local-lifecycle cross-chain tracker. The
+docs site and AGENTS files should stay aligned with those live surfaces and their
+current limitations.
 
 ## Repository Structure
 
@@ -107,6 +110,14 @@ All verified on Blockscout at `https://blockscout-testnet.polkadot.io`.
 | Swap | `/swap` | `src/app/swap/page.tsx`, `src/components/swap/` |
 | Yields + LP | `/yields` | `src/app/yields/page.tsx`, `src/components/liquidity/liquidity-panel.tsx` |
 | Insights | `/insights` | `src/app/insights/page.tsx` |
+| Agent | `/agent` | `src/app/agent/page.tsx`, `src/components/chat/interactive-chat.tsx` |
+
+### App / Agent Surface Notes
+- `POST /api/chat` is still the read-only inspection endpoint.
+- `POST /api/chat/execute` is the streamed browser surface that can emit swap proposals, keeps short in-memory history per wallet address, rate-limits by wallet address, and still leaves final execution to the browser wallet.
+- Limit orders are agent-monitored through `/api/limit-orders*`; they are no longer localStorage-only.
+- `/insights` is backed by `obi.index` `protocolStats`, `topRoutes`, and `priceHistory`; keep docs clear that these are indexed analytics, not direct on-chain reads.
+- Cross-chain status in the app is currently based on locally indexed Polkadot Hub lifecycle events. Do not describe destination-host execution on remote chains as fully indexed unless that backend work is actually present.
 
 ### UniswapV2 Liquidity Panel
 - Opened by clicking `+ Earn` on a UV2 row in `/yields`

@@ -33,6 +33,7 @@ export const NAV_ITEMS: NavItem[] = [
   { label: "Cross-Chain", href: "/crosschain" },
   { label: "Insights", href: "/insights" },
   { label: "Agent", href: "/agent" },
+  { label: "Docs", href: "/docs/agent-kit" },
   { label: "Faucet", href: "/faucet", visibleOnChainId: 420420417 },
   { label: "Dashboard", href: "/" },
 ];

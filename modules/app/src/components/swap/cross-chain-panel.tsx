@@ -25,13 +25,19 @@ import {
   useWaitForTransactionReceipt,
   useWriteContract,
 } from "wagmi";
+import { RouteStatusBadge } from "@/components/ui/route-status-badge";
 import { useRouteFinder } from "@/hooks/use-swap";
 import { ERC20_APPROVE_ABI, SWAP_ROUTER_ABI } from "@/lib/abi";
 import { CONTRACTS, GAS_LIMITS, ZERO_BYTES32 } from "@/lib/constants";
 import { cn, formatTokenAmount } from "@/lib/format";
 import { TOKENS } from "@/shared/trade/swap";
 import { PoolType, type SwapRouteResult } from "@/types";
+import { CrossChainStatusPanel } from "./cross-chain-status-panel";
 import TokenPicker from "./token-picker";
+import {
+  type XcmRouteStatusItem,
+  XcmRouteStatusPanel,
+} from "./xcm-route-status-panel";
 
 interface XCMChain {
   id: string;
@@ -131,24 +137,6 @@ function matchRouteToChain(route: SwapRouteResult, chainId: string): boolean {
     chainflip: ["chainflip"],
   };
   return (map[chainId] ?? []).some((keyword) => label.includes(keyword));
-}
-
-function StatusPill({ status }: { status: SwapRouteResult["status"] }) {
-  const classes: Record<SwapRouteResult["status"], string> = {
-    live: "bg-accent text-accent-foreground",
-    mainnet_only: "bg-primary text-primary-foreground",
-    coming_soon: "bg-surface-alt text-text-secondary",
-    no_liquidity: "bg-destructive text-white",
-  };
-
-  const labels: Record<SwapRouteResult["status"], string> = {
-    live: "Live",
-    mainnet_only: "Mainnet Only",
-    coming_soon: "Coming Soon",
-    no_liquidity: "No Liquidity",
-  };
-
-  return <span className={cn("pill", classes[status])}>{labels[status]}</span>;
 }
 
 interface ChainSelectorProps {
@@ -352,6 +340,88 @@ export default function CrossChainSwapPanel() {
   const activeRoute = xcmRoutes.find((route) =>
     matchRouteToChain(route, selectedChain.id),
   );
+  const routeStatusItems = useMemo<XcmRouteStatusItem[]>(
+    () =>
+      XCM_CHAINS.map((chain) => {
+        const isRelayChain = chain.id === "relay";
+        const matchedRoute = xcmRoutes.find((route) =>
+          matchRouteToChain(route, chain.id),
+        );
+
+        if (isRelayChain) {
+          return {
+            id: chain.id,
+            name: chain.name,
+            icon: chain.icon,
+            type: chain.type,
+            paraId: chain.paraId,
+            estTime: chain.estTime,
+            selected: chain.id === selectedChain.id,
+            executable: isRelayTokenSupported,
+            status: isRelayTokenSupported ? "live" : "unavailable",
+            routeId: isRelayTokenSupported ? "relay-teleport" : undefined,
+            note: isRelayTokenSupported
+              ? "Relay Teleport is the direct live execution path on this testnet surface. This screen can dispatch the current transfer through the XCM executor."
+              : "Relay Teleport currently accepts tDOT only. Switch the input token back to tDOT to make this route executable from this screen.",
+          };
+        }
+
+        if (!matchedRoute) {
+          return {
+            id: chain.id,
+            name: chain.name,
+            icon: chain.icon,
+            type: chain.type,
+            paraId: chain.paraId,
+            estTime: chain.estTime,
+            selected: chain.id === selectedChain.id,
+            executable: false,
+            status: parsedAmountIn
+              ? isLoading
+                ? "pending"
+                : "unavailable"
+              : "pending",
+            note: parsedAmountIn
+              ? isLoading
+                ? "Checking route availability for the current amount."
+                : "No preview route is currently available for this destination and token pair."
+              : "Enter an amount to inspect route reachability for this destination.",
+          };
+        }
+
+        return {
+          id: chain.id,
+          name: chain.name,
+          icon: chain.icon,
+          type: chain.type,
+          paraId: chain.paraId,
+          estTime: chain.estTime,
+          selected: chain.id === selectedChain.id,
+          executable: matchedRoute.status === "live",
+          status: matchedRoute.status,
+          routeId: matchedRoute.id,
+          note:
+            matchedRoute.status === "simulated"
+              ? "Preview-only quote backed by oracle pricing. Execution stays disabled until the live XCM pathway is available."
+              : matchedRoute.status === "live"
+                ? "Reachable on the current network with a live quote and indexed route path."
+                : matchedRoute.status === "mainnet_only"
+                  ? "Route shape is known, but execution is intentionally gated to mainnet."
+                  : matchedRoute.status === "coming_soon"
+                    ? chain.id === "chainflip"
+                      ? "Chainflip is staged as a DOT and ETH bridge roadmap item. Quotes and execution stay disabled until the live integration is wired."
+                      : "Destination has a reserved integration slot, but the adapter or bridge is not deployed yet."
+                    : "Destination pair is recognized, but there is no usable liquidity for the current trade size.",
+        };
+      }),
+    [
+      isLoading,
+      isRelayTokenSupported,
+      parsedAmountIn,
+      selectedChain.id,
+      xcmRoutes,
+    ],
+  );
 
   const relayReceiveAmount = useMemo(() => {
     if (!isRelayTeleport || !parsedAmountIn) return null;
@@ -497,6 +567,7 @@ export default function CrossChainSwapPanel() {
 
     if (!activeRoute) return "No Route Available";
     if (activeRoute.status === "mainnet_only") return "Mainnet Only";
+    if (activeRoute.status === "simulated") return "Simulated Quote Only";
     if (activeRoute.status === "coming_soon") return "Coming Soon";
     if (activeRoute.status === "no_liquidity") return "No Liquidity";
     return "Preview Only";
@@ -549,6 +620,8 @@ export default function CrossChainSwapPanel() {
               Estimated settlement: {selectedChain.estTime}
             </p>
           </div>
+
+          <XcmRouteStatusPanel items={routeStatusItems} />
 
           <div className="grid gap-3">
             <label
@@ -634,7 +707,7 @@ export default function CrossChainSwapPanel() {
                 <span className="retro-label text-[0.95rem] text-text-secondary">
                   Active Route
                 </span>
-                <StatusPill status={activeRoute.status} />
+                <RouteStatusBadge status={activeRoute.status} />
               </div>
               <dl className="divide-y divide-border-subtle">
                 <div className="flex items-center justify-between gap-3 px-4 py-3">
@@ -703,12 +776,28 @@ export default function CrossChainSwapPanel() {
         </div>
       )}
 
+      {activeRoute?.status === "simulated" && (
+        <div className="border-[3px] border-border bg-accent/10 px-4 py-3 shadow-[3px_3px_0_0_var(--border)]">
+          <div className="flex items-start gap-3">
+            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-accent" />
+            <p className="text-[13px] leading-relaxed text-text-secondary">
+              {selectedChain.name} is shown as a simulated testnet route. The
+              output uses an oracle-backed estimate with a conservative fee
+              spread, but this path is preview-only until live XCM execution is
+              available.
+            </p>
+          </div>
+        </div>
+      )}
+
       {activeRoute?.status === "coming_soon" && (
         <div className="border-[3px] border-border bg-surface-alt px-4 py-3 shadow-[3px_3px_0_0_var(--border)]">
           <div className="flex items-start gap-3">
             <Clock className="mt-0.5 h-4 w-4 shrink-0 text-text-primary" />
             <p className="text-[13px] text-text-secondary">
-              {selectedChain.name} integration is staged but not live yet.
+              {selectedChain.id === "chainflip"
+                ? "Chainflip is staged as a DOT and ETH bridge roadmap item. The adapter stub is in place, but quotes and execution stay disabled until the live integration is wired."
+                : `${selectedChain.name} integration is staged but not live yet.`}
             </p>
           </div>
         </div>
@@ -736,6 +825,11 @@ export default function CrossChainSwapPanel() {
           <ExternalLink className="h-3 w-3" />
         </a>
       </p>
+
+      <CrossChainStatusPanel
+        address={address}
+        activeTxHash={swapTxHash ?? undefined}
+      />
     </div>
   );
 }

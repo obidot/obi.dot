@@ -1,9 +1,15 @@
 ---
 title: AI Agent
-description: Autonomous AI agent module — architecture, LangChain tools, decision pipeline, services, Fastify API server, WebSocket, Telegram bot, Bifrost yield monitoring, and DEX aggregator swap routing.
+description: Autonomous AI agent module — architecture, Fastify API surfaces, streamed browser proposals, limit-order monitoring, WebSocket events, Telegram bot, and DEX aggregator routing.
 ---
 
-The Obidot AI Agent is an autonomous financial strategist that manages the vault system. Built with TypeScript, [LangChain](https://js.langchain.com/), and [Viem](https://viem.sh/), it runs an observation-decision-execution loop that monitors yield opportunities across Polkadot parachains, then signs and submits strategy intents to the vault's on-chain policy engine. It also exposes a Fastify HTTP/WebSocket API consumed by the Next.js dashboard, and optionally integrates with Telegram.
+The Obidot AI Agent is an autonomous financial strategist that manages the vault system. Built with TypeScript, [LangChain](https://js.langchain.com/), and [Viem](https://viem.sh/), it runs an observation-decision-execution loop that monitors yield opportunities across Polkadot parachains, then signs and submits strategy intents to the vault's on-chain policy engine. It also exposes a Fastify HTTP/WebSocket API consumed by the Next.js dashboard, including a read-only chat surface, a streamed browser proposal surface, and agent-monitored limit-order APIs.
+
+## Current Browser Surfaces
+
+- `POST /api/chat` is the inspection-only endpoint. It can answer questions, read state, quote routes, and optionally persist short history by wallet address, but it never executes.
+- `POST /api/chat/execute` is the streamed browser endpoint used by the app. It requires a wallet address, keeps short in-memory history per address, rate-limits requests per address, and can propose a route, but wallet approval and transaction submission still happen in the client.
+- Limit orders are stored and monitored in the agent process, exposed through `/api/limit-orders*`, and surfaced back to the browser for review before any approval flow.
 
 ## Architecture
 
@@ -23,18 +29,18 @@ The Obidot AI Agent is an autonomous financial strategist that manages the vault
 │  ┌─────────────────────┐    ┌────────────────────────────────────┐  │
 │  │   Services           │    │   Fastify API Server (port 3011)   │  │
 │  │ • YieldService       │    │                                    │  │
-│  │ • CrossChainService  │    │   GET  /api/vault/state            │  │
-│  │ • SignerService      │    │   GET  /api/vault/performance      │  │
+│  │ • CrossChainService  │    │   GET  /api/health                 │  │
+│  │ • SignerService      │    │   GET  /api/vault/state            │  │
 │  │ • SwapRouterService  │    │   GET  /api/yields                 │  │
-│  │ • StrategyStore      │    │   GET  /api/yields/bifrost         │  │
-│  │ • EventBus           │    │   GET  /api/strategies             │  │
-│  │ • OracleService      │    │   GET  /api/crosschain/state       │  │
-│  │ • PriceAggregator    │    │   GET  /api/agent/log              │  │
-│  └─────────────────────┘    │   POST /api/chat (read-only)       │  │
-│                              │   GET  /api/swap/quote             │  │
-│  ┌─────────────────────┐    │   GET  /api/swap/routes            │  │
-│  │   Telegram Bot       │    │   GET  /ws  (WebSocket)            │  │
-│  │ (configured LLM +    │    └────────────────────────────────────┘  │
+│  │ • LimitOrderMonitor  │    │   GET  /api/agent/log              │  │
+│  │ • StrategyStore      │    │   POST /api/chat                   │  │
+│  │ • EventBus           │    │   POST /api/chat/execute           │  │
+│  │ • PriceAggregator    │    │   /api/limit-orders/*              │  │
+│  └─────────────────────┘    │   GET  /api/swap/routes            │  │
+│                              │   GET  /ws  (WebSocket)            │  │
+│  ┌─────────────────────┐                                            │
+│  │   Telegram Bot       │                                            │
+│  │ (configured LLM +    │                                            │
 │  │  operator tools)     │                                            │
 │  └─────────────────────┘                                            │
 └────────────────────────────────────────────────────────────────────┘
@@ -45,33 +51,37 @@ The Obidot AI Agent is an autonomous financial strategist that manages the vault
 ```
 modules/agent/
 ├── src/
-│   ├── main.ts                       # Entry point — starts loop, API server, Telegram bot
+│   ├── bootstrap.ts                  # Current runtime entry used by dev/start scripts
+│   ├── main.ts                       # Bootstrap helpers and service wiring
 │   ├── agent/
 │   │   ├── loop.ts                   # AutonomousLoop class — 4-phase cycle
 │   │   ├── systemPrompt.ts           # LLM system prompt (identity, rules, output format)
-│   │   └── tools.ts                  # 9 LangChain tools (yield, vault, strategy, Bifrost, cross-chain, swap)
+│   │   └── tools.ts                  # Autonomous loop tool wiring
 │   ├── api/
 │   │   ├── server.ts                 # Fastify server with CORS, WebSocket upgrade
 │   │   └── routes/
-│   │       ├── vault.ts              # GET /api/vault/state, /api/vault/performance
-│   │       ├── yields.ts             # GET /api/yields, /api/yields/bifrost
-│   │       ├── strategies.ts         # GET /api/strategies
-│   │       ├── crosschain.ts         # GET /api/crosschain/state
-│   │       ├── swap.ts               # GET /api/swap/quote, /api/swap/routes
-│   │       └── agent.ts              # GET /api/agent/log, POST /api/chat
+│   │       ├── agent.ts              # Agent log + chat routes
+│   │       ├── crosschain.ts         # Cross-chain state routes
+│   │       ├── limit-orders.ts       # Agent-monitored limit-order CRUD
+│   │       ├── strategies.ts         # Indexed strategy history
+│   │       ├── swap.ts               # Quote + route routes
+│   │       ├── vault.ts              # Vault state + performance
+│   │       └── yields.ts             # Yield surfaces
 │   ├── config/
 │   │   ├── constants.ts              # Addresses, ABIs, protocol registry, chain configs
 │   │   ├── env.ts                    # Environment variable parsing (Zod validated)
 │   │   └── oracle.config.ts          # Oracle feed definitions (symbols, decimals, heartbeats)
 │   ├── services/
-│   │   ├── yield.service.ts          # Yield fetcher — DeFiLlama TVL + simulated APYs
 │   │   ├── crosschain.service.ts     # Multi-chain state aggregator
+│   │   ├── event-bus.service.ts      # WebSocket relay bus
+│   │   ├── intent.service.ts         # Intent execution helpers
+│   │   ├── limit-order-monitor.service.ts # Off-chain limit-order monitor
+│   │   ├── oracle.service.ts         # Oracle freshness + price reads
+│   │   ├── price-aggregator.service.ts # On-chain/off-chain price fetching
 │   │   ├── signer.service.ts         # EIP-712 signing + on-chain execution
-│   │   ├── swap-router.service.ts    # SwapQuoter reads + best-route construction
-│   │   ├── strategy-store.service.ts # In-memory strategy + decision log (singleton)
-│   │   ├── event-bus.service.ts      # Node EventEmitter bus for real-time WebSocket relay
-│   │   ├── oracle.service.ts         # Multi-source price aggregation with TWAP
-│   │   └── price-aggregator.service.ts # On-chain/off-chain price fetching (Pyth, CG, Binance)
+│   │   ├── strategy-store.service.ts # In-memory decisions + history
+│   │   ├── swap-router.service.ts    # Quote and route assembly
+│   │   └── yield.service.ts          # Yield fetcher — TVL + simulated APYs
 │   ├── telegram/
 │   │   └── bot.ts                    # Telegram bot — createLlm() + operator tools, /start command
 │   ├── types/
@@ -186,7 +196,15 @@ When no profitable opportunity exists or risk is too high:
 
 ## LangChain Tools
 
-The agent registers 9 custom LangChain tools:
+The autonomous loop wires a focused set of inspection and execution tools. The browser chat uses the read-only subset plus route discovery.
+
+## Browser Guardrails
+
+- `POST /api/chat/execute` rejects missing wallet addresses.
+- Oversized browser prompts are rejected at `4000` characters.
+- Per-address history is capped to the latest `40` messages.
+- Per-address rate limiting is capped to `10` requests per minute.
+- Streamed proposals are advisory only. The browser wallet remains the only execution authority.
 
 ### Perception Tools
 
@@ -415,6 +433,10 @@ The Fastify HTTP server starts on port `API_PORT` (default `3011`). All routes a
 | `GET`  | `/api/crosschain/state`  | Hub + satellite vault state aggregate                               |
 | `GET`  | `/api/agent/log`         | Agent decision log (most recent first)                              |
 | `POST` | `/api/chat`              | Read-only AI chat for state, yields, and route inspection           |
+| `POST` | `/api/chat/execute`      | Streamed browser chat that can emit route proposals                 |
+| `GET`  | `/api/limit-orders/:address` | List monitored limit orders for one wallet                     |
+| `POST` | `/api/limit-orders`      | Create an agent-monitored limit order                               |
+| `DELETE` | `/api/limit-orders/:id` | Cancel an agent-monitored limit order                            |
 | `GET`  | `/api/routes`            | Multi-hop route discovery for a token pair (sorted best-first)      |
 | `GET`  | `/api/quote`             | Single best route for a token pair                                  |
 | `GET`  | `/api/swap/quote`        | Best swap quote via `SwapQuoter.getBestQuote()`                     |
@@ -424,12 +446,14 @@ The Fastify HTTP server starts on port `API_PORT` (default `3011`). All routes a
 
 ### Response Envelope
 
-All REST responses follow a standard envelope:
+All non-streaming REST responses follow a standard envelope:
 
 ```json
 { "success": true, "data": <T> }
 { "success": false, "error": "message" }
 ```
+
+`POST /api/chat/execute` is the exception: it returns `text/event-stream` with `message`, `trade_proposal`, `done`, and `error` events.
 
 ### WebSocket Events
 
@@ -440,6 +464,7 @@ type WsEvent =
   | { type: "vault:stateUpdate"; data: VaultState }
   | { type: "strategy:executed"; data: StrategyRecord }
   | { type: "agent:decision"; data: AgentDecisionRecord }
+  | { type: "limit_order:triggered"; data: PendingOrder }
   | { type: "heartbeat"; data: { timestamp: string } };
 ```
 

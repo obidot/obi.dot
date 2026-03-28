@@ -10,6 +10,7 @@ const NAV_ITEMS = [
   { label: "Yields", href: "/yields" },
   { label: "Cross-Chain", href: "/crosschain" },
   { label: "Agent", href: "/agent" },
+  { label: "Docs", href: "/docs/agent-kit" },
 ];
 
 export function Sidebar() {

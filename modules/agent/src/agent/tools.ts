@@ -20,6 +20,7 @@ import {
   DestType,
   type LocalSwapDecision,
   POOL_TYPE_LABELS,
+  type PoolType,
   type ReallocateDecision,
   type StrategyIntent,
   type UniversalIntentDecision,
@@ -656,6 +657,9 @@ export class SwapQuoteTool extends Tool {
             feeBps: bestQuote.feeBps.toString(),
             amountIn: bestQuote.amountIn.toString(),
             amountOut: bestQuote.amountOut.toString(),
+            status: bestQuote.status,
+            previewOnly: bestQuote.previewOnly,
+            note: bestQuote.note,
           },
           allQuotes: allQuotes.map((q) => ({
             source: POOL_TYPE_LABELS[q.source] ?? String(q.source),
@@ -663,6 +667,9 @@ export class SwapQuoteTool extends Tool {
             feeBps: q.feeBps.toString(),
             amountIn: q.amountIn.toString(),
             amountOut: q.amountOut.toString(),
+            status: q.status,
+            previewOnly: q.previewOnly,
+            note: q.note,
           })),
           adapters: this.swapRouterService.getPoolAdapters().map((a) => ({
             poolType: a.name,
@@ -795,6 +802,18 @@ export class ExecuteLocalSwapTool extends Tool {
         return JSON.stringify({
           success: false,
           error: "SwapQuoter.buildBestSwap returned no result for this pair.",
+        });
+      }
+
+      if (
+        this.swapRouterService.isPreviewOnlyPoolType(
+          swapParams.route.poolType as PoolType,
+        )
+      ) {
+        return JSON.stringify({
+          success: false,
+          error:
+            "Preview-only routes cannot be executed. AssetHub Pair quotes are currently simulation-only on testnet.",
         });
       }
 
@@ -1181,13 +1200,19 @@ export class FindRoutesTool extends Tool {
           amountIn,
           liveRoutes: liveRoutes.map((r) => ({
             id: r.id,
+            tokenIn: r.tokenIn,
+            tokenOut: r.tokenOut,
+            amountIn: r.amountIn,
             amountOut: r.amountOut,
             minAmountOut: r.minAmountOut,
             totalFeeBps: r.totalFeeBps,
             totalPriceImpactBps: r.totalPriceImpactBps,
+            routeType: r.routeType,
+            status: r.status,
             hops: r.hops.map((h) => ({
               pool: h.pool,
               poolLabel: h.poolLabel,
+              poolType: h.poolType,
               tokenIn: h.tokenIn,
               tokenInSymbol: h.tokenInSymbol,
               tokenOut: h.tokenOut,
@@ -1195,6 +1220,7 @@ export class FindRoutesTool extends Tool {
               amountIn: h.amountIn,
               amountOut: h.amountOut,
               feeBps: h.feeBps,
+              priceImpactBps: h.priceImpactBps,
             })),
           })),
           totalRoutesFound: routes.length,

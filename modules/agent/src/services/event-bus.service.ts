@@ -1,4 +1,5 @@
 import { EventEmitter } from "node:events";
+import type { SwapRouteResult } from "../types/index.js";
 import { logger } from "../utils/logger.js";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -65,10 +66,12 @@ export interface LimitOrderTriggeredEvent {
   type: "limit_order:triggered";
   data: {
     orderId: string;
+    ownerAddress: string;
     tokenInSymbol: string;
     tokenOutSymbol: string;
     targetPrice: string;
     currentPrice: string;
+    proposedRoute: SwapRouteResult;
     timestamp: number;
   };
 }

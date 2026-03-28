@@ -59,26 +59,28 @@ Five pairs are live in the UV2 pair registry:
 | tDOT / TKB | Local Hub |
 | TKB / TKA | Local Hub |
 
-## Cross-Chain Route Stubs
+## Cross-Chain Route Statuses
 
-The route finder appends stubs for all registered adapters. On testnet, only `live` stubs are executable.
+The route finder appends preview-only status rows for registered adapters and bridge ideas. The app now distinguishes executable `live` routes from `simulated`, `mainnet_only`, and `coming_soon` surfaces.
 
-| Route | Type | Status |
-|-------|------|--------|
-| RelayTeleport (XCM) | xcm | live |
-| Hydration Omnipool (XCM) | xcm | mainnet_only |
-| Bifrost DEX (XCM) | xcm | mainnet_only |
-| Uniswap V2 (Polkadot Hub) | local | live |
-| Karura DEX (XCM) | xcm | mainnet_only |
-| Interlay Loans (XCM) | xcm | mainnet_only |
-| Moonbeam DEX (XCM) | xcm | coming_soon |
-| Hyperbridge (ISMP) | bridge | mainnet_only |
-| Snowbridge (BridgeHub → Ethereum) | bridge | coming_soon |
-| ChainFlip (Polkadot → Ethereum) | bridge | coming_soon |
+| Route | Type | Current Testnet Status |
+|-------|------|------------------------|
+| RelayTeleport (XCM) | xcm | `live` |
+| Hydration Omnipool (XCM) | xcm | `simulated` when adapter simulation mode is enabled, otherwise `mainnet_only` |
+| AssetHub Pair | xcm | `simulated` preview when simulation mode is enabled and a supported pair can be quoted; otherwise omitted instead of faking output |
+| Bifrost DEX (XCM) | xcm | `mainnet_only` |
+| Uniswap V2 (Polkadot Hub) | local | `live` |
+| Karura DEX (XCM) | xcm | `mainnet_only` |
+| Interlay Loans (XCM) | xcm | `mainnet_only` |
+| Moonbeam DEX (XCM) | xcm | `coming_soon` |
+| Uniswap V3 (Polkadot Hub) | local | `coming_soon` preview stub only |
+| Hyperbridge (ISMP) | bridge | `mainnet_only` |
+| Snowbridge (BridgeHub → Ethereum) | bridge | `coming_soon` |
+| ChainFlip (Polkadot → Ethereum) | bridge | `coming_soon` |
 
 ## Pool Types
 
-The router defines nine pool types via the `PoolType` enum:
+The router currently defines ten pool types via the `PoolType` enum:
 
 | Value | Name                | Target                     | Mechanism                             |
 | ----- | ------------------- | -------------------------- | ------------------------------------- |
@@ -91,6 +93,7 @@ The router defines nine pool types via the `PoolType` enum:
 | `6`   | `Karura`            | Karura (parachain 2000)    | XCM Transact → Dex pallet 56          |
 | `7`   | `Moonbeam`          | Moonbeam (parachain 2004)  | XCM Transact → Ethereum pallet 4      |
 | `8`   | `Interlay`          | Interlay (parachain 2032)  | XCM Transact → Loans pallet 59        |
+| `9`   | `Chainflip`         | Chainflip bridge stub      | Honest `coming_soon` placeholder      |
 
 ## Data Types
 
@@ -245,6 +248,8 @@ Transient storage is cleared automatically at the end of the transaction — no 
 ## SwapQuoter
 
 `SwapQuoter` is a read-only companion contract. It queries the `SwapRouter`'s adapter registry and compares quotes across all registered pool types.
+
+Honesty rule for current adapters: unsupported or disabled-simulation preview adapters now return zero or no quote instead of fake 1:1 output. The app and agent layer then surface those paths as preview-only statuses rather than executable routes.
 
 ### `getBestQuote`
 

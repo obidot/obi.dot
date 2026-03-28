@@ -2,6 +2,7 @@ import { AutonomousLoop } from "./agent/loop.js";
 import { createReadOnlyObidotTools } from "./agent/tools.js";
 import { startApiServer } from "./api/server.js";
 import { env } from "./config/env.js";
+import { LimitOrderMonitorService } from "./services/limit-order-monitor.service.js";
 import { startTelegramBot } from "./telegram/bot.js";
 import { logger } from "./utils/logger.js";
 
@@ -26,6 +27,10 @@ async function main(): Promise<void> {
     services.crossChainService,
     services.swapRouterService,
   );
+  const limitOrderMonitorService = new LimitOrderMonitorService(
+    services.swapRouterService,
+  );
+  limitOrderMonitorService.start(30_000);
 
   // ── API Server ─────────────────────────────────────────────────────────
   try {
@@ -34,6 +39,7 @@ async function main(): Promise<void> {
       yieldService: services.yieldService,
       crossChainService: services.crossChainService,
       swapRouterService: services.swapRouterService,
+      limitOrderMonitorService,
       chatTools,
     });
   } catch (error) {
@@ -62,6 +68,7 @@ async function main(): Promise<void> {
   // ── Graceful Shutdown ──────────────────────────────────────────────────
   const shutdown = () => {
     logger.info("Shutdown signal received — completing current cycle...");
+    limitOrderMonitorService.stop();
     loop.stop();
   };
 
@@ -95,6 +102,6 @@ async function main(): Promise<void> {
 // ─────────────────────────────────────────────────────────────────────────────
 
 main().catch((error: unknown) => {
-  console.error("Fatal startup error:", error);
+  logger.fatal({ err: error }, "Fatal startup error");
   process.exit(1);
 });

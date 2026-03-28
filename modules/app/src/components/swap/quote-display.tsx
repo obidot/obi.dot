@@ -5,7 +5,7 @@ import { useState } from "react";
 import { formatUnits } from "viem";
 import { cn } from "@/lib/format";
 import type { SwapQuoteResult, SwapToken } from "@/types";
-import { POOL_TYPE_LABELS, type PoolType } from "@/types";
+import { getPoolTypeLabel } from "@/types";
 
 interface QuoteDisplayProps {
   quote: SwapQuoteResult;
@@ -26,9 +26,11 @@ export function QuoteDisplay({
 }: QuoteDisplayProps) {
   const [expanded, setExpanded] = useState(false);
   const feePercent = (quote.feeBps / 100).toFixed(2);
-  const sourceLabel = POOL_TYPE_LABELS[quote.source as PoolType] ?? "Unknown";
+  const sourceLabel = getPoolTypeLabel(quote.source);
   const slippagePercent = (slippageBps / 100).toFixed(1);
   const impactPct = (priceImpactBps / 100).toFixed(2);
+  const isPreviewOnly = quote.previewOnly ?? false;
+  const quoteStatus = quote.status ?? "live";
 
   const impactColor =
     priceImpactBps < 50
@@ -54,6 +56,17 @@ export function QuoteDisplay({
 
   return (
     <div className="mb-4 space-y-3 border-b-[3px] border-border pb-4">
+      {(isPreviewOnly || quoteStatus !== "live" || quote.note) && (
+        <div className="border-[3px] border-warning bg-warning/10 px-3 py-2.5 shadow-[2px_2px_0_0_var(--border)]">
+          <p className="text-[13px] leading-relaxed text-text-secondary">
+            {quote.note ??
+              (isPreviewOnly
+                ? "This quote is preview-only and should not be treated as an executable route."
+                : `Quote status: ${quoteStatus}.`)}
+          </p>
+        </div>
+      )}
+
       {/* Big metric row */}
       <div className="grid grid-cols-2 gap-2">
         {/* Min Received */}
@@ -104,6 +117,12 @@ export function QuoteDisplay({
             <span className="text-[13px] text-text-muted">Pool Fee</span>
             <span className="font-mono text-[13px] text-text-secondary">
               {feePercent}%
+            </span>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-[13px] text-text-muted">Quote Status</span>
+            <span className="font-mono text-[13px] text-text-secondary">
+              {isPreviewOnly ? "Preview only" : quoteStatus}
             </span>
           </div>
           <div className="flex justify-between">

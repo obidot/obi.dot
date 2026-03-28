@@ -72,6 +72,9 @@ export function registerSwapRoutes(
                 feeBps: bestQuote.feeBps.toString(),
                 amountIn: bestQuote.amountIn.toString(),
                 amountOut: bestQuote.amountOut.toString(),
+                status: bestQuote.status,
+                previewOnly: bestQuote.previewOnly,
+                note: bestQuote.note,
               }
             : null,
           allQuotes: allQuotes.map((q) => ({
@@ -80,6 +83,9 @@ export function registerSwapRoutes(
             feeBps: q.feeBps.toString(),
             amountIn: q.amountIn.toString(),
             amountOut: q.amountOut.toString(),
+            status: q.status,
+            previewOnly: q.previewOnly,
+            note: q.note,
           })),
           timestamp: Date.now(),
         },

@@ -92,6 +92,7 @@ export enum PoolType {
   Karura = 6,
   Moonbeam = 7,
   Interlay = 8,
+  Chainflip = 9,
 }
 
 /**
@@ -107,6 +108,7 @@ export const POOL_TYPE_LABELS: Record<PoolType, string> = {
   [PoolType.Karura]: "Karura DEX",
   [PoolType.Moonbeam]: "Moonbeam EVM",
   [PoolType.Interlay]: "Interlay Loans",
+  [PoolType.Chainflip]: "Chainflip Bridge",
 };
 
 /**
@@ -153,6 +155,9 @@ export interface SwapQuote {
   feeBps: bigint;
   amountIn: bigint;
   amountOut: bigint;
+  status: "live" | "simulated";
+  previewOnly: boolean;
+  note?: string;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -210,6 +215,9 @@ export interface SwapQuoteResult {
   feeBps: string;
   amountIn: string;
   amountOut: string;
+  status: "live" | "simulated";
+  previewOnly: boolean;
+  note?: string;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -273,9 +281,19 @@ export interface SwapRouteResult {
    *  - "live"          — ready to trade (pool has reserves)
    *  - "no_liquidity"  — path exists in UV2 but pool has zero reserves (needs seeding)
    *  - "mainnet_only"  — adapter deployed on mainnet only
+   *  - "simulated"     — oracle-backed estimate, preview only on testnet
    *  - "coming_soon"   — adapter not yet deployed
    */
-  status: "live" | "mainnet_only" | "coming_soon" | "no_liquidity";
+  status:
+    | "live"
+    | "mainnet_only"
+    | "simulated"
+    | "coming_soon"
+    | "no_liquidity";
+  /** True when the route is informational only and should not be executed. */
+  previewOnly?: boolean;
+  /** Optional user-facing note explaining route availability or limitations. */
+  note?: string;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

@@ -3,6 +3,7 @@
 import { Loader2, Network, SplitSquareHorizontal } from "lucide-react";
 import { Fragment, useEffect, useMemo, useState } from "react";
 import { useChainId } from "wagmi";
+import { RouteStatusBadge } from "@/components/ui/route-status-badge";
 import { useRouteFinder } from "@/hooks/use-swap";
 import { polkadotHubTestnet } from "@/lib/chains";
 import { cn, formatTokenAmount } from "@/lib/format";
@@ -17,30 +18,12 @@ function tokenColor(_symbol: string) {
 
 // ── Status / route-type badges ─────────────────────────────────────────────
 
-function StatusBadge({ status }: { status: SwapRouteResult["status"] }) {
-  const styles: Record<SwapRouteResult["status"], string> = {
-    live: "bg-primary text-primary-foreground",
-    mainnet_only: "bg-warning/15 text-warning",
-    coming_soon: "bg-surface-hover text-text-muted",
-    no_liquidity: "bg-danger/10 text-danger",
-  };
-  const labels: Record<SwapRouteResult["status"], string> = {
-    live: "LIVE",
-    mainnet_only: "MAINNET ONLY",
-    coming_soon: "COMING SOON",
-    no_liquidity: "NO LIQUIDITY",
-  };
-  return (
-    <span className={cn("pill text-[0.82rem]", styles[status])}>
-      {labels[status]}
-    </span>
-  );
-}
-
 function RouteTypeBadge({
   routeType,
+  label,
 }: {
   routeType: SwapRouteResult["routeType"];
+  label?: string;
 }) {
   const styles: Record<SwapRouteResult["routeType"], string> = {
     local: "bg-accent/10 text-accent border-accent/20",
@@ -54,9 +37,16 @@ function RouteTypeBadge({
   };
   return (
     <span className={cn("pill text-[0.82rem]", styles[routeType])}>
-      {labels[routeType]}
+      {label ?? labels[routeType]}
     </span>
   );
+}
+
+function routeTypeBadgeLabel(route: SwapRouteResult): string | undefined {
+  if (route.routeType !== "local") return undefined;
+  const label = route.hops[0]?.poolLabel ?? route.id;
+  if (/uniswap\s*v3/i.test(label)) return "V3";
+  return undefined;
 }
 
 // ── Token node ────────────────────────────────────────────────────────────
@@ -332,6 +322,7 @@ function LocalRouteCard({
   onWeightChange,
 }: LocalRouteCardProps) {
   const isNoLiquidity = route.status === "no_liquidity";
+  const isExecutable = route.status === "live" && !route.previewOnly;
   const amountOutDisplay = isNoLiquidity
     ? "—"
     : formatTokenAmount(route.amountOut, tokenOutDecimals, 6);
@@ -339,8 +330,8 @@ function LocalRouteCard({
   const impactPct = (impactBps / 100).toFixed(2);
   const feePct = (Number(route.totalFeeBps) / 100).toFixed(2);
   const isBest = rank === 0 && !isNoLiquidity;
-  // No-liquidity routes cannot be selected
-  const canSelect = !isNoLiquidity && !splitMode && !!onSelect;
+  const canSelect = isExecutable && !splitMode && !!onSelect;
+  const canSplitToggle = !!splitMode && isExecutable && !!onSplitToggle;
 
   return (
     <div
@@ -370,15 +361,20 @@ function LocalRouteCard({
           {splitMode && (
             <button
               type="button"
+              disabled={!canSplitToggle}
               onClick={(e) => {
                 e.stopPropagation();
-                onSplitToggle?.(route);
+                if (canSplitToggle) {
+                  onSplitToggle(route);
+                }
               }}
               className={cn(
                 "flex h-4 w-4 items-center justify-center border-[2px] shrink-0 transition-colors",
                 splitSelected
                   ? "border-border bg-primary/30"
-                  : "border-border hover:border-primary/50",
+                  : canSplitToggle
+                    ? "border-border hover:border-primary/50"
+                    : "border-border/50 bg-surface text-text-muted/60",
               )}
             >
               {splitSelected && (
@@ -386,7 +382,7 @@ function LocalRouteCard({
               )}
             </button>
           )}
-          <StatusBadge status={route.status} />
+          <RouteStatusBadge status={route.status} />
           {isBest && (
             <span className="pill bg-primary text-primary-foreground text-[0.8rem]">
               BEST
@@ -466,18 +462,43 @@ function LocalRouteCard({
           </span>
         )}
       </div>
+
+      {route.note && (
+        <div
+          className={cn(
+            "mt-2 border-t border-border/60 pt-2 text-[12px] leading-relaxed",
+            route.previewOnly || route.status === "simulated"
+              ? "text-primary"
+              : "text-text-muted",
+          )}
+        >
+          {route.note}
+        </div>
+      )}
     </div>
   );
 }
 
 // ── Cross-chain route card ─────────────────────────────────────────────────
 
-function CrossChainCard({ route }: { route: SwapRouteResult }) {
+function CrossChainCard({
+  route,
+  tokenOutDecimals = 18,
+  tokenOutSymbol = "?",
+}: {
+  route: SwapRouteResult;
+  tokenOutDecimals?: number;
+  tokenOutSymbol?: string;
+}) {
   const label = route.hops[0]?.poolLabel ?? route.id;
+  const previewAmount =
+    route.amountOut !== "0"
+      ? formatTokenAmount(route.amountOut, tokenOutDecimals, 4)
+      : null;
   return (
     <div
       className={cn(
-        "flex items-center justify-between gap-2 border-[3px] px-3 py-2.5 shadow-[3px_3px_0_0_var(--border)]",
+        "border-[3px] px-3 py-2.5 shadow-[3px_3px_0_0_var(--border)]",
         route.status === "live"
           ? "border-primary/20 bg-primary/5"
           : route.status === "mainnet_only"
@@ -485,13 +506,35 @@ function CrossChainCard({ route }: { route: SwapRouteResult }) {
             : "border-border bg-background/40 opacity-60",
       )}
     >
-      <div className="flex items-center gap-1.5 min-w-0">
-        <RouteTypeBadge routeType={route.routeType} />
-        <span className="text-[13px] text-text-primary font-medium truncate">
-          {label}
-        </span>
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <div className="flex items-center gap-1.5 min-w-0">
+            <RouteTypeBadge
+              routeType={route.routeType}
+              label={routeTypeBadgeLabel(route)}
+            />
+            {route.previewOnly && (
+              <span className="pill bg-primary/10 text-primary border-primary/20 text-[0.78rem]">
+                PREVIEW
+              </span>
+            )}
+            <span className="text-[13px] text-text-primary font-medium truncate">
+              {label}
+            </span>
+          </div>
+          {route.note && (
+            <p className="mt-1 text-[12px] leading-relaxed text-text-muted">
+              {route.note}
+            </p>
+          )}
+          {previewAmount && (
+            <p className="mt-1 font-mono text-[12px] text-text-secondary">
+              Est. {previewAmount} {tokenOutSymbol}
+            </p>
+          )}
+        </div>
+        <RouteStatusBadge status={route.status} />
       </div>
-      <StatusBadge status={route.status} />
     </div>
   );
 }
@@ -546,19 +589,17 @@ export function RouteDiagram({
     [],
   );
 
-  // Routes with actual hops go into on-chain section; stubs (no hops) go into cross-chain section
-  // Include "no_liquidity" dry paths in localRoutes so the hop diagram is visible
+  // Routes with actual hops go into the local section; local no-hop stubs stay
+  // visible as local previews instead of being mixed into the cross-chain list.
+  // Include "no_liquidity" dry paths in localRoutes so the hop diagram is visible.
   const localRoutes = routes.filter(
     (r) => r.routeType === "local" && r.hops.length > 0,
   );
   const liveLocalRoutes = localRoutes.filter((r) => r.status === "live");
-  const localStubs = routes.filter(
+  const localPreviewRoutes = routes.filter(
     (r) => r.routeType === "local" && r.hops.length === 0,
   );
-  const crossChainRoutes = [
-    ...routes.filter((r) => r.routeType !== "local"),
-    ...localStubs,
-  ];
+  const crossChainRoutes = routes.filter((r) => r.routeType !== "local");
 
   // Auto-select the best live local route when routes load and none is selected.
   // On testnet, skip mainnet_only routes since they aren't functional.
@@ -704,7 +745,7 @@ export function RouteDiagram({
       {!isLoading && localRoutes.length > 0 && (
         <div className="space-y-2">
           <p className="retro-label text-[0.9rem] text-text-secondary">
-            On-chain routes
+            Local routes
           </p>
           {localRoutes.map((r, i) => (
             <LocalRouteCard
@@ -730,6 +771,24 @@ export function RouteDiagram({
         </div>
       )}
 
+      {!isLoading && localPreviewRoutes.length > 0 && (
+        <div className="space-y-2">
+          <p className="retro-label text-[0.9rem] text-text-secondary">
+            Local previews
+          </p>
+          <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
+            {localPreviewRoutes.map((r) => (
+              <CrossChainCard
+                key={r.id}
+                route={r}
+                tokenOutDecimals={tokenOutDecimals}
+                tokenOutSymbol={tokenOutSymbol}
+              />
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Cross-chain routes */}
       {!isLoading && crossChainRoutes.length > 0 && (
         <div className="space-y-2">
@@ -738,7 +797,12 @@ export function RouteDiagram({
           </p>
           <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
             {crossChainRoutes.map((r) => (
-              <CrossChainCard key={r.id} route={r} />
+              <CrossChainCard
+                key={r.id}
+                route={r}
+                tokenOutDecimals={tokenOutDecimals}
+                tokenOutSymbol={tokenOutSymbol}
+              />
             ))}
           </div>
         </div>

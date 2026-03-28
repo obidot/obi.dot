@@ -3,7 +3,7 @@
 Obidot is the frontend, off-chain agent, and docs workspace for the Obidot protocol on Polkadot Hub. This repo is focused on three local surfaces:
 
 - `modules/app` — Next.js trading and vault dashboard UI
-- `modules/agent` — Fastify + LangChain autonomous agent and read-only HTTP assistant
+- `modules/agent` — Fastify + LangChain autonomous agent with read-only chat, streamed execution proposals, and limit-order monitoring APIs
 - `docs` — Fumadocs documentation site
 
 ## Quick Start
@@ -42,7 +42,11 @@ obidot/
 
 ## Notes
 
-- The browser-exposed `POST /api/chat` surface is intentionally read-only. It can inspect vault state, yields, and swap routes, but it does not execute transactions.
+- `POST /api/chat` remains the read-only inspection surface.
+- `POST /api/chat/execute` streams proposals for the browser UI, keeps short per-wallet in-memory history, and still requires wallet approval in the app for any execution.
+- Limit orders are now agent-monitored and stored server-side; the browser reviews triggered orders before any approval flow starts.
+- `/insights` is backed by `obi.index` GraphQL analytics (`protocolStats`, `topRoutes`, `priceHistory`), while `/swap` also consumes indexed cross-chain lifecycle rows for the status panel.
+- Cross-chain tracking is currently strongest for locally indexed Polkadot Hub router/executor surfaces. Remote destination-host receipts are still a documented limitation.
 - The agent binds to `127.0.0.1` by default. If you intentionally expose it beyond loopback, pair that with an explicit `API_ALLOWED_ORIGINS` configuration.
 - `SITE_URL` controls docs metadata and sitemap generation. It defaults to `https://obidot.com`.
 

@@ -10,6 +10,7 @@ universal intent execution, and a Fastify API server.
 # From repo root
 pnpm --filter @obidot/agent run typecheck     # Strict TypeScript check (mandatory)
 pnpm --filter @obidot/agent run lint          # Biome check
+pnpm --filter @obidot/agent run test          # Node test runner
 pnpm --filter @obidot/agent run format        # Biome format
 pnpm --filter @obidot/agent run dev           # Dev mode with tsx watch
 pnpm --filter @obidot/agent run build         # Compile to dist/
@@ -19,7 +20,7 @@ pnpm --filter @obidot/agent run start         # Run compiled agent
 npx tsc --noEmit                              # Typecheck
 ```
 
-No unit test suite — validate via `typecheck` and `lint` before committing.
+Targeted Vitest coverage exists. Run `pnpm --filter @obidot/agent run test` alongside `typecheck` and `lint` before close-out.
 
 ## TypeScript Configuration
 
@@ -32,21 +33,34 @@ No unit test suite — validate via `typecheck` and `lint` before committing.
 
 ```
 modules/agent/src/
-├── main.ts                         # Entrypoint — bootstrap & shutdown
+├── bootstrap.ts                    # Current entry used by dev/start scripts
+├── main.ts                         # Service construction + lifecycle wiring
 ├── agent/
-│   ├── loop.ts                     # Autonomous loop orchestrator (LangChain + strategy verification)
-│   ├── systemPrompt.ts             # LangChain system prompt (vault, DEX aggregator, intent sections)
-│   └── tools.ts                    # Custom LangChain tools (6 tools: fetch yields/state/strategy + swap quote/local swap/intent)
+│   ├── llm.ts                      # Chat-model factory
+│   ├── loop.ts                     # Autonomous loop orchestrator
+│   ├── systemPrompt.ts             # Loop prompt
+│   └── tools.ts                    # Loop/browser tool wiring
 ├── services/
-│   ├── yield.service.ts            # Bifrost + DeFiLlama yield data
+│   ├── crosschain.service.ts       # Satellite state aggregation
+│   ├── event-bus.service.ts        # WebSocket event relay
+│   ├── intent.service.ts           # Universal intent execution helpers
+│   ├── limit-order-monitor.service.ts # Off-chain limit-order monitor
+│   ├── oracle.service.ts           # Oracle reads and freshness checks
+│   ├── price-aggregator.service.ts # Multi-source pricing
 │   ├── signer.service.ts           # EIP-712 signing for strategy intents
-│   ├── price-aggregator.service.ts # Multi-source oracle (Pyth, CoinGecko, Binance, Subsquid)
-│   ├── swap-router.service.ts      # SwapRouter + SwapQuoter on-chain reads (getBestQuote, getAllQuotes, etc.)
-│   └── intent.service.ts           # Universal intent signing + execution (EIP-712, executeIntent, executeLocalSwap)
+│   ├── strategy-store.service.ts   # In-memory decision log/history
+│   ├── swap-router.service.ts      # SwapRouter + SwapQuoter reads
+│   └── yield.service.ts            # Bifrost + DeFiLlama yield data
 ├── api/
-│   ├── server.ts                   # Fastify API server (vault, yields, strategies, swap, agent, chat)
+│   ├── server.ts                   # Fastify API server + WebSocket
 │   └── routes/
-│       └── swap.ts                 # GET /api/swap/quote, GET /api/swap/routes
+│       ├── agent.ts                # Agent log + chat routes
+│       ├── crosschain.ts           # Cross-chain state
+│       ├── limit-orders.ts         # Limit-order CRUD
+│       ├── strategies.ts           # Strategy history
+│       ├── swap.ts                 # Swap quote/routes
+│       ├── vault.ts                # Vault state/performance
+│       └── yields.ts               # Yield routes
 ├── config/
 │   ├── env.ts                      # Zod-validated environment variables (including DEX addresses)
 │   ├── constants.ts                # Chain IDs, API URLs, protocol addresses, ABIs, EIP-712 types
@@ -117,9 +131,20 @@ import { yieldLog } from "../utils/logger.js";
 | GET    | `/api/strategies`        | Strategy execution history                               |
 | GET    | `/api/crosschain/state`  | Satellite vault states                                   |
 | GET    | `/api/agent/log`         | Agent decision log                                       |
-| POST   | `/api/chat`              | Chat with AI agent                                       |
+| POST   | `/api/chat`              | Read-only inspection chat                                |
+| POST   | `/api/chat/execute`      | Streamed browser chat with route proposals               |
 | GET    | `/api/swap/quote`        | DEX aggregator quote (pool, tokenIn, tokenOut, amountIn) |
 | GET    | `/api/swap/routes`       | Available pool adapters + router status                  |
+| GET    | `/api/limit-orders/:address` | List limit orders for a wallet                       |
+| POST   | `/api/limit-orders`      | Create a monitored limit order                           |
+| DELETE | `/api/limit-orders/:id`  | Cancel a monitored limit order                           |
+
+### Chat Surfaces
+- `POST /api/chat` remains read-only even if the model recommends a trade.
+- `POST /api/chat` can use caller-supplied history or short in-memory history keyed by wallet address.
+- `POST /api/chat/execute` can emit streamed trade proposals, but it never signs or submits transactions server-side.
+- `POST /api/chat/execute` requires an `address`, caps prompts at `4000` characters, stores up to `40` recent history messages per address, and rate-limits each address to `10` requests per minute.
+- Browser execution flows are approval-gated in `modules/app`; keep the server documentation explicit about that boundary.
 
 ### GET /api/swap/routes Response
 
@@ -128,12 +153,14 @@ The `/api/swap/routes` endpoint includes cross-chain stubs appended to all live 
 | Stub | routeType | status |
 |------|-----------|--------|
 | RelayTeleport (XCM) | xcm | live |
-| Hydration Omnipool (XCM) | xcm | mainnet_only |
+| Hydration Omnipool (XCM) | xcm | simulated or mainnet_only |
+| AssetHub Pair | xcm | simulated |
 | Bifrost DEX (XCM) | xcm | mainnet_only |
 | Uniswap V2 (Polkadot Hub) | local | live |
 | Karura DEX (XCM) | xcm | mainnet_only |
 | Interlay Loans (XCM) | xcm | mainnet_only |
 | Moonbeam DEX (XCM) | xcm | coming_soon |
+| Uniswap V3 (Polkadot Hub) | local | coming_soon |
 | Hyperbridge (ISMP) | bridge | mainnet_only |
 | Snowbridge (BridgeHub → Ethereum) | bridge | coming_soon |
 | ChainFlip (Polkadot → Ethereum) | bridge | coming_soon |

@@ -5,7 +5,9 @@ import { MarketPulse } from "@/components/insights/market-pulse";
 import { OpportunityRadar } from "@/components/insights/opportunity-radar";
 import { PortfolioOptimizer } from "@/components/insights/portfolio-optimizer";
 import { PositionSimulatorPanel } from "@/components/insights/position-simulator";
+import { PriceHistoryPanel } from "@/components/insights/price-history-panel";
 import { ProtocolActivity } from "@/components/insights/protocol-activity";
+import { ProtocolAnalyticsPanel } from "@/components/insights/protocol-analytics-panel";
 import { RiskMatrix } from "@/components/insights/risk-matrix";
 import { YieldComparison } from "@/components/insights/yield-comparison";
 import { PageHero } from "@/components/ui/page-hero";
@@ -71,6 +73,10 @@ export default function InsightsPage() {
             error={actError ?? null}
             connected={actConnected}
           />
+
+          <ProtocolAnalyticsPanel />
+
+          <PriceHistoryPanel />
 
           {/* Row 1: Market Pulse + Opportunity Radar */}
           <div className="grid gap-4 md:grid-cols-2">

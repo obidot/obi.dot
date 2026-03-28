@@ -5,6 +5,16 @@ description: Cross-chain architecture using Hyperbridge ISMP — message types, 
 
 Obidot extends beyond single-chain Polkadot Hub operations to support **multi-chain vault infrastructure** via [Hyperbridge](https://hyperbridge.network/), the Polkadot-native cross-chain messaging protocol based on ISMP (Interoperable State Machine Protocol). This enables satellite ERC-4626 vaults on Ethereum, Arbitrum, Optimism, Base, and other EVM chains to synchronize state with the hub vault on Polkadot Hub.
 
+## Current Tracking Surface
+
+The shipped app and indexer now expose a recent-pipeline tracker instead of leaving cross-chain dispatches opaque:
+
+- `obi.index` persists router lifecycle rows from `MessageDispatched`, `MessageReceived`, and `MessageTimeout`
+- executor-level steps from the local XCM and Hyperbridge surfaces are indexed into the same pipeline view when they can be correlated
+- the app renders those rows in `CrossChainStatusPanel` and subscribes to updates for the active origin transaction
+
+The current limitation is important: destination-host receipts on remote chains are still not indexed as separate data sources. The tracker is accurate for the locally indexed Polkadot Hub surfaces, but remote execution remains best-effort until multi-source indexing is added.
+
 ## Architecture Overview
 
 The cross-chain system follows a **hub-and-spoke model**:

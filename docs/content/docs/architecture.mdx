@@ -32,20 +32,22 @@ Keeper ─────── reports outcome (P&L) ─────────�
 Off-Chain Layer
 ──────────────────────────────────────────────────────────
 obi.index — GraphQL Indexer (port 4350)
-  ├── Blockscout poller (60s) — fetches logs for all contracts
-  ├── Event handlers — vault, oracle, router → PostgreSQL via Prisma
-  ├── GraphQL API — queries + real-time subscriptions (graphql-ws)
-  └── AI Agent sub-process
+  ├── Blockscout poller (15s) — fetches logs for all contracts with retry + reorg rewind/replay
+  ├── Event handlers — vault, oracle, router, executor → PostgreSQL via Prisma
+  ├── GraphQL API — analytics, price history, cross-chain pipeline queries + subscriptions
+  ├── Operational endpoints — /health, /metrics, /analytics/materialized
+  └── Optional AI agent sub-process
         ├── Perceive   — reads live vault state + oracle prices via RPC
         ├── Reason     — LLM decision (deploy / rebalance / hold)
         ├── Act        — signs + submits UniversalIntent / StrategyIntent on-chain
         └── Record     — Prisma writes indexed by strategyId
 
 Next.js Dashboard (port 3010) — obidot/app
-  ├── /           — Vault overview, deposits, swaps
-  ├── /strategies — Strategy table + intent history
+  ├── /           — Vault overview, deposits, withdrawals, recent activity
+  ├── /swap       — Local swap, limit orders, cross-chain route planner
   ├── /crosschain — Chain topology, satellite table
-  └── /agent      — Agent status, decision feed
+  ├── /insights   — Indexed analytics, top routes, and price history
+  └── /agent      — Streamed chat, proposal review, agent telemetry
 ```
 
 ## Actor Model

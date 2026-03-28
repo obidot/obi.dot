@@ -5,12 +5,14 @@ import Fastify, { type FastifyInstance } from "fastify";
 import { env } from "../config/env.js";
 import type { CrossChainService } from "../services/crosschain.service.js";
 import { eventBus } from "../services/event-bus.service.js";
+import type { LimitOrderMonitorService } from "../services/limit-order-monitor.service.js";
 import type { SignerService } from "../services/signer.service.js";
 import type { SwapRouterService } from "../services/swap-router.service.js";
 import type { YieldService } from "../services/yield.service.js";
 import { logger } from "../utils/logger.js";
 import { type ChatModelFactory, registerAgentRoutes } from "./routes/agent.js";
 import { registerCrossChainRoutes } from "./routes/crosschain.js";
+import { registerLimitOrderRoutes } from "./routes/limit-orders.js";
 import { registerStrategyRoutes } from "./routes/strategies.js";
 import { registerSwapRoutes } from "./routes/swap.js";
 import { registerVaultRoutes } from "./routes/vault.js";
@@ -44,6 +46,7 @@ export interface ApiDependencies {
   yieldService: YieldService;
   crossChainService: CrossChainService;
   swapRouterService: SwapRouterService;
+  limitOrderMonitorService: LimitOrderMonitorService;
   chatTools: StructuredToolInterface[];
   createChatModel?: ChatModelFactory;
 }
@@ -69,7 +72,7 @@ export async function createApiServer(
     origin(origin, callback) {
       callback(null, isAllowedOrigin(origin));
     },
-    methods: ["GET", "POST", "OPTIONS"],
+    methods: ["GET", "POST", "DELETE", "OPTIONS"],
     credentials: true,
   });
 
@@ -87,6 +90,7 @@ export async function createApiServer(
   registerYieldRoutes(app, deps.yieldService);
   registerStrategyRoutes(app);
   registerCrossChainRoutes(app, deps.crossChainService, deps.signerService);
+  registerLimitOrderRoutes(app, deps.limitOrderMonitorService);
   registerAgentRoutes(app, deps.chatTools, deps.createChatModel);
   registerSwapRoutes(app, deps.swapRouterService);
 

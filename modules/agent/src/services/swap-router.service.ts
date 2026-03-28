@@ -17,10 +17,15 @@ import {
   SWAP_QUOTER_ADDRESS,
   SWAP_ROUTER_ABI,
   SWAP_ROUTER_ADDRESS,
+  TOKEN_ADDRESSES,
   TOKEN_SYMBOLS,
   UV2_PAIR_ABI,
   UV2_PAIRS,
 } from "../config/constants.js";
+import {
+  KEEPER_ORACLE_ABI,
+  KEEPER_ORACLE_ADDRESS,
+} from "../config/oracle.config.js";
 import {
   POOL_TYPE_LABELS,
   PoolType,
@@ -47,6 +52,15 @@ const polkadotHubTestnet: Chain = {
 // ─────────────────────────────────────────────────────────────────────────────
 
 const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000" as Address;
+const ADAPTER_SIMULATION_MODE_ABI = [
+  {
+    type: "function",
+    name: "simulationMode",
+    inputs: [],
+    outputs: [{ name: "", type: "bool" }],
+    stateMutability: "view",
+  },
+] as const;
 
 // ─────────────────────────────────────────────────────────────────────────────
 //  SwapRouterService
@@ -65,6 +79,15 @@ const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000" as Address;
  */
 export class SwapRouterService {
   private readonly publicClient: PublicClient;
+  private dotUsdCache: {
+    price: bigint;
+    decimals: number;
+    fetchedAt: number;
+  } | null = null;
+  private readonly adapterSimulationCache = new Map<
+    string,
+    { enabled: boolean; fetchedAt: number }
+  >();
 
   constructor() {
     this.publicClient = createPublicClient({
@@ -79,6 +102,214 @@ export class SwapRouterService {
       },
       "SwapRouterService initialized",
     );
+  }
+
+  private async getDotUsdPrice(): Promise<{
+    price: bigint;
+    decimals: number;
+  } | null> {
+    const now = Date.now();
+    if (this.dotUsdCache && now - this.dotUsdCache.fetchedAt < 30_000) {
+      return this.dotUsdCache;
+    }
+
+    if (KEEPER_ORACLE_ADDRESS === ZERO_ADDRESS) {
+      return null;
+    }
+
+    try {
+      const [roundData, decimals] = await Promise.all([
+        this.publicClient.readContract({
+          address: KEEPER_ORACLE_ADDRESS,
+          abi: KEEPER_ORACLE_ABI,
+          functionName: "latestRoundData",
+        }),
+        this.publicClient.readContract({
+          address: KEEPER_ORACLE_ADDRESS,
+          abi: KEEPER_ORACLE_ABI,
+          functionName: "decimals",
+        }),
+      ]);
+
+      const [, answer] = roundData;
+      const price = BigInt(answer);
+      if (price <= 0n) return null;
+
+      this.dotUsdCache = {
+        price,
+        decimals: Number(decimals),
+        fetchedAt: now,
+      };
+      return this.dotUsdCache;
+    } catch (error) {
+      swapLog.warn({ err: error }, "Failed to read DOT oracle price");
+      return null;
+    }
+  }
+
+  private async estimateHydrationSimulation(
+    tokenIn: string,
+    tokenOut: string,
+    amountIn: bigint,
+  ): Promise<{ amountOut: string; minAmountOut: string } | null> {
+    const simulationEnabled = await this.isAdapterSimulationEnabled(
+      HYDRATION_ADAPTER_ADDRESS,
+    );
+    if (!simulationEnabled) {
+      return null;
+    }
+
+    const dot = TOKEN_ADDRESSES.tDOT.toLowerCase();
+    const usdc = TOKEN_ADDRESSES.tUSDC.toLowerCase();
+
+    const isDotToUsdc = tokenIn === dot && tokenOut === usdc;
+    const isUsdcToDot = tokenIn === usdc && tokenOut === dot;
+    if (!isDotToUsdc && !isUsdcToDot) {
+      return null;
+    }
+
+    const oracle = await this.getDotUsdPrice();
+    if (!oracle) {
+      return null;
+    }
+
+    const oracleScale = 10n ** BigInt(oracle.decimals);
+    let amountOut: bigint;
+
+    if (isDotToUsdc) {
+      amountOut = (amountIn * oracle.price) / (oracleScale * 10n ** 12n);
+    } else {
+      amountOut = (amountIn * oracleScale * 10n ** 12n) / oracle.price;
+    }
+
+    if (amountOut <= 0n) {
+      return null;
+    }
+
+    // Apply a conservative 30 bps Omnipool spread on the preview quote.
+    amountOut = (amountOut * 9_970n) / 10_000n;
+    const minAmountOut = (amountOut * 9_950n) / 10_000n;
+
+    return {
+      amountOut: amountOut.toString(),
+      minAmountOut: minAmountOut.toString(),
+    };
+  }
+
+  private async estimateAssetHubSimulation(
+    tokenIn: string,
+    tokenOut: string,
+    amountIn: bigint,
+  ): Promise<{ amountOut: string; minAmountOut: string } | null> {
+    const simulationEnabled = await this.isAdapterSimulationEnabled(
+      ASSET_HUB_ADAPTER_ADDRESS,
+    );
+    if (!simulationEnabled) {
+      return null;
+    }
+
+    const tokenInAddress = tokenIn as Address;
+    const tokenOutAddress = tokenOut as Address;
+
+    const supported = await this.supportsPair(
+      ASSET_HUB_ADAPTER_ADDRESS,
+      ZERO_ADDRESS,
+      tokenInAddress,
+      tokenOutAddress,
+    );
+    if (!supported) {
+      return null;
+    }
+
+    const amountOut = await this.getAdapterQuote(
+      ASSET_HUB_ADAPTER_ADDRESS,
+      ZERO_ADDRESS,
+      tokenInAddress,
+      tokenOutAddress,
+      amountIn,
+    );
+    if (!amountOut || amountOut <= 0n) {
+      return null;
+    }
+
+    const minAmountOut = (amountOut * 9_950n) / 10_000n;
+
+    return {
+      amountOut: amountOut.toString(),
+      minAmountOut: minAmountOut.toString(),
+    };
+  }
+
+  private async isAdapterSimulationEnabled(
+    adapterAddress: Address,
+  ): Promise<boolean> {
+    if (adapterAddress === ZERO_ADDRESS) {
+      return false;
+    }
+
+    const cacheKey = adapterAddress.toLowerCase();
+    const cached = this.adapterSimulationCache.get(cacheKey);
+    const now = Date.now();
+    if (cached && now - cached.fetchedAt < 30_000) {
+      return cached.enabled;
+    }
+
+    try {
+      const enabled = (await this.publicClient.readContract({
+        address: adapterAddress,
+        abi: ADAPTER_SIMULATION_MODE_ABI,
+        functionName: "simulationMode",
+      })) as boolean;
+
+      this.adapterSimulationCache.set(cacheKey, {
+        enabled,
+        fetchedAt: now,
+      });
+      return enabled;
+    } catch (error) {
+      swapLog.warn(
+        { err: error, adapter: adapterAddress },
+        "Failed to read adapter simulationMode",
+      );
+      this.adapterSimulationCache.set(cacheKey, {
+        enabled: false,
+        fetchedAt: now,
+      });
+      return false;
+    }
+  }
+
+  private isDotEthBridgePair(tokenIn: string, tokenOut: string): boolean {
+    const dot = TOKEN_ADDRESSES.tDOT.toLowerCase();
+    const eth = TOKEN_ADDRESSES.tETH.toLowerCase();
+
+    return (
+      (tokenIn === dot && tokenOut === eth) ||
+      (tokenIn === eth && tokenOut === dot)
+    );
+  }
+
+  private getQuotePresentation(source: PoolType): {
+    status: "live" | "simulated";
+    previewOnly: boolean;
+    note?: string;
+  } {
+    if (source === PoolType.AssetHubPair) {
+      return {
+        status: "simulated",
+        previewOnly: true,
+        note: "AssetHub Pair quotes are preview-only on testnet until live pricing is verified.",
+      };
+    }
+
+    return {
+      status: "live",
+      previewOnly: false,
+    };
+  }
+
+  isPreviewOnlyPoolType(source: PoolType): boolean {
+    return this.getQuotePresentation(source).previewOnly;
   }
 
   // ─────────────────────────────────────────────────────────────────────
@@ -149,6 +380,7 @@ export class SwapRouterService {
         feeBps: quote.feeBps,
         amountIn: quote.amountIn,
         amountOut: quote.amountOut,
+        ...this.getQuotePresentation(quote.source as PoolType),
       };
     } catch (error) {
       swapLog.error({ err: error }, "getBestQuote failed");
@@ -200,6 +432,7 @@ export class SwapRouterService {
         feeBps: q.feeBps,
         amountIn: q.amountIn,
         amountOut: q.amountOut,
+        ...this.getQuotePresentation(q.source as PoolType),
       }));
     } catch (error) {
       swapLog.error({ err: error }, "getAllQuotes failed");
@@ -480,6 +713,8 @@ export class SwapRouterService {
   ): Promise<SwapRouteResult[]> {
     const tokenInLc = tokenIn.toLowerCase();
     const tokenOutLc = tokenOut.toLowerCase();
+    const tokenInSymbol = TOKEN_SYMBOLS[tokenInLc] ?? tokenInLc.slice(0, 8);
+    const tokenOutSymbol = TOKEN_SYMBOLS[tokenOutLc] ?? tokenOutLc.slice(0, 8);
 
     if (tokenInLc === tokenOutLc) return [];
 
@@ -629,9 +864,9 @@ export class SwapRouterService {
           totalFee += feeBps;
           totalImpact += impactBps;
 
-          const tokenInSymbol =
+          const stepTokenInSymbol =
             TOKEN_SYMBOLS[step.tokenIn] ?? step.tokenIn.slice(0, 8);
-          const tokenOutSymbol =
+          const stepTokenOutSymbol =
             TOKEN_SYMBOLS[step.tokenOut] ?? step.tokenOut.slice(0, 8);
 
           return {
@@ -639,9 +874,9 @@ export class SwapRouterService {
             poolLabel: pair.label,
             poolType: POOL_TYPE_LABELS[PoolType.Custom],
             tokenIn: step.tokenIn,
-            tokenInSymbol,
+            tokenInSymbol: stepTokenInSymbol,
             tokenOut: step.tokenOut,
-            tokenOutSymbol,
+            tokenOutSymbol: stepTokenOutSymbol,
             amountIn: step.amountIn.toString(),
             amountOut: step.amountOut.toString(),
             feeBps: feeBps.toString(),
@@ -723,18 +958,18 @@ export class SwapRouterService {
         if (!liveRouteIds.has(id)) {
           const hops: RouteHop[] = path.map((step) => {
             const pair = UV2_PAIRS[step.pairIdx];
-            const tokenInSymbol =
+            const stepTokenInSymbol =
               TOKEN_SYMBOLS[step.tokenIn] ?? step.tokenIn.slice(0, 8);
-            const tokenOutSymbol =
+            const stepTokenOutSymbol =
               TOKEN_SYMBOLS[step.tokenOut] ?? step.tokenOut.slice(0, 8);
             return {
               pool: pair.address,
               poolLabel: pair.label,
               poolType: POOL_TYPE_LABELS[PoolType.Custom],
               tokenIn: step.tokenIn,
-              tokenInSymbol,
+              tokenInSymbol: stepTokenInSymbol,
               tokenOut: step.tokenOut,
-              tokenOutSymbol,
+              tokenOutSymbol: stepTokenOutSymbol,
               amountIn: "0",
               amountOut: "0",
               feeBps: "30",
@@ -782,35 +1017,85 @@ export class SwapRouterService {
       routeType: SwapRouteResult["routeType"],
       status: SwapRouteResult["status"],
       totalFeeBps = "0",
+      amountOut = "0",
+      minAmountOut = "0",
+      extras?: Pick<SwapRouteResult, "previewOnly" | "note">,
     ): SwapRouteResult => ({
       id,
       tokenIn,
       tokenOut,
       amountIn: amountIn.toString(),
-      amountOut: "0",
-      minAmountOut: "0",
+      amountOut,
+      minAmountOut,
       hops: [],
       totalFeeBps,
       totalPriceImpactBps: "0",
       routeType,
       status,
+      ...extras,
     });
+
+    const [hydrationSimulation, assetHubSimulation] = await Promise.all([
+      this.estimateHydrationSimulation(tokenInLc, tokenOutLc, amountIn),
+      this.estimateAssetHubSimulation(tokenInLc, tokenOutLc, amountIn),
+    ]);
+    const dotEthBridgePair = this.isDotEthBridgePair(tokenInLc, tokenOutLc);
+    const assetHubPresentation = this.getQuotePresentation(
+      PoolType.AssetHubPair,
+    );
 
     const crossChainStubs: SwapRouteResult[] = [
       // XCM parachains
       stub("RelayTeleport (XCM)", "xcm", "live"),
-      stub("Hydration Omnipool (XCM)", "xcm", "mainnet_only", "30"),
+      ...(assetHubSimulation
+        ? [
+            stub(
+              "AssetHub Pair (XCM)",
+              "xcm",
+              assetHubPresentation.status,
+              "30",
+              assetHubSimulation.amountOut,
+              assetHubSimulation.minAmountOut,
+              {
+                previewOnly: assetHubPresentation.previewOnly,
+                note: assetHubPresentation.note,
+              },
+            ),
+          ]
+        : []),
+      stub(
+        "Hydration Omnipool (XCM)",
+        "xcm",
+        hydrationSimulation ? "simulated" : "mainnet_only",
+        "30",
+        hydrationSimulation?.amountOut ?? "0",
+        hydrationSimulation?.minAmountOut ?? "0",
+        hydrationSimulation
+          ? {
+              previewOnly: true,
+              note: "Hydration simulationMode is enabled on the adapter, so this testnet quote is an oracle-backed preview.",
+            }
+          : undefined,
+      ),
       stub("Bifrost DEX (XCM)", "xcm", "mainnet_only", "30"),
       // Local Polkadot Hub DEX — also appears in On-chain Routes when pair exists
       stub("Uniswap V2 (Polkadot Hub)", "local", "live", "30"),
+      stub("Uniswap V3 (Polkadot Hub)", "local", "coming_soon", "5", "0", "0", {
+        previewOnly: true,
+        note: "Planned local route. Deployment is blocked by current PolkaVM bytecode limits under resolc, so V3 is not executable on testnet yet.",
+      }),
       stub("Karura DEX (XCM)", "xcm", "mainnet_only", "30"),
       stub("Interlay Loans (XCM)", "xcm", "mainnet_only"),
       // The Moonbeam adapter (slot 7) routes via XCM to Moonbeam para 2004.
       stub("Moonbeam DEX (XCM)", "xcm", "coming_soon", "30"),
       // EVM bridges
       stub("Hyperbridge (ISMP)", "bridge", "mainnet_only"),
-      stub("Snowbridge (BridgeHub → Ethereum)", "bridge", "coming_soon"),
-      stub("ChainFlip (Polkadot → Ethereum)", "bridge", "coming_soon"),
+      ...(dotEthBridgePair
+        ? [
+            stub("Snowbridge (BridgeHub ↔ Ethereum)", "bridge", "coming_soon"),
+            stub("Chainflip (DOT ↔ ETH)", "bridge", "coming_soon"),
+          ]
+        : []),
     ];
 
     // ── 7. Sort: live routes first (best amountOut), dry paths next, then stubs ─
@@ -821,8 +1106,8 @@ export class SwapRouterService {
 
     swapLog.debug(
       {
-        tokenIn: TOKEN_SYMBOLS[tokenInLc] ?? tokenInLc,
-        tokenOut: TOKEN_SYMBOLS[tokenOutLc] ?? tokenOutLc,
+        tokenIn: tokenInSymbol,
+        tokenOut: tokenOutSymbol,
         liveCount: liveRoutes.length,
         dryCount: dryRoutes.length,
       },

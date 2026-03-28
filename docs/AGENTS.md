@@ -33,7 +33,14 @@ pnpm format
   - agent API: `3011`
   - docs: `4010`
 - Use `Polkadot Hub TestNet` as the current testnet naming unless a page is explicitly describing historical context
-- Document `POST /api/chat` as read-only; it does not execute transactions
+- `docs/public/` is generated output from docs builds (`robots.txt`, sitemap files). Treat it as build output, not authored content.
+- Document both chat surfaces accurately:
+  - `POST /api/chat` is read-only inspection
+  - `POST /api/chat/execute` is streamed proposal generation for the browser, with per-address short-term memory/rate limiting and wallet approval required for any execution
+- Limit orders are agent-monitored via `/api/limit-orders*`; do not describe them as localStorage-only unless a page is explicitly talking about historical behavior
+- The docs site should describe `/insights` as an indexed analytics surface backed by `obi.index` (`protocolStats`, `topRoutes`, `priceHistory`)
+- The cross-chain tracker currently covers locally indexed Polkadot Hub lifecycle events. Do not overstate remote destination-host indexing coverage.
+- The docs site should point developer-facing package guidance at the shipped Agent Kit surface, not only the in-app `/docs/agent-kit` page
 
 ## Architecture Notes
 

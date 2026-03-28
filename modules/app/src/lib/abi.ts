@@ -191,6 +191,20 @@ export const POOL_ADAPTER_ABI = [
   },
 ] as const;
 
+export const ORACLE_REGISTRY_ABI = [
+  {
+    type: "function",
+    name: "getPriceStrict",
+    inputs: [{ name: "asset", type: "address" }],
+    outputs: [
+      { name: "price", type: "uint256" },
+      { name: "oracleDecimals", type: "uint8" },
+      { name: "updatedAt", type: "uint256" },
+    ],
+    stateMutability: "view",
+  },
+] as const;
+
 /** ERC-20 approve — needed for token approvals before swap */
 export const ERC20_APPROVE_ABI = [
   {

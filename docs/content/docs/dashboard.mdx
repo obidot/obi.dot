@@ -1,9 +1,9 @@
 ---
 title: Dashboard
-description: Reference for the Obidot Next.js operator dashboard — all six pages, the Financial Intelligence Hub, computation engines, design system, and API proxy setup.
+description: Reference for the Obidot Next.js trading and operations app — swap, limit orders, cross-chain tracking, agent chat, analytics, and the docs-linked developer surfaces.
 ---
 
-The Obidot dashboard is a **Next.js 15** web application that gives operators a real-time view of vault performance, active strategies, cross-chain activity, and AI-powered analytics. It reads on-chain state live from Polkadot Hub TestNet via Wagmi, queries historical events from the [obi.index](/docs/architecture) GraphQL indexer, and proxies yield/crosschain/agent-log calls to the [AI Agent](/docs/agent) REST API.
+The Obidot dashboard is a **Next.js 15** web application that gives operators and users a real-time view of swaps, limit orders, cross-chain activity, agent proposals, and analytics. It reads on-chain state live from Polkadot Hub TestNet via Wagmi, queries historical events from the [obi.index](/docs/architecture) GraphQL indexer, and proxies chat, routing, and operational calls to the [AI Agent](/docs/agent) REST API.
 
 ## Tech Stack
 
@@ -15,7 +15,7 @@ The Obidot dashboard is a **Next.js 15** web application that gives operators a 
 | Server state | TanStack Query v5 (polling every 10–30 s)                             |
 | Wallet       | Wagmi v2 + RainbowKit v2 + viem v2                                    |
 | GraphQL      | Raw `graphql-ws` for subscriptions; `fetchGraphQL()` for HTTP queries |
-| Charts       | recharts (PnL candlestick chart)                                      |
+| Charts       | lightweight-charts + recharts                                         |
 | Icons        | lucide-react                                                          |
 
 ## Trade UI
@@ -29,13 +29,13 @@ The `/swap` (and `/:trade/:chain/:router`) routes render a two-panel trading int
 
 ### Limit Order Tab
 
-- **Left panel:** Token pair (via `TokenPicker`), sell amount, target price with ±% quick-set buttons and delta indicator, expiry selector. Submits a `PendingOrder` to `localStorage("obidot_limit_orders")` and dispatches a `CustomEvent("obidot:order-placed")`.
-- **Right panel:** `OrdersPanel` — live list of active and expired orders. Cancel removes the order from localStorage. Orders are monitored by the Obidot AI Agent and executed via `UniversalIntent` when the target price is reached.
+- **Left panel:** Token pair (via `TokenPicker`), sell amount, target price with ±% quick-set buttons and delta indicator, expiry selector. Submits to the agent's `/api/limit-orders` surface instead of localStorage.
+- **Right panel:** `OrdersPanel` — server-backed order list with Pending, Triggered, Filled, Expired, and Cancelled states. Triggered orders can auto-open a review modal and reuse the same approve-then-swap wallet flow as chat proposals.
 
 ### Cross-Chain Tab
 
-- **Left panel:** Source and destination token (both via `TokenPicker`), amount input, destination chain selector (XCM or Bridge). For **RelayTeleport**, the output is estimated at 1:1 minus ~0.1% XCM fee with no exchange rate. For other chains, amounts are shown when routes are available.
-- **Right panel:** Idle (cross-chain positions panel is planned for a future iteration).
+- **Left panel:** Source and destination token (both via `TokenPicker`), amount input, destination chain selector (XCM or Bridge), and route-status badges that distinguish `live`, `simulated`, `mainnet_only`, and `coming_soon`.
+- **Right panel:** Pair-aware reachability plus `CrossChainStatusPanel`, which shows indexed lifecycle steps for recent pipelines associated with the connected wallet when sender attribution is available. The current tracker is strongest for locally indexed Polkadot Hub lifecycle rows; remote destination-host receipts are still a known gap.
 
 ### Supported Chains
 
@@ -68,8 +68,8 @@ The dashboard uses three distinct data sources:
 | Source                                  | Used For                                                                                                                       |
 | --------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
 | **On-chain (Wagmi `useReadContracts`)** | Live vault state: `totalAssets`, `totalSupply`, `paused`, `emergencyMode`, `totalRemoteAssets`, user share balance             |
-| **obi.index GraphQL**                   | Historical events: deposits, withdrawals, swap executions, strategy executions, vault stats — queried via `src/lib/graphql.ts` |
-| **Agent REST API (proxied `/api/*`)**   | Yield opportunities, cross-chain topology, agent decisions, vault performance                                                  |
+| **obi.index GraphQL**                   | Historical events, protocol analytics, cross-chain pipelines, and price history — queried via `src/lib/graphql.ts` |
+| **Agent REST API (proxied `/api/*`)**   | Chat streaming, limit orders, route discovery, yields, cross-chain topology, agent decisions, vault performance    |
 
 No Apollo Client is used — GraphQL subscriptions use raw `graphql-ws`; HTTP queries use the `fetchGraphQL<T>()` helper.
 
@@ -82,9 +82,11 @@ GET /api/yields            → http://localhost:3011/api/yields
 GET /api/crosschain/state  → http://localhost:3011/api/crosschain/state
 GET /api/agent/log         → http://localhost:3011/api/agent/log
 POST /api/chat             → http://localhost:3011/api/chat
+POST /api/chat/execute     → http://localhost:3011/api/chat/execute
 GET /api/strategies        → http://localhost:3011/api/strategies
 GET /api/routes            → http://localhost:3011/api/routes
 GET /api/swap/routes       → http://localhost:3011/api/swap/routes
+GET /api/limit-orders/*    → http://localhost:3011/api/limit-orders/*
 GET /api/vault/state       → http://localhost:3011/api/vault/state
 GET /api/vault/performance → http://localhost:3011/api/vault/performance
 ```
@@ -105,8 +107,8 @@ The primary trading interface. URL segments encode the trade mode, chain, and to
 | --------------------- | ---------------------------------------------------------------------------------------------- |
 | `SwapPanel`           | Left column: tab bar (Swap / Limit / Cross-Chain) + active form                                |
 | `SwapForm`            | Token inputs, live quote via on-chain `SwapQuoter`, approve-then-swap state machine            |
-| `LimitOrderPanel`     | Target price input, market delta indicator, expiry selector, localStorage order persistence    |
-| `CrossChainSwapPanel` | XCM/bridge destination selector, live route from `/api/routes`, status-aware execute button        |
+| `LimitOrderPanel`     | Target price input, market delta indicator, expiry selector, and server-backed order creation     |
+| `CrossChainSwapPanel` | XCM/bridge destination selector, live route from `/api/routes`, route-status panel, and tracker   |
 | `RouteDiagram`        | Right column: per-adapter quote comparison table, split-route toggle (60/40 weight sliders)    |
 
 **Wallet redirect:** when the connected wallet switches chains, `TradePage` auto-redirects the URL chain segment to match (e.g. `polkadot-hub-testnet` → `polkadot-hub`).
@@ -156,13 +158,14 @@ Strategies are fetched from obi.index (`getIndexedStrategyExecutions`) and polle
 
 Data is fetched from `/api/crosschain`.
 
-### `/agent` — Agent Status
+### `/agent` — Agent Status + Live Demo
 
 | Component      | Description                                                                          |
 | -------------- | ------------------------------------------------------------------------------------ |
-| `AgentStatus`  | Derived state: running / idle / error, last decision timestamp, loop iteration count |
-| `DecisionFeed` | Scrollable list of recent agent decisions                                            |
-| `DecisionCard` | Per-decision: type (deploy / rebalance / hold / error), rationale text, timestamp    |
+| `InteractiveChat` | Streamed browser chat with reviewable route proposals and wallet-approved execution |
+| `AgentStatus`     | Derived state: running / idle / error, last decision timestamp, loop iteration count |
+| `DecisionFeed`    | Scrollable list of recent agent decisions                                            |
+| `LiveEvents`      | Event-bus surface for recent operational activity                                    |
 
 The `AgentStatus` component derives its display state from `lastDecision` and `isRunning` fields — it does not rely on a separate status endpoint.
 
@@ -174,6 +177,8 @@ The insights page is the most feature-rich section of the dashboard, providing A
 
 | Component                | Description                                                                           |
 | ------------------------ | ------------------------------------------------------------------------------------- |
+| `ProtocolAnalyticsPanel` | Indexed stat cards plus top-routes table backed by `protocolStats` and `topRoutes`    |
+| `PriceHistoryPanel`      | Hourly OHLCV chart with pair/window selectors backed by `priceHistory`                 |
 | `MarketPulse`            | Real-time market sentiment: DOT price, 24h change, volume trend, fear/greed indicator |
 | `OpportunityRadar`       | Ranked list of yield opportunities scored by the opportunity scoring engine           |
 | `RiskMatrix`             | 2D risk/return scatter plot for all active positions and protocols                    |
@@ -255,7 +260,8 @@ On-chain hooks use Wagmi `useReadContracts` with a 12-second `refetchInterval` (
 
 | Gap                       | Detail                                                                                               |
 | ------------------------- | ---------------------------------------------------------------------------------------------------- |
-| `PnlChart` uses demo data | Hard-coded candlestick data, not live P&L from the vault                                             |
+| PnL chart still uses demo data | The dedicated price history panel is live, but vault PnL candlesticks are still not fully indexed |
 | APYs are simulated        | The agent's yield service still uses simulated APY output on the current Polkadot Hub TestNet setup   |
-| Limit orders are off-chain | `/limit` tab stores orders in `localStorage` — the agent monitors and executes them via UniversalIntent when price is reached, but there is no on-chain limit order contract |
+| Limit orders are still off-chain | The agent monitors and persists them server-side, but there is still no on-chain limit order contract |
 | Price oracle feed         | DOT/USD market price in `MarketPulse` uses DeFiLlama/CoinGecko; `KeeperOracle` feeds are on-chain but not yet surfaced in the UI |
+| Remote chain receipts     | Cross-chain lifecycle tracking is based on locally indexed router/executor events; destination-host execution on remote chains is not yet indexed as a separate source |

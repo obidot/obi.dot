@@ -5,19 +5,18 @@ import {
   ArrowDownUp,
   ExternalLink,
   Loader2,
-  TriangleAlert,
   Wallet,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { type Address, formatUnits, parseUnits } from "viem";
 import {
   useAccount,
-  useBalance,
   useChainId,
   useReadContract,
   useWaitForTransactionReceipt,
   useWriteContract,
 } from "wagmi";
+import { useSwapBalances } from "@/hooks/use-balances";
 import { useSwapQuote, useSwapRoutes } from "@/hooks/use-swap";
 import { ERC20_APPROVE_ABI, SWAP_ROUTER_ABI } from "@/lib/abi";
 import { polkadotHubTestnet } from "@/lib/chains";
@@ -28,10 +27,11 @@ import {
   ZERO_ADDRESS,
   ZERO_BYTES32,
 } from "@/lib/constants";
-import { cn, formatTokenAmount } from "@/lib/format";
+import { cn } from "@/lib/format";
 import { TOKENS } from "@/shared/trade/swap";
 import type { SplitRouteSelection, SwapRouteResult, SwapStep } from "@/types";
-import { POOL_TYPE_LABELS, PoolType, resolvePoolType } from "@/types";
+import { getPoolTypeLabel, PoolType, resolvePoolType } from "@/types";
+import { PriceImpactWarning } from "./price-impact-warning";
 import { QuoteDisplay } from "./quote-display";
 import TokenPicker from "./token-picker";
 
@@ -73,16 +73,8 @@ export default function SwapForm({
   const { address, isConnected } = useAccount();
   const chainId = useChainId();
   const isTestnet = chainId === polkadotHubTestnet.id;
-  const { data: balanceInData } = useBalance({
-    address,
-    token: tokenIn.address as Address,
-    query: { enabled: isConnected && !!address },
-  });
-  const { data: balanceOutData } = useBalance({
-    address,
-    token: tokenOut.address as Address,
-    query: { enabled: isConnected && !!address },
-  });
+  const { tokenBalances, inputBalance, outputBalance, nativeBalance } =
+    useSwapBalances(tokenIn, tokenOut);
 
   // ── Router status ──────────────────────────────────────────────────────
   const { data: routes } = useSwapRoutes();
@@ -103,7 +95,8 @@ export default function SwapForm({
     !!selectedRoute &&
     selectedRouteIsLocal &&
     selectedRouteHasHops &&
-    selectedRouteIsLive;
+    selectedRouteIsLive &&
+    !selectedRoute.previewOnly;
   const splitRoutesExecutable =
     !!isSplitMode &&
     !!selectedSplitRoutes &&
@@ -166,7 +159,6 @@ export default function SwapForm({
     : selectedRoute
       ? Number(selectedRoute.totalPriceImpactBps)
       : 0;
-  const highImpact = activeImpactBps > 200; // >2%
   const impactResetKey = useMemo(
     () =>
       JSON.stringify({
@@ -431,12 +423,15 @@ export default function SwapForm({
   };
 
   const handlePct = (fraction: number) => {
-    if (!isConnected || !balanceInData) return;
-    const bal = Number(
-      formatUnits(balanceInData.value, balanceInData.decimals),
-    );
-    if (bal <= 0) return;
-    const val = (bal * fraction).toFixed(6).replace(/\.?0+$/, "");
+    if (
+      !isConnected ||
+      inputBalance.numeric === null ||
+      inputBalance.numeric <= 0
+    )
+      return;
+    const val = (inputBalance.numeric * fraction)
+      .toFixed(6)
+      .replace(/\.?0+$/, "");
     setAmountIn(val);
   };
 
@@ -445,7 +440,8 @@ export default function SwapForm({
     if (swapStep !== "idle" && swapStep !== "done") return;
     if (isSplitMode && !splitRoutesExecutable) return;
     if (!isSplitMode && !selectedRouteExecutable) return;
-    if (highImpact && !impactConfirmed) return; // safety: must confirm via button click first
+    if (Number(activeImpactBps) >= 500) return; // blocking: impact too high
+    if (Number(activeImpactBps) >= 300 && !impactConfirmed) return; // safety: must confirm via checkbox first
 
     if (!needsApproval) {
       // Allowance already covers the amount — skip to swap
@@ -468,7 +464,7 @@ export default function SwapForm({
     parsedAmountIn,
     address,
     swapStep,
-    highImpact,
+    activeImpactBps,
     impactConfirmed,
     needsApproval,
     executeSwap,
@@ -489,15 +485,19 @@ export default function SwapForm({
   }, []);
 
   // ── Derived display values ───────────────────────────────────────────────
-  const displayBalanceIn =
-    isConnected && balanceInData
-      ? `${formatTokenAmount(balanceInData.value.toString(), balanceInData.decimals, 4)} ${tokenIn.symbol}`
-      : null;
+  const displayBalanceIn = isConnected ? inputBalance.display : null;
 
-  const displayBalanceOut =
-    isConnected && balanceOutData
-      ? `${formatTokenAmount(balanceOutData.value.toString(), balanceOutData.decimals, 4)} ${tokenOut.symbol}`
-      : null;
+  const displayBalanceOut = isConnected ? outputBalance.display : null;
+  const displayBalanceInUsd = isConnected ? inputBalance.usdDisplay : null;
+  const displayBalanceOutUsd = isConnected ? outputBalance.usdDisplay : null;
+  const displayNativeBalance = isConnected ? nativeBalance.display : null;
+  const displayNativeBalanceUsd = isConnected ? nativeBalance.usdDisplay : null;
+
+  const selectedTokenAddresses = useMemo(
+    () =>
+      new Set([tokenIn.address.toLowerCase(), tokenOut.address.toLowerCase()]),
+    [tokenIn.address, tokenOut.address],
+  );
 
   const amountOutDisplay = effectiveAmountOut
     ? formatUnits(BigInt(effectiveAmountOut), tokenOut.decimals)
@@ -513,7 +513,7 @@ export default function SwapForm({
   const sourceLabel = selectedRoute
     ? (selectedRoute.hops[0]?.poolLabel ?? "")
     : !isTestnet && quote
-      ? POOL_TYPE_LABELS[quote.source as PoolType]
+      ? getPoolTypeLabel(quote.source)
       : "";
   const showNotDeployed = (routerAddress as string) === ZERO_ADDRESS;
 
@@ -528,9 +528,12 @@ export default function SwapForm({
     if (!selectedRoute && !isSplitMode) return "SELECT A ROUTE";
     if (selectedRoute && !selectedRouteIsLocal) return "USE CROSS-CHAIN TAB";
     if (selectedRoute && !selectedRouteHasHops) return "ROUTE NOT EXECUTABLE";
+    if (selectedRoute?.previewOnly) return "PREVIEW ONLY";
     if (selectedRoute?.status === "mainnet_only") return "MAINNET ONLY";
     if (selectedRoute?.status === "coming_soon") return "COMING SOON";
-    if (highImpact && !impactConfirmed) return "CONFIRM HIGH IMPACT";
+    if (Number(activeImpactBps) >= 500) return "PRICE IMPACT TOO HIGH";
+    if (Number(activeImpactBps) >= 300 && !impactConfirmed)
+      return "CONFIRM HIGH IMPACT";
     switch (swapStep) {
       case "approving":
         return "APPROVING…";
@@ -566,7 +569,9 @@ export default function SwapForm({
     !!quote &&
     (selectedRouteExecutable || splitRoutesExecutable) &&
     !isExecuting &&
-    routerReady;
+    routerReady &&
+    !(Number(activeImpactBps) >= 300 && !impactConfirmed) &&
+    !(Number(activeImpactBps) >= 500);
 
   return (
     <div className="space-y-4 p-5">
@@ -586,9 +591,16 @@ export default function SwapForm({
         <div className="flex items-center justify-between mb-4">
           <p className="retro-label text-[0.95rem] text-text-muted">You Pay</p>
           {displayBalanceIn && (
-            <div className="flex items-center gap-1.5 text-[14px] text-text-muted font-mono">
-              <Wallet className="h-3.5 w-3.5" />
-              <span>{displayBalanceIn}</span>
+            <div className="flex flex-col items-end gap-0.5 text-[14px] text-text-muted font-mono">
+              <div className="flex items-center gap-1.5">
+                <Wallet className="h-3.5 w-3.5" />
+                <span>{displayBalanceIn}</span>
+              </div>
+              {displayBalanceInUsd && (
+                <span className="text-[12px] text-text-muted/80">
+                  Est. {displayBalanceInUsd}
+                </span>
+              )}
             </div>
           )}
         </div>
@@ -657,9 +669,16 @@ export default function SwapForm({
           </p>
           <div className="flex items-center gap-3">
             {displayBalanceOut && (
-              <div className="flex items-center gap-1.5 text-[14px] text-text-muted font-mono">
-                <Wallet className="h-3.5 w-3.5" />
-                <span>{displayBalanceOut}</span>
+              <div className="flex flex-col items-end gap-0.5 text-[14px] text-text-muted font-mono">
+                <div className="flex items-center gap-1.5">
+                  <Wallet className="h-3.5 w-3.5" />
+                  <span>{displayBalanceOut}</span>
+                </div>
+                {displayBalanceOutUsd && (
+                  <span className="text-[12px] text-text-muted/80">
+                    Est. {displayBalanceOutUsd}
+                  </span>
+                )}
               </div>
             )}
             {sourceLabel && !displayBalanceOut && (
@@ -685,6 +704,16 @@ export default function SwapForm({
                 ? "≈ market value"
                 : ""}
             </p>
+            {displayBalanceOut && (
+              <p className="mt-2 text-left font-mono text-[13px] text-text-muted">
+                Wallet balance: {displayBalanceOut}
+              </p>
+            )}
+            {displayBalanceOutUsd && (
+              <p className="mt-1 text-left font-mono text-[13px] text-text-muted">
+                Est. USD value: {displayBalanceOutUsd}
+              </p>
+            )}
           </div>
           <TokenPicker
             selectedIdx={tokenOutIdx}
@@ -698,6 +727,66 @@ export default function SwapForm({
           </p>
         )}
       </div>
+
+      {/* Wallet snapshot */}
+      {isConnected && (
+        <div className="card p-4">
+          <div className="mb-3 flex items-start justify-between gap-3">
+            <div>
+              <p className="retro-label text-[0.9rem] text-text-muted">
+                Wallet Snapshot
+              </p>
+              <p className="mt-1 text-[12px] text-text-muted">
+                Configured swap tokens plus native DOT.
+              </p>
+            </div>
+            {displayNativeBalance && (
+              <div className="text-right font-mono text-[12px] text-text-muted">
+                <p>Native {displayNativeBalance}</p>
+                {displayNativeBalanceUsd && (
+                  <p className="mt-0.5 text-text-muted/80">
+                    Est. {displayNativeBalanceUsd}
+                  </p>
+                )}
+              </div>
+            )}
+          </div>
+
+          <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+            {tokenBalances.map((balance) => {
+              const addressKey = balance.token.address.toLowerCase();
+              const isSelected = selectedTokenAddresses.has(addressKey);
+              const usdDisplay = balance.usdDisplay;
+
+              return (
+                <div
+                  key={balance.token.address}
+                  className={cn(
+                    "border-[2px] px-3 py-2 shadow-[2px_2px_0_0_var(--border)]",
+                    isSelected
+                      ? "border-border bg-primary/10"
+                      : "border-border bg-surface",
+                  )}
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="retro-label text-[0.82rem] text-text-muted">
+                      {balance.token.symbol}
+                    </span>
+                    <span className="font-mono text-[13px] text-text-secondary">
+                      {balance.display}
+                    </span>
+                  </div>
+                  {usdDisplay && (
+                    <p className="mt-1 font-mono text-[12px] text-text-muted">
+                      Est. {usdDisplay}
+                    </p>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* Quote details */}
       {displayQuote && parsedAmountIn && !isSplitMode && (
@@ -728,46 +817,13 @@ export default function SwapForm({
         </div>
       )}
 
-      {/* High price impact warning */}
-      {highImpact && parsedAmountIn && quote && (
-        <div className="border-[3px] border-danger bg-danger/10 px-3 py-3 shadow-[2px_2px_0_0_var(--border)]">
-          <div className="flex items-start gap-2 mb-2">
-            <TriangleAlert className="h-4 w-4 text-danger mt-0.5 shrink-0" />
-            <div>
-              <p className="text-[14px] text-danger font-semibold">
-                High Price Impact
-              </p>
-              <p className="text-[13px] text-text-secondary mt-0.5">
-                This swap has {(activeImpactBps / 100).toFixed(2)}% price
-                impact. You may receive significantly less than expected.
-              </p>
-            </div>
-          </div>
-          <button
-            type="button"
-            onClick={() => setImpactConfirmed((v) => !v)}
-            className={cn(
-              "flex items-center gap-2 border-[2px] px-2 py-1 text-[13px] font-mono transition-colors",
-              impactConfirmed
-                ? "border-danger bg-danger/20 text-danger"
-                : "border-danger/40 text-text-muted hover:border-danger hover:text-danger",
-            )}
-          >
-            <span
-              className={cn(
-                "w-3.5 h-3.5 border flex items-center justify-center",
-                impactConfirmed
-                  ? "border-danger bg-danger/30"
-                  : "border-danger/40",
-              )}
-            >
-              {impactConfirmed && (
-                <span className="text-danger text-[9px] font-bold">✓</span>
-              )}
-            </span>
-            I understand the risk
-          </button>
-        </div>
+      {/* Price impact warning */}
+      {activeImpactBps > 0 && (
+        <PriceImpactWarning
+          priceImpactBps={Number(activeImpactBps)}
+          confirmed={impactConfirmed}
+          onConfirmChange={setImpactConfirmed}
+        />
       )}
 
       {/* Quote error */}
@@ -787,9 +843,12 @@ export default function SwapForm({
               ? "Selected route is cross-chain. Use the Cross-chain tab to execute XCM/bridge routes."
               : selectedRoute.hops.length === 0
                 ? "Selected route is informational only and cannot be executed on this tab."
-                : selectedRoute.status === "mainnet_only"
-                  ? "Selected route is available on mainnet only."
-                  : "Selected route is not executable right now."}
+                : selectedRoute.previewOnly
+                  ? (selectedRoute.note ??
+                    "Selected route is preview-only on testnet and cannot be executed yet.")
+                  : selectedRoute.status === "mainnet_only"
+                    ? "Selected route is available on mainnet only."
+                    : "Selected route is not executable right now."}
           </p>
         </div>
       )}
@@ -854,17 +913,8 @@ export default function SwapForm({
       <button
         type="button"
         disabled={!canExecute}
-        onClick={
-          highImpact && !impactConfirmed
-            ? () => setImpactConfirmed(true)
-            : handleSwap
-        }
-        className={cn(
-          "btn-primary",
-          highImpact &&
-            !impactConfirmed &&
-            "border-danger bg-danger text-white",
-        )}
+        onClick={handleSwap}
+        className="btn-primary"
       >
         {isExecuting && <Loader2 className="h-4 w-4 animate-spin" />}
         {buttonLabel()}

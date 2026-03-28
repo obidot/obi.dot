@@ -268,7 +268,11 @@ body::before {
     radial-gradient(circle at 18% 14%, var(--orb-a), transparent 24%),
     radial-gradient(circle at 82% 18%, var(--orb-b), transparent 22%),
     radial-gradient(circle at 74% 72%, var(--orb-c), transparent 26%),
-    radial-gradient(circle at 50% 50%, color-mix(in srgb, var(--primary) 4%, transparent), transparent 60%);
+    radial-gradient(
+      circle at 50% 50%,
+      color-mix(in srgb, var(--primary) 4%, transparent),
+      transparent 60%
+    );
   opacity: 0.9;
   z-index: 0;
 }
@@ -454,11 +458,7 @@ img {
   top: -30px;
   width: 220px;
   height: 220px;
-  background: radial-gradient(
-    circle,
-    var(--orb-b),
-    transparent 70%
-  );
+  background: radial-gradient(circle, var(--orb-b), transparent 70%);
   pointer-events: none;
 }
 
@@ -983,22 +983,38 @@ img {
   animation: fadeUp 0.35s ease-out both;
 }
 
-.fade-up-1 { animation-delay: 0.06s; }
-.fade-up-2 { animation-delay: 0.12s; }
-.fade-up-3 { animation-delay: 0.18s; }
-.fade-up-4 { animation-delay: 0.24s; }
+.fade-up-1 {
+  animation-delay: 0.06s;
+}
+.fade-up-2 {
+  animation-delay: 0.12s;
+}
+.fade-up-3 {
+  animation-delay: 0.18s;
+}
+.fade-up-4 {
+  animation-delay: 0.24s;
+}
 
 /* ── Accent left border for stat cells ─────────────────────────────────── */
 
-.stat-accent-primary  { box-shadow: inset 4px 0 0 var(--primary); }
-.stat-accent-secondary { box-shadow: inset 4px 0 0 var(--secondary); }
-.stat-accent-accent   { box-shadow: inset 4px 0 0 var(--accent); }
+.stat-accent-primary {
+  box-shadow: inset 4px 0 0 var(--primary);
+}
+.stat-accent-secondary {
+  box-shadow: inset 4px 0 0 var(--secondary);
+}
+.stat-accent-accent {
+  box-shadow: inset 4px 0 0 var(--accent);
+}
 
 /* ── Enhanced btn-primary glow on hover ────────────────────────────────── */
 
 .btn-primary:hover:not(:disabled) {
   transform: translate(2px, 2px);
-  box-shadow: var(--shadow-block-xs), 0 0 18px var(--primary-glow);
+  box-shadow:
+    var(--shadow-block-xs),
+    0 0 18px var(--primary-glow);
 }
 
 /* ── Ticker fade-out edges ─────────────────────────────────────────────── */
@@ -1026,7 +1042,9 @@ img {
   background: var(--primary);
   color: var(--foreground);
   border-color: var(--border);
-  box-shadow: var(--shadow-block-xs), 0 0 10px var(--primary-glow);
+  box-shadow:
+    var(--shadow-block-xs),
+    0 0 10px var(--primary-glow);
 }
 
 @media (prefers-reduced-motion: reduce) {

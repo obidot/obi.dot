@@ -110,6 +110,87 @@ export interface IndexedVaultState {
   updatedAt: string;
 }
 
+export interface IndexedPriceHistoryBar {
+  timestamp: number;
+  open: string;
+  high: string;
+  low: string;
+  close: string;
+  volumeIn: string;
+  volumeOut: string;
+  trades: number;
+}
+
+export interface IndexedProtocolStats {
+  volume24h: string;
+  feeRevenue24h: string;
+  uniqueTraders7d: number;
+  tvl: string;
+  totalSwaps: number;
+  activeAdapters: number;
+  pricedSwapCoverage24h: number;
+  estimationNote: string;
+}
+
+export interface IndexedRouteStats {
+  routeKey: string;
+  label: string;
+  tokenIn: string;
+  tokenInSymbol: string;
+  tokenOut: string;
+  tokenOutSymbol: string;
+  poolType: string;
+  hops: number;
+  swapCount: number;
+  amountInTotal: string;
+  amountOutTotal: string;
+  estimatedVolumeUsd: string;
+  priced: boolean;
+  lastSwapAt: string;
+}
+
+export interface IndexedPoolAnalytics {
+  pair: string;
+  window: string;
+  volumeIn: string;
+  volumeOut: string;
+  estimatedVolumeUsd: string;
+  estimatedFeesUsd: string;
+  tradeCount: number;
+  pricedTrades: number;
+  priceHigh: string;
+  priceLow: string;
+  lastPrice: string | null;
+}
+
+export interface IndexedCrossChainDispatch {
+  id: string;
+  txHash: string;
+  logIndex: number;
+  blockNumber: number;
+  timestamp: string;
+  messageType: string;
+  sourceChain: string;
+  destChain: string;
+  sender: string;
+  data: string;
+  commitment: string | null;
+  status: string;
+}
+
+export interface IndexedCrossChainPipeline {
+  intentId: string;
+  txHash: string;
+  commitment: string | null;
+  sender: string;
+  sourceChain: string;
+  destChain: string;
+  latestStatus: string;
+  latestMessageType: string;
+  lastUpdatedAt: string;
+  steps: IndexedCrossChainDispatch[];
+}
+
 // ── Named queries ─────────────────────────────────────────────────────────
 
 export async function getIndexedDeposits(
@@ -213,4 +294,173 @@ export async function getIndexedVaultState(): Promise<IndexedVaultState | null> 
     }`,
   );
   return data.vaultState;
+}
+
+export async function getPriceHistory(
+  tokenIn: string,
+  tokenOut: string,
+  from: number,
+  to: number,
+): Promise<IndexedPriceHistoryBar[]> {
+  const data = await fetchGraphQL<{ priceHistory: IndexedPriceHistoryBar[] }>(
+    `query PriceHistory($tokenIn: String!, $tokenOut: String!, $from: Int!, $to: Int!) {
+      priceHistory(tokenIn: $tokenIn, tokenOut: $tokenOut, from: $from, to: $to) {
+        timestamp open high low close volumeIn volumeOut trades
+      }
+    }`,
+    { tokenIn, tokenOut, from, to },
+  );
+
+  return data.priceHistory;
+}
+
+export async function getProtocolStats(): Promise<IndexedProtocolStats> {
+  const data = await fetchGraphQL<{ protocolStats: IndexedProtocolStats }>(
+    `query ProtocolStats {
+      protocolStats {
+        volume24h
+        feeRevenue24h
+        uniqueTraders7d
+        tvl
+        totalSwaps
+        activeAdapters
+        pricedSwapCoverage24h
+        estimationNote
+      }
+    }`,
+  );
+
+  return data.protocolStats;
+}
+
+export async function getTopRoutes(limit = 6): Promise<IndexedRouteStats[]> {
+  const data = await fetchGraphQL<{ topRoutes: IndexedRouteStats[] }>(
+    `query TopRoutes($limit: Int) {
+      topRoutes(limit: $limit) {
+        routeKey
+        label
+        tokenIn
+        tokenInSymbol
+        tokenOut
+        tokenOutSymbol
+        poolType
+        hops
+        swapCount
+        amountInTotal
+        amountOutTotal
+        estimatedVolumeUsd
+        priced
+        lastSwapAt
+      }
+    }`,
+    { limit },
+  );
+
+  return data.topRoutes;
+}
+
+export async function getPoolAnalytics(
+  pair: string,
+  window: string,
+): Promise<IndexedPoolAnalytics> {
+  const data = await fetchGraphQL<{ poolAnalytics: IndexedPoolAnalytics }>(
+    `query PoolAnalytics($pair: String!, $window: String!) {
+      poolAnalytics(pair: $pair, window: $window) {
+        pair
+        window
+        volumeIn
+        volumeOut
+        estimatedVolumeUsd
+        estimatedFeesUsd
+        tradeCount
+        pricedTrades
+        priceHigh
+        priceLow
+        lastPrice
+      }
+    }`,
+    { pair, window },
+  );
+
+  return data.poolAnalytics;
+}
+
+export async function getCrossChainPipeline(
+  intentId: string,
+): Promise<IndexedCrossChainPipeline | null> {
+  const data = await fetchGraphQL<{
+    crossChainPipeline: IndexedCrossChainPipeline | null;
+  }>(
+    `query CrossChainPipeline($intentId: String!) {
+      crossChainPipeline(intentId: $intentId) {
+        intentId
+        txHash
+        commitment
+        sender
+        sourceChain
+        destChain
+        latestStatus
+        latestMessageType
+        lastUpdatedAt
+        steps {
+          id
+          txHash
+          logIndex
+          blockNumber
+          timestamp
+          messageType
+          sourceChain
+          destChain
+          sender
+          data
+          commitment
+          status
+        }
+      }
+    }`,
+    { intentId },
+  );
+
+  return data.crossChainPipeline;
+}
+
+export async function getCrossChainPipelines(
+  limit = 6,
+  sender?: string,
+  status?: string,
+): Promise<IndexedCrossChainPipeline[]> {
+  const data = await fetchGraphQL<{
+    crossChainPipelines: IndexedCrossChainPipeline[];
+  }>(
+    `query CrossChainPipelines($limit: Int, $sender: String, $status: String) {
+      crossChainPipelines(limit: $limit, sender: $sender, status: $status) {
+        intentId
+        txHash
+        commitment
+        sender
+        sourceChain
+        destChain
+        latestStatus
+        latestMessageType
+        lastUpdatedAt
+        steps {
+          id
+          txHash
+          logIndex
+          blockNumber
+          timestamp
+          messageType
+          sourceChain
+          destChain
+          sender
+          data
+          commitment
+          status
+        }
+      }
+    }`,
+    { limit, sender, status },
+  );
+
+  return data.crossChainPipelines;
 }

@@ -1,0 +1,105 @@
+---
+title: Agent Kit
+description: Developer guide for the shipped obi-kit packages, CLI templates, tool families, and the live browser demo surface.
+---
+
+`obi-kit` is the external developer surface for building Obidot-aware agents without copying code out of the app or the agent service. It packages the current Hub testnet addresses, reusable LangChain-style tools, a higher-level SDK facade, and a CLI that scaffolds runnable projects.
+
+## Package Surface
+
+| Package | Purpose |
+| ------- | ------- |
+| `@obidot-kit/core` | Typed chain config, contract addresses, ABI exports, and EVM context helpers |
+| `@obidot-kit/llm` | Tool wrappers for swaps, liquidity, vault operations, risk checks, and cross-chain route planning |
+| `@obidot-kit/sdk` | `ObiKit` facade that bundles the shipped tool families into one developer-facing entry point |
+| `@obidot-kit/cli` | Project scaffolding for starter and bot templates |
+
+## Quickstart
+
+```bash
+pnpm add @obidot-kit/core @obidot-kit/sdk
+npx @obidot-kit/cli init my-obi-agent --template vault-agent
+cd my-obi-agent
+cp .env.example .env
+pnpm install
+pnpm start
+```
+
+The CLI template is the shortest path because it gives you the expected package wiring, `.env.example`, and a runnable `src/index.ts` immediately.
+
+## CLI Templates
+
+| Template | Command | Purpose |
+| -------- | ------- | ------- |
+| `starter` | `npx @obidot-kit/cli init my-agent --template starter` | Minimal inspection scaffold |
+| `vault-agent` | `npx @obidot-kit/cli init my-agent --template vault-agent` | Hub vault automation with signer wiring |
+| `cross-chain-agent` | `npx @obidot-kit/cli init my-agent --template cross-chain-agent` | Satellite-aware scaffold for route and state planning |
+| `dca-bot` | `npx @obidot-kit/cli init my-agent --template dca-bot` | Recurring tUSDC -> tDOT execution scaffold |
+| `yield-optimizer` | `npx @obidot-kit/cli init my-agent --template yield-optimizer` | Preview-first optimizer that compares vault posture, Bifrost yield, and route availability |
+
+## Included Example Bots
+
+`obi-kit/examples/` currently includes:
+
+- `dca-bot`
+- `arbitrage-bot`
+- `yield-optimizer`
+
+The CLI scaffolds the templates listed above. `arbitrage-bot` is currently a checked-in example, not a first-class `obi-kit init` template.
+
+## Tool Families
+
+### Swap + Liquidity
+
+- `SwapQuoteTool`
+- `SwapExecuteTool`
+- `SwapMultiHopTool`
+- `ExecuteLocalSwapTool`
+- `LiquidityAddTool`
+- `LiquidityRemoveTool`
+
+These cover quote inspection, execution-ready swap assembly, and Uniswap V2-style LP operations on the current Hub testnet surface.
+
+### Vault + Policy
+
+- `VaultStateTool`
+- `VaultDepositTool`
+- `VaultWithdrawTool`
+- `VaultAdminTool`
+- `VaultPolicyTool`
+- `WithdrawalQueueTool`
+
+These expose the ERC-4626 and policy-engine surfaces without forcing every app to rebuild the contract wrappers.
+
+### Cross-Chain + Yield
+
+- `CrossChainStateTool`
+- `CrossChainRouteTool`
+- `CrossChainRebalanceTool`
+- `BifrostYieldTool`
+- `BifrostStrategyTool`
+- `LpPoolStateTool`
+
+`CrossChainRouteTool` uses the same route-status vocabulary the app shows today: `live`, `simulated`, `mainnet_only`, and `coming_soon`.
+
+### Risk + Operations
+
+- `PerformanceTool`
+- `OracleCheckTool`
+- `OracleUpdateTool`
+- `BatchStrategyTool`
+
+These are intended for controlled operator workflows and strategy orchestration rather than open-ended autonomous execution.
+
+## Current Execution Boundary
+
+- The browser demo at `/agent` can stream route proposals and hand them to the connected wallet for approval.
+- `obi-kit` provides the same primitives for external apps, but it does not bypass wallet approval or signer ownership.
+- Some route families are intentionally preview-only on testnet today. AssetHub and Hydration may surface simulated quotes; other cross-chain routes still remain `mainnet_only` or `coming_soon`.
+
+## Where To Explore
+
+- The in-app showcase lives at `/agent` and `/docs/agent-kit`.
+- The canonical package README lives in the `obi-kit` repository.
+- The `obi-kit` root README also contains the current manual publish checklist and package publish order (`core → llm → sdk → cli`).
+- The swap, cross-chain, and analytics APIs described in the rest of this docs site are the backend surfaces those tools build on top of.

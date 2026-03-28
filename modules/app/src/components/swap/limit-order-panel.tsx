@@ -2,7 +2,9 @@
 
 import { ArrowRight, Clock3, TrendingDown, TrendingUp } from "lucide-react";
 import { useId, useState } from "react";
+import { useAccount } from "wagmi";
 import { useMarketPrice } from "@/hooks/use-market-price";
+import { createLimitOrder } from "@/lib/api";
 import { cn } from "@/lib/format";
 import { TOKENS } from "@/shared/trade/swap";
 import type { PendingOrder } from "@/types";
@@ -15,10 +17,6 @@ const EXPIRY_OPTIONS = [
   { label: "30 days", ms: 30 * 24 * 60 * 60 * 1000 },
 ];
 
-function saveOrders(orders: PendingOrder[]) {
-  localStorage.setItem("obidot_limit_orders", JSON.stringify(orders));
-}
-
 function priceDeltaPct(target: string, market: string): number {
   const targetValue = Number(target);
   const marketValue = Number(market);
@@ -27,12 +25,15 @@ function priceDeltaPct(target: string, market: string): number {
 }
 
 export default function LimitOrderPanel() {
+  const { address, isConnected } = useAccount();
   const [tokenInIdx, setTokenInIdx] = useState(0);
   const [tokenOutIdx, setTokenOutIdx] = useState(1);
   const [amountIn, setAmountIn] = useState("");
   const [targetPrice, setTargetPrice] = useState("");
   const [expiryIdx, setExpiryIdx] = useState(1);
   const [submitted, setSubmitted] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [errorText, setErrorText] = useState<string | null>(null);
 
   const amountId = useId();
   const targetId = useId();
@@ -60,11 +61,12 @@ export default function LimitOrderPanel() {
     if (raw === "" || /^\d*\.?\d*$/.test(raw)) setTargetPrice(raw);
   };
 
-  const handlePlaceOrder = () => {
-    if (!canPlace) return;
+  const handlePlaceOrder = async () => {
+    if (!canPlace || !address || submitting) return;
 
     const order: PendingOrder = {
       id: `${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      ownerAddress: address,
       tokenInSymbol: tokenIn.symbol,
       tokenOutSymbol: tokenOut.symbol,
       tokenInAddress: tokenIn.address,
@@ -74,24 +76,28 @@ export default function LimitOrderPanel() {
       expiry: Date.now() + EXPIRY_OPTIONS[expiryIdx].ms,
       marketPriceAtOrder: marketPriceDisplay ?? "—",
       createdAt: Date.now(),
+      status: "pending",
     };
 
-    const existing: PendingOrder[] = (() => {
-      try {
-        return JSON.parse(localStorage.getItem("obidot_limit_orders") ?? "[]");
-      } catch {
-        return [];
-      }
-    })();
+    setSubmitting(true);
+    setErrorText(null);
 
-    saveOrders([order, ...existing]);
-    window.dispatchEvent(new CustomEvent("obidot:order-placed"));
-    setAmountIn("");
-    setTargetPrice(
-      marketPriceDisplay ? Number(marketPriceDisplay).toFixed(6) : "",
-    );
-    setSubmitted(true);
-    setTimeout(() => setSubmitted(false), 3000);
+    try {
+      await createLimitOrder(order);
+      window.dispatchEvent(new CustomEvent("obidot:order-created"));
+      setAmountIn("");
+      setTargetPrice(
+        marketPriceDisplay ? Number(marketPriceDisplay).toFixed(6) : "",
+      );
+      setSubmitted(true);
+      setTimeout(() => setSubmitted(false), 3000);
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Failed to place order";
+      setErrorText(message);
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -276,22 +282,35 @@ export default function LimitOrderPanel() {
         </div>
       )}
 
+      {errorText && (
+        <div className="border-[3px] border-border bg-destructive/15 px-4 py-3 shadow-[3px_3px_0_0_var(--border)]">
+          <p className="retro-label text-[0.95rem] text-danger">
+            Unable to queue order
+          </p>
+          <p className="mt-1 text-[13px] text-text-secondary">{errorText}</p>
+        </div>
+      )}
+
       <button
         type="button"
-        disabled={!canPlace}
+        disabled={!canPlace || !isConnected || submitting}
         onClick={handlePlaceOrder}
         className="btn-primary"
       >
-        {!amountIn
-          ? "Enter Amount"
-          : !targetPrice
-            ? "Set Target Price"
-            : `Place Order For ${amountIn} ${tokenIn.symbol}`}
+        {!isConnected
+          ? "Connect Wallet"
+          : submitting
+            ? "Queuing Order..."
+            : !amountIn
+              ? "Enter Amount"
+              : !targetPrice
+                ? "Set Target Price"
+                : `Place Order For ${amountIn} ${tokenIn.symbol}`}
       </button>
 
       <p className="text-center text-[12px] leading-relaxed text-text-muted">
-        Orders are monitored by the Obidot AI agent and executed via
-        UniversalIntent when price is reached.
+        Orders are monitored by the Obidot AI agent. When the target price is
+        reached, you receive a triggered alert instead of silent execution.
       </p>
     </div>
   );
